@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 
-// ─── Color Constants (same as main.dart) ─────────────────────────────────────
-const kBlue   = Color(0xFF0052FF);
-const kOrange = Color(0xFFFF6B00);
-const kBg     = Color(0xFFF2F3F5);
-const kWhite  = Colors.white;
-const kGreen  = Color(0xFF00C48C);
+// ─── Color Constants (TEMA HIJAU BARU) ───────────────────────────────────────
+const kPrimary      = Color(0xFF4C6B3F); // Olive Green
+const kPrimaryLight = Color(0xFF799B61); // Lighter Olive
+const kAccent       = Color(0xFFF27B35); // Oren
+const kBg           = Color(0xFFF5F7F2); // Off-white hijau
+const kWhite        = Colors.white;
 
 // ─── Data Models ─────────────────────────────────────────────────────────────
 
@@ -60,8 +60,7 @@ final List<OrderHistory> _sampleOrders = [
     orderId: 'UM-20241201-0042',
     itemName: 'Nasi Lemak Special + Teh Tarik',
     sellerName: 'Mak Cik Siti',
-    sellerPhoto:
-        'https://images.unsplash.com/photo-1607631568010-a87245c0daf7?w=200',
+    sellerPhoto: 'https://images.unsplash.com/photo-1607631568010-a87245c0daf7?w=200',
     sellerAddress: 'Kolej Delima, UiTM Shah Alam',
     sellerRating: 4.8,
     sellerReviews: 234,
@@ -80,8 +79,7 @@ final List<OrderHistory> _sampleOrders = [
     orderId: 'UM-20241128-0031',
     itemName: 'Ramen Tonkotsu',
     sellerName: 'Ramen House',
-    sellerPhoto:
-        'https://images.unsplash.com/photo-1569718212165-3a8278d5f624?w=200',
+    sellerPhoto: 'https://images.unsplash.com/photo-1569718212165-3a8278d5f624?w=200',
     sellerAddress: 'Dataran Cendekia, UiTM Shah Alam',
     sellerRating: 4.6,
     sellerReviews: 187,
@@ -99,8 +97,7 @@ final List<OrderHistory> _sampleOrders = [
     orderId: 'UM-20241125-0018',
     itemName: 'Croissant × 2 + Americano',
     sellerName: 'Bake & Brew',
-    sellerPhoto:
-        'https://images.unsplash.com/photo-1555507036-ab1f4038808a?w=200',
+    sellerPhoto: 'https://images.unsplash.com/photo-1555507036-ab1f4038808a?w=200',
     sellerAddress: 'Pusat Perdagangan, UiTM Shah Alam',
     sellerRating: 4.9,
     sellerReviews: 312,
@@ -119,8 +116,7 @@ final List<OrderHistory> _sampleOrders = [
     orderId: 'UM-20241120-0009',
     itemName: 'Burger Double Patty',
     sellerName: 'Burger Lab',
-    sellerPhoto:
-        'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=200',
+    sellerPhoto: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=200',
     sellerAddress: 'Kolej Meranti, UiTM Shah Alam',
     sellerRating: 4.5,
     sellerReviews: 98,
@@ -143,10 +139,7 @@ class ActivityPage extends StatelessWidget {
   const ActivityPage({super.key});
 
   String _formatDate(DateTime dt) {
-    const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
-    ];
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     return '${dt.day} ${months[dt.month - 1]} ${dt.year}';
   }
 
@@ -161,7 +154,8 @@ class ActivityPage extends StatelessWidget {
     final topPad = MediaQuery.of(context).padding.top;
 
     return Scaffold(
-      backgroundColor: kBg,
+      // Buat transparent supaya corak dari main.dart boleh tembus!
+      backgroundColor: Colors.transparent, 
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -171,14 +165,9 @@ class ActivityPage extends StatelessWidget {
             padding: EdgeInsets.fromLTRB(20, topPad + 16, 20, 20),
             decoration: BoxDecoration(
               color: kWhite,
-              borderRadius: const BorderRadius.vertical(
-                  bottom: Radius.circular(24)),
+              borderRadius: const BorderRadius.vertical(bottom: Radius.circular(24)),
               boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
-                  blurRadius: 12,
-                  offset: const Offset(0, 4),
-                ),
+                BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 12, offset: const Offset(0, 4)),
               ],
             ),
             child: Column(
@@ -187,41 +176,19 @@ class ActivityPage extends StatelessWidget {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text(
-                      'Order Activity',
-                      style: TextStyle(
-                        color: Color(0xFF1A1A2E),
-                        fontSize: 24,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: -0.5,
-                      ),
-                    ),
+                    const Text('Order Activity', style: TextStyle(color: Color(0xFF1A1A2E), fontSize: 24, fontWeight: FontWeight.w800, letterSpacing: -0.5)),
                     Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 6),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFE8EEFF),
+                        color: kPrimary.withOpacity(0.1), // Hijau Pudar
                         borderRadius: BorderRadius.circular(20),
                       ),
-                      child: Text(
-                        '${_sampleOrders.length} orders',
-                        style: const TextStyle(
-                          color: kBlue,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
+                      child: Text('${_sampleOrders.length} orders', style: const TextStyle(color: kPrimary, fontSize: 12, fontWeight: FontWeight.w600)),
                     ),
                   ],
                 ),
                 const SizedBox(height: 4),
-                Text(
-                  'Your complete order history',
-                  style: TextStyle(
-                    color: Colors.grey[500],
-                    fontSize: 13,
-                  ),
-                ),
+                Text('Your complete order history', style: TextStyle(color: Colors.grey[500], fontSize: 13)),
               ],
             ),
           ),
@@ -237,12 +204,7 @@ class ActivityPage extends StatelessWidget {
                   order: order,
                   formatDate: _formatDate,
                   formatTime: _formatTime,
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => OrderDetailPage(order: order),
-                    ),
-                  ),
+                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => OrderDetailPage(order: order))),
                 );
               },
             ),
@@ -261,12 +223,7 @@ class _OrderHistoryCard extends StatelessWidget {
   final String Function(DateTime) formatTime;
   final VoidCallback onTap;
 
-  const _OrderHistoryCard({
-    required this.order,
-    required this.formatDate,
-    required this.formatTime,
-    required this.onTap,
-  });
+  const _OrderHistoryCard({required this.order, required this.formatDate, required this.formatTime, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -278,33 +235,19 @@ class _OrderHistoryCard extends StatelessWidget {
         decoration: BoxDecoration(
           color: kWhite,
           borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 12,
-              offset: const Offset(0, 3),
-            ),
-          ],
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 12, offset: const Offset(0, 3))],
         ),
         child: Row(
           children: [
             // ── Seller photo ────────────────────────────────────────
             Container(
-              width: 56,
-              height: 56,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(14),
-                color: kBg,
-              ),
+              width: 56, height: 56,
+              decoration: BoxDecoration(borderRadius: BorderRadius.circular(14), color: kBg),
               clipBehavior: Clip.hardEdge,
               child: Image.network(
                 order.sellerPhoto,
                 fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => Container(
-                  color: const Color(0xFFE8EEFF),
-                  child: const Icon(Icons.storefront_rounded,
-                      color: kBlue, size: 28),
-                ),
+                errorBuilder: (_, __, ___) => Container(color: kPrimary.withOpacity(0.1), child: const Icon(Icons.storefront_rounded, color: kPrimary, size: 28)),
               ),
             ),
             const SizedBox(width: 14),
@@ -314,47 +257,19 @@ class _OrderHistoryCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Item name
-                  Text(
-                    order.itemName,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 14,
-                      color: Color(0xFF1A1A2E),
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                  Text(order.itemName, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: Color(0xFF1A1A2E)), maxLines: 1, overflow: TextOverflow.ellipsis),
                   const SizedBox(height: 3),
-                  // Seller name
-                  Text(
-                    order.sellerName,
-                    style: TextStyle(
-                        color: Colors.grey[500], fontSize: 12),
-                  ),
+                  Text(order.sellerName, style: TextStyle(color: Colors.grey[500], fontSize: 12)),
                   const SizedBox(height: 8),
-                  // Date + time row
                   Row(
                     children: [
-                      const Icon(Icons.calendar_today_rounded,
-                          size: 11, color: kBlue),
+                      const Icon(Icons.calendar_today_rounded, size: 11, color: kPrimary),
                       const SizedBox(width: 4),
-                      Text(
-                        formatDate(order.dateTime),
-                        style: const TextStyle(
-                            fontSize: 11, color: kBlue,
-                            fontWeight: FontWeight.w500),
-                      ),
+                      Text(formatDate(order.dateTime), style: const TextStyle(fontSize: 11, color: kPrimary, fontWeight: FontWeight.w500)),
                       const SizedBox(width: 8),
-                      const Icon(Icons.access_time_rounded,
-                          size: 11, color: kOrange),
+                      const Icon(Icons.access_time_rounded, size: 11, color: kAccent),
                       const SizedBox(width: 4),
-                      Text(
-                        formatTime(order.dateTime),
-                        style: const TextStyle(
-                            fontSize: 11, color: kOrange,
-                            fontWeight: FontWeight.w500),
-                      ),
+                      Text(formatTime(order.dateTime), style: const TextStyle(fontSize: 11, color: kAccent, fontWeight: FontWeight.w500)),
                     ],
                   ),
                 ],
@@ -365,34 +280,15 @@ class _OrderHistoryCard extends StatelessWidget {
             Column(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                Text(
-                  'RM ${order.total.toStringAsFixed(2)}',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w800,
-                    fontSize: 15,
-                    color: Color(0xFF1A1A2E),
-                  ),
-                ),
+                Text('RM ${order.total.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: Color(0xFF1A1A2E))),
                 const SizedBox(height: 6),
                 Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFE6FFF5),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Text(
-                    'Delivered',
-                    style: TextStyle(
-                      color: kGreen,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(color: kPrimary.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+                  child: const Text('Delivered', style: TextStyle(color: kPrimary, fontSize: 10, fontWeight: FontWeight.w700)),
                 ),
                 const SizedBox(height: 6),
-                const Icon(Icons.chevron_right_rounded,
-                    color: Color(0xFFB0BBCB), size: 18),
+                const Icon(Icons.chevron_right_rounded, color: Color(0xFFB0BBCB), size: 18),
               ],
             ),
           ],
@@ -410,10 +306,7 @@ class OrderDetailPage extends StatelessWidget {
   const OrderDetailPage({super.key, required this.order});
 
   String _formatDate(DateTime dt) {
-    const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
-    ];
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     return '${dt.day} ${months[dt.month - 1]} ${dt.year}';
   }
 
@@ -430,61 +323,51 @@ class OrderDetailPage extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: kBg,
-      body: Stack(
-        children: [
-          // ── Scrollable content ──────────────────────────────────────
-          SingleChildScrollView(
-            padding: EdgeInsets.only(bottom: 100 + bottomPad),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // ── Hero header with back button ────────────────────
-                _buildHeroHeader(context, topPad),
-
-                const SizedBox(height: 16),
-
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // ── Order meta (date / time / ID) ───────────
-                      _buildOrderMeta(),
-
-                      const SizedBox(height: 14),
-
-                      // ── Seller card ─────────────────────────────
-                      _buildSellerCard(),
-
-                      const SizedBox(height: 14),
-
-                      // ── Route card ──────────────────────────────
-                      _buildRouteCard(),
-
-                      const SizedBox(height: 14),
-
-                      // ── Order summary ───────────────────────────
-                      _buildOrderSummary(),
-
-                      const SizedBox(height: 14),
-
-                      // ── Price breakdown ─────────────────────────
-                      _buildPriceBreakdown(),
-                    ],
+      body: Container(
+        // MAGIK: Letak background doodle kat page Detail juga!
+        decoration: const BoxDecoration(
+          image: DecorationImage(
+            image: AssetImage('assets/bg_pattern.jpg'),
+            repeat: ImageRepeat.repeat,
+            opacity: 0.05,
+          ),
+        ),
+        child: Stack(
+          children: [
+            SingleChildScrollView(
+              padding: EdgeInsets.only(bottom: 100 + bottomPad),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildHeroHeader(context, topPad),
+                  const SizedBox(height: 16),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildOrderMeta(),
+                        const SizedBox(height: 14),
+                        _buildSellerCard(),
+                        const SizedBox(height: 14),
+                        _buildRouteCard(),
+                        const SizedBox(height: 14),
+                        _buildOrderSummary(),
+                        const SizedBox(height: 14),
+                        _buildPriceBreakdown(),
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-
-          // ── Floating Contact Button ─────────────────────────────────
-          Positioned(
-            left: 16,
-            right: 16,
-            bottom: bottomPad > 0 ? bottomPad : 16,
-            child: _buildContactButton(context),
-          ),
-        ],
+            // Floating Contact Button
+            Positioned(
+              left: 16, right: 16, bottom: bottomPad > 0 ? bottomPad : 16,
+              child: _buildContactButton(context),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -496,87 +379,32 @@ class OrderDetailPage extends StatelessWidget {
       padding: EdgeInsets.fromLTRB(16, topPad + 12, 16, 20),
       decoration: BoxDecoration(
         color: kWhite,
-        borderRadius: const BorderRadius.vertical(
-            bottom: Radius.circular(28)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(28)),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 12, offset: const Offset(0, 4))],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Back button row
           Row(
             children: [
               GestureDetector(
                 onTap: () => Navigator.pop(context),
-                child: Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: kBg,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Icon(Icons.arrow_back_ios_new_rounded,
-                      size: 16, color: Color(0xFF1A1A2E)),
-                ),
+                child: Container(width: 40, height: 40, decoration: BoxDecoration(color: kBg, borderRadius: BorderRadius.circular(12)), child: const Icon(Icons.arrow_back_ios_new_rounded, size: 16, color: Color(0xFF1A1A2E))),
               ),
               const SizedBox(width: 12),
-              const Text(
-                'Order Detail',
-                style: TextStyle(
-                  color: Color(0xFF1A1A2E),
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
+              const Text('Order Detail', style: TextStyle(color: Color(0xFF1A1A2E), fontSize: 18, fontWeight: FontWeight.w800)),
               const Spacer(),
               Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFE6FFF5),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Row(
-                  children: const [
-                    Icon(Icons.check_circle_rounded,
-                        color: kGreen, size: 13),
-                    SizedBox(width: 4),
-                    Text(
-                      'Delivered',
-                      style: TextStyle(
-                        color: kGreen,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ],
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(color: kPrimary.withOpacity(0.1), borderRadius: BorderRadius.circular(20)),
+                child: Row(children: const [Icon(Icons.check_circle_rounded, color: kPrimary, size: 13), SizedBox(width: 4), Text('Delivered', style: TextStyle(color: kPrimary, fontSize: 11, fontWeight: FontWeight.w700))]),
               ),
             ],
           ),
           const SizedBox(height: 16),
-          // Order name + seller
-          Text(
-            order.itemName,
-            style: const TextStyle(
-              color: Color(0xFF1A1A2E),
-              fontSize: 20,
-              fontWeight: FontWeight.w800,
-              letterSpacing: -0.3,
-              height: 1.2,
-            ),
-          ),
+          Text(order.itemName, style: const TextStyle(color: Color(0xFF1A1A2E), fontSize: 20, fontWeight: FontWeight.w800, letterSpacing: -0.3, height: 1.2)),
           const SizedBox(height: 4),
-          Text(
-            'from ${order.sellerName}',
-            style: TextStyle(color: Colors.grey[500], fontSize: 13),
-          ),
+          Text('from ${order.sellerName}', style: TextStyle(color: Colors.grey[500], fontSize: 13)),
         ],
       ),
     );
@@ -586,39 +414,14 @@ class OrderDetailPage extends StatelessWidget {
   Widget _buildOrderMeta() {
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: kWhite,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 10,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
+      decoration: BoxDecoration(color: kWhite, borderRadius: BorderRadius.circular(20), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 3))]),
       child: Row(
         children: [
-          _MetaChip(
-            icon: Icons.tag_rounded,
-            label: 'Order ID',
-            value: order.orderId,
-            color: kBlue,
-          ),
+          _MetaChip(icon: Icons.tag_rounded, label: 'Order ID', value: order.orderId, color: kPrimary),
           const SizedBox(width: 10),
-          _MetaChip(
-            icon: Icons.calendar_today_rounded,
-            label: 'Date',
-            value: _formatDate(order.dateTime),
-            color: kOrange,
-          ),
+          _MetaChip(icon: Icons.calendar_today_rounded, label: 'Date', value: _formatDate(order.dateTime), color: kAccent),
           const SizedBox(width: 10),
-          _MetaChip(
-            icon: Icons.access_time_rounded,
-            label: 'Time',
-            value: _formatTime(order.dateTime),
-            color: kGreen,
-          ),
+          _MetaChip(icon: Icons.access_time_rounded, label: 'Time', value: _formatTime(order.dateTime), color: kPrimaryLight),
         ],
       ),
     );
@@ -628,107 +431,43 @@ class OrderDetailPage extends StatelessWidget {
   Widget _buildSellerCard() {
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: kWhite,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 10,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
+      decoration: BoxDecoration(color: kWhite, borderRadius: BorderRadius.circular(20), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 3))]),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Section title
           const _SectionTitle(title: 'Seller Info', icon: Icons.storefront_rounded),
           const SizedBox(height: 14),
           Row(
             children: [
-              // Seller photo
               Container(
-                width: 60,
-                height: 60,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(16),
-                  color: kBg,
-                ),
+                width: 60, height: 60, decoration: BoxDecoration(borderRadius: BorderRadius.circular(16), color: kBg),
                 clipBehavior: Clip.hardEdge,
-                child: Image.network(
-                  order.sellerPhoto,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => Container(
-                    color: const Color(0xFFE8EEFF),
-                    child: const Icon(Icons.person_rounded,
-                        color: kBlue, size: 30),
-                  ),
-                ),
+                child: Image.network(order.sellerPhoto, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Container(color: kPrimary.withOpacity(0.1), child: const Icon(Icons.person_rounded, color: kPrimary, size: 30))),
               ),
               const SizedBox(width: 14),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      order.sellerName,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 15,
-                        color: Color(0xFF1A1A2E),
-                      ),
-                    ),
+                    Text(order.sellerName, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: Color(0xFF1A1A2E))),
                     const SizedBox(height: 4),
                     Row(
                       children: [
-                        const Icon(Icons.location_on_rounded,
-                            size: 12, color: kOrange),
+                        const Icon(Icons.location_on_rounded, size: 12, color: kAccent),
                         const SizedBox(width: 3),
-                        Expanded(
-                          child: Text(
-                            order.sellerAddress,
-                            style: TextStyle(
-                                color: Colors.grey[500], fontSize: 12),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
+                        Expanded(child: Text(order.sellerAddress, style: TextStyle(color: Colors.grey[500], fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis)),
                       ],
                     ),
                     const SizedBox(height: 6),
-                    // Rating
                     Row(
                       children: [
                         Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFFFF3E0),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Row(
-                            children: [
-                              const Icon(Icons.star_rounded,
-                                  color: kOrange, size: 12),
-                              const SizedBox(width: 3),
-                              Text(
-                                order.sellerRating.toStringAsFixed(1),
-                                style: const TextStyle(
-                                  color: kOrange,
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ],
-                          ),
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(color: kAccent.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+                          child: Row(children: [const Icon(Icons.star_rounded, color: kAccent, size: 12), const SizedBox(width: 3), Text(order.sellerRating.toStringAsFixed(1), style: const TextStyle(color: kAccent, fontSize: 11, fontWeight: FontWeight.w700))]),
                         ),
                         const SizedBox(width: 6),
-                        Text(
-                          '(${order.sellerReviews} reviews)',
-                          style: TextStyle(
-                              color: Colors.grey[400], fontSize: 11),
-                        ),
+                        Text('(${order.sellerReviews} reviews)', style: TextStyle(color: Colors.grey[400], fontSize: 11)),
                       ],
                     ),
                   ],
@@ -745,56 +484,19 @@ class OrderDetailPage extends StatelessWidget {
   Widget _buildRouteCard() {
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: kWhite,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 10,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
+      decoration: BoxDecoration(color: kWhite, borderRadius: BorderRadius.circular(20), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 3))]),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const _SectionTitle(
-              title: 'Delivery Route',
-              icon: Icons.route_rounded),
+          const _SectionTitle(title: 'Delivery Route', icon: Icons.route_rounded),
           const SizedBox(height: 14),
           Row(
             children: [
-              // Timeline dots
               Column(
                 children: [
-                  Container(
-                    width: 10,
-                    height: 10,
-                    decoration: const BoxDecoration(
-                      color: kBlue,
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                  Container(
-                    width: 2,
-                    height: 36,
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [kBlue, kOrange],
-                      ),
-                    ),
-                  ),
-                  Container(
-                    width: 10,
-                    height: 10,
-                    decoration: const BoxDecoration(
-                      color: kOrange,
-                      shape: BoxShape.circle,
-                    ),
-                  ),
+                  Container(width: 10, height: 10, decoration: const BoxDecoration(color: kPrimary, shape: BoxShape.circle)),
+                  Container(width: 2, height: 36, decoration: const BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [kPrimary, kAccent]))),
+                  Container(width: 10, height: 10, decoration: const BoxDecoration(color: kAccent, shape: BoxShape.circle)),
                 ],
               ),
               const SizedBox(width: 14),
@@ -802,78 +504,26 @@ class OrderDetailPage extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // From
                     Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 10),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFE8EEFF),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      decoration: BoxDecoration(color: kPrimary.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
                       child: Row(
                         children: [
-                          const Icon(Icons.storefront_rounded,
-                              size: 14, color: kBlue),
+                          const Icon(Icons.storefront_rounded, size: 14, color: kPrimary),
                           const SizedBox(width: 8),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment:
-                                  CrossAxisAlignment.start,
-                              children: [
-                                const Text('From',
-                                    style: TextStyle(
-                                        color: kBlue,
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.w600)),
-                                Text(
-                                  order.sellerLocation,
-                                  style: const TextStyle(
-                                    color: Color(0xFF1A1A2E),
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
+                          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const Text('From', style: TextStyle(color: kPrimary, fontSize: 10, fontWeight: FontWeight.w600)), Text(order.sellerLocation, style: const TextStyle(color: Color(0xFF1A1A2E), fontSize: 13, fontWeight: FontWeight.w600))])),
                         ],
                       ),
                     ),
                     const SizedBox(height: 8),
-                    // To
                     Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 10),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFFF0E0),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      decoration: BoxDecoration(color: kAccent.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
                       child: Row(
                         children: [
-                          const Icon(Icons.home_rounded,
-                              size: 14, color: kOrange),
+                          const Icon(Icons.home_rounded, size: 14, color: kAccent),
                           const SizedBox(width: 8),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment:
-                                  CrossAxisAlignment.start,
-                              children: [
-                                const Text('To',
-                                    style: TextStyle(
-                                        color: kOrange,
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.w600)),
-                                Text(
-                                  order.buyerLocation,
-                                  style: const TextStyle(
-                                    color: Color(0xFF1A1A2E),
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
+                          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const Text('To', style: TextStyle(color: kAccent, fontSize: 10, fontWeight: FontWeight.w600)), Text(order.buyerLocation, style: const TextStyle(color: Color(0xFF1A1A2E), fontSize: 13, fontWeight: FontWeight.w600))])),
                         ],
                       ),
                     ),
@@ -891,66 +541,20 @@ class OrderDetailPage extends StatelessWidget {
   Widget _buildOrderSummary() {
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: kWhite,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 10,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
+      decoration: BoxDecoration(color: kWhite, borderRadius: BorderRadius.circular(20), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 3))]),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const _SectionTitle(
-              title: 'Order Summary',
-              icon: Icons.receipt_long_rounded),
+          const _SectionTitle(title: 'Order Summary', icon: Icons.receipt_long_rounded),
           const SizedBox(height: 14),
           ...order.items.map((item) => Padding(
                 padding: const EdgeInsets.only(bottom: 10),
                 child: Row(
                   children: [
-                    // Qty badge
-                    Container(
-                      width: 28,
-                      height: 28,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFE8EEFF),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Center(
-                        child: Text(
-                          '×${item.qty}',
-                          style: const TextStyle(
-                            color: kBlue,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                    ),
+                    Container(width: 28, height: 28, decoration: BoxDecoration(color: kPrimary.withOpacity(0.1), borderRadius: BorderRadius.circular(8)), child: Center(child: Text('×${item.qty}', style: const TextStyle(color: kPrimary, fontSize: 11, fontWeight: FontWeight.w700)))),
                     const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        item.name,
-                        style: const TextStyle(
-                          fontSize: 13,
-                          color: Color(0xFF1A1A2E),
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ),
-                    Text(
-                      'RM ${(item.price * item.qty).toStringAsFixed(2)}',
-                      style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xFF1A1A2E),
-                      ),
-                    ),
+                    Expanded(child: Text(item.name, style: const TextStyle(fontSize: 13, color: Color(0xFF1A1A2E), fontWeight: FontWeight.w500))),
+                    Text('RM ${(item.price * item.qty).toStringAsFixed(2)}', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF1A1A2E))),
                   ],
                 ),
               )),
@@ -963,68 +567,23 @@ class OrderDetailPage extends StatelessWidget {
   Widget _buildPriceBreakdown() {
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: kWhite,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 10,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
+      decoration: BoxDecoration(color: kWhite, borderRadius: BorderRadius.circular(20), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 3))]),
       child: Column(
         children: [
-          const _SectionTitle(
-              title: 'Payment Summary',
-              icon: Icons.payments_rounded),
+          const _SectionTitle(title: 'Payment Summary', icon: Icons.payments_rounded),
           const SizedBox(height: 14),
           _PriceRow(label: 'Subtotal', value: order.subtotal),
           const SizedBox(height: 8),
-          _PriceRow(
-              label: 'Delivery Fee', value: order.deliveryFee,
-              valueColor: kOrange),
+          _PriceRow(label: 'Delivery Fee', value: order.deliveryFee, valueColor: kAccent),
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 12),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Container(
-                    height: 1,
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          Colors.transparent,
-                          Colors.grey.withOpacity(0.2),
-                          Colors.transparent
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
+            child: Row(children: [Expanded(child: Container(height: 1, decoration: BoxDecoration(gradient: LinearGradient(colors: [Colors.transparent, Colors.grey.withOpacity(0.2), Colors.transparent]))))]),
           ),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
-                'Total',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w800,
-                  color: Color(0xFF1A1A2E),
-                ),
-              ),
-              Text(
-                'RM ${order.total.toStringAsFixed(2)}',
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
-                  color: kBlue,
-                ),
-              ),
+              const Text('Total', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF1A1A2E))),
+              Text('RM ${order.total.toStringAsFixed(2)}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: kPrimary)),
             ],
           ),
         ],
@@ -1037,19 +596,9 @@ class OrderDetailPage extends StatelessWidget {
     return Container(
       height: 56,
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [kBlue, Color(0xFF003FCC)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
+        gradient: const LinearGradient(colors: [kPrimary, Color(0xFF3A5230)], begin: Alignment.topLeft, end: Alignment.bottomRight),
         borderRadius: BorderRadius.circular(28),
-        boxShadow: [
-          BoxShadow(
-            color: kBlue.withOpacity(0.35),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
-          ),
-        ],
+        boxShadow: [BoxShadow(color: kPrimary.withOpacity(0.35), blurRadius: 20, offset: const Offset(0, 8))],
       ),
       child: Material(
         color: Colors.transparent,
@@ -1059,18 +608,9 @@ class OrderDetailPage extends StatelessWidget {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: const [
-              Icon(Icons.chat_bubble_rounded,
-                  color: kWhite, size: 18),
+              Icon(Icons.chat_bubble_rounded, color: kWhite, size: 18),
               SizedBox(width: 10),
-              Text(
-                'Contact Seller',
-                style: TextStyle(
-                  color: kWhite,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 0.3,
-                ),
-              ),
+              Text('Contact Seller', style: TextStyle(color: kWhite, fontSize: 15, fontWeight: FontWeight.w700, letterSpacing: 0.3)),
             ],
           ),
         ),
@@ -1091,24 +631,9 @@ class _SectionTitle extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Container(
-          width: 28,
-          height: 28,
-          decoration: BoxDecoration(
-            color: const Color(0xFFE8EEFF),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Icon(icon, size: 14, color: kBlue),
-        ),
+        Container(width: 28, height: 28, decoration: BoxDecoration(color: kPrimary.withOpacity(0.1), borderRadius: BorderRadius.circular(8)), child: Icon(icon, size: 14, color: kPrimary)),
         const SizedBox(width: 8),
-        Text(
-          title,
-          style: const TextStyle(
-            color: Color(0xFF1A1A2E),
-            fontSize: 14,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
+        Text(title, style: const TextStyle(color: Color(0xFF1A1A2E), fontSize: 14, fontWeight: FontWeight.w700)),
       ],
     );
   }
@@ -1120,43 +645,22 @@ class _MetaChip extends StatelessWidget {
   final String value;
   final Color color;
 
-  const _MetaChip({
-    required this.icon,
-    required this.label,
-    required this.value,
-    required this.color,
-  });
+  const _MetaChip({required this.icon, required this.label, required this.value, required this.color});
 
   @override
   Widget build(BuildContext context) {
     return Expanded(
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-        decoration: BoxDecoration(
-          color: color.withOpacity(0.08),
-          borderRadius: BorderRadius.circular(12),
-        ),
+        decoration: BoxDecoration(color: color.withOpacity(0.08), borderRadius: BorderRadius.circular(12)),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Icon(icon, size: 13, color: color),
             const SizedBox(height: 4),
-            Text(label,
-                style: TextStyle(
-                    color: color.withOpacity(0.7),
-                    fontSize: 9,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 0.3)),
+            Text(label, style: TextStyle(color: color.withOpacity(0.7), fontSize: 9, fontWeight: FontWeight.w600, letterSpacing: 0.3)),
             const SizedBox(height: 2),
-            Text(
-              value,
-              style: TextStyle(
-                  color: color,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w700),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
+            Text(value, style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.w700), maxLines: 1, overflow: TextOverflow.ellipsis),
           ],
         ),
       ),
@@ -1169,27 +673,15 @@ class _PriceRow extends StatelessWidget {
   final double value;
   final Color? valueColor;
 
-  const _PriceRow({
-    required this.label,
-    required this.value,
-    this.valueColor,
-  });
+  const _PriceRow({required this.label, required this.value, this.valueColor});
 
   @override
   Widget build(BuildContext context) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(label,
-            style: TextStyle(color: Colors.grey[500], fontSize: 13)),
-        Text(
-          'RM ${value.toStringAsFixed(2)}',
-          style: TextStyle(
-            color: valueColor ?? const Color(0xFF1A1A2E),
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
+        Text(label, style: TextStyle(color: Colors.grey[500], fontSize: 13)),
+        Text('RM ${value.toStringAsFixed(2)}', style: TextStyle(color: valueColor ?? const Color(0xFF1A1A2E), fontSize: 13, fontWeight: FontWeight.w600)),
       ],
     );
   }

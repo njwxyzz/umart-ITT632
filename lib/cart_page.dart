@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
+import 'checkout_page.dart';
 
-// ─── Colors (match main.dart) ─────────────────────────────────────────────────
-const _kElectricBlue = Color(0xFF0052FF);
-const _kVibrantOrange = Color(0xFFFF6B00);
-const _kWhite = Colors.white;
-const _kBg = Color(0xFFF2F3F5);
-const _kGreen = Color(0xFF00C48C);
+// ─── Color Constants (TEMA HIJAU BARU) ───────────────────────────────────────
+const kPrimary      = Color(0xFF4C6B3F); // Olive Green
+const kPrimaryLight = Color(0xFF799B61); // Lighter Olive
+const kAccent       = Color(0xFFF27B35); // Oren Lembut
+const kBg           = Color(0xFFF5F7F2); // Off-white hijau
+const kWhite        = Colors.white;
+const kGreen        = Color(0xFF00C48C); // Kekalkan untuk 'Free Delivery'
 
 // ─── Cart Page ───────────────────────────────────────────────────────────────
 
@@ -56,9 +58,9 @@ class _CartPageState extends State<CartPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _kBg,
+      backgroundColor: kBg,
       appBar: AppBar(
-        backgroundColor: _kWhite,
+        backgroundColor: kBg,
         elevation: 0,
         scrolledUnderElevation: 0,
         leading: IconButton(
@@ -76,89 +78,107 @@ class _CartPageState extends State<CartPage> {
         ),
         centerTitle: false,
       ),
-      body: Stack(
-        children: [
-          SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _SellerHeaderCard(
-                  shopName: 'Mak Cik Nasi Lemak',
-                  location: 'Kolej Dahlia',
-                ),
-                const SizedBox(height: 16),
-                _FreeDeliveryProgress(
-                  amountNeeded: _amountNeededForFreeDelivery,
-                  progress: _freeDeliveryProgress,
-                ),
-                const SizedBox(height: 20),
-                ..._items.map((item) => Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: Dismissible(
-                        key: ValueKey(item.id),
-                        direction: DismissDirection.endToStart,
-                        background: Container(
-                          alignment: Alignment.centerRight,
-                          padding: const EdgeInsets.only(right: 20),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFE53935),
-                            borderRadius: BorderRadius.circular(14),
+      // MAGIK BACKGROUND PATTERN .JPG KAT SINI!
+      body: Container(
+        decoration: const BoxDecoration(
+          image: DecorationImage(
+            image: AssetImage('assets/bg_pattern.jpg'),
+            repeat: ImageRepeat.repeat,
+            opacity: 0.05,
+          ),
+        ),
+        child: Stack(
+          children: [
+            SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _SellerHeaderCard(
+                    shopName: 'Mak Cik Nasi Lemak',
+                    location: 'Kolej Dahlia',
+                  ),
+                  const SizedBox(height: 16),
+                  _FreeDeliveryProgress(
+                    amountNeeded: _amountNeededForFreeDelivery,
+                    progress: _freeDeliveryProgress,
+                  ),
+                  const SizedBox(height: 20),
+                  ..._items.map((item) => Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: Dismissible(
+                          key: ValueKey(item.id),
+                          direction: DismissDirection.endToStart,
+                          background: Container(
+                            alignment: Alignment.centerRight,
+                            padding: const EdgeInsets.only(right: 20),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFE53935), // Warna merah standard untuk delete
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            child: const Icon(
+                              Icons.delete_rounded,
+                              color: kWhite,
+                              size: 28,
+                            ),
                           ),
-                          child: const Icon(
-                            Icons.delete_rounded,
-                            color: _kWhite,
-                            size: 28,
-                          ),
-                        ),
-                        onDismissed: (_) {
-                          setState(() => _items.removeWhere((e) => e.id == item.id));
-                        },
-                        child: _CartItem(
-                          name: item.name,
-                          price: item.price,
-                          quantity: item.quantity,
-                          onDecrement: () {
-                            if (item.quantity > 1) {
-                              setState(() => item.quantity--);
-                            }
+                          onDismissed: (_) {
+                            setState(() => _items.removeWhere((e) => e.id == item.id));
                           },
-                          onIncrement: () => setState(() => item.quantity++),
+                          child: _CartItem(
+                            name: item.name,
+                            price: item.price,
+                            quantity: item.quantity,
+                            onDecrement: () {
+                              if (item.quantity > 1) {
+                                setState(() => item.quantity--);
+                              }
+                            },
+                            onIncrement: () => setState(() => item.quantity++),
+                          ),
                         ),
+                      )),
+                  const SizedBox(height: 4),
+                  TextButton.icon(
+                    onPressed: () {},
+                    icon: const Icon(Icons.add_circle_outline, size: 18, color: kPrimary),
+                    label: const Text(
+                      'Add more items from this shop',
+                      style: TextStyle(
+                        color: kPrimary,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
                       ),
-                    )),
-                const SizedBox(height: 4),
-                TextButton.icon(
-                  onPressed: () {},
-                  icon: const Icon(Icons.add_circle_outline, size: 18, color: _kElectricBlue),
-                  label: const Text(
-                    'Add more items from this shop',
-                    style: TextStyle(
-                      color: _kElectricBlue,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
                     ),
                   ),
-                ),
-                const SizedBox(height: 20),
-                _StudentRemarksBox(),
-                const SizedBox(height: 20),
-                _OrderSummary(
-                  subtotal: _subtotal,
-                  deliveryFee: _deliveryFee,
-                  total: _total,
-                ),
-                const SizedBox(height: 100),
-              ],
+                  const SizedBox(height: 20),
+                  _StudentRemarksBox(),
+                  const SizedBox(height: 20),
+                  _OrderSummary(
+                    subtotal: _subtotal,
+                    deliveryFee: _deliveryFee,
+                    total: _total,
+                  ),
+                  const SizedBox(height: 100),
+                ],
+              ),
             ),
-          ),
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            child: _BottomCheckoutBar(onProceed: () {}),
-          ),
-        ],
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: _BottomCheckoutBar(
+                onProceed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const CheckoutPage(),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -181,7 +201,7 @@ class _FreeDeliveryProgress extends StatelessWidget {
       return Container(
         padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
         decoration: BoxDecoration(
-          color: _kWhite,
+          color: kWhite,
           borderRadius: BorderRadius.circular(14),
           boxShadow: [
             BoxShadow(
@@ -193,13 +213,13 @@ class _FreeDeliveryProgress extends StatelessWidget {
         ),
         child: Row(
           children: [
-            Text('🚚 ', style: TextStyle(fontSize: 16, color: _kGreen)),
+            const Text('🚚 ', style: TextStyle(fontSize: 16, color: kGreen)),
             const Text(
               "You've unlocked FREE delivery!",
               style: TextStyle(
                 fontWeight: FontWeight.w600,
                 fontSize: 14,
-                color: _kGreen,
+                color: kGreen,
               ),
             ),
           ],
@@ -210,7 +230,7 @@ class _FreeDeliveryProgress extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: _kWhite,
+        color: kWhite,
         borderRadius: BorderRadius.circular(14),
         boxShadow: [
           BoxShadow(
@@ -238,7 +258,7 @@ class _FreeDeliveryProgress extends StatelessWidget {
               value: progress,
               minHeight: 6,
               backgroundColor: Colors.grey[200],
-              valueColor: const AlwaysStoppedAnimation<Color>(_kVibrantOrange),
+              valueColor: const AlwaysStoppedAnimation<Color>(kAccent), // Guna warna Oren
             ),
           ),
         ],
@@ -262,7 +282,7 @@ class _StudentRemarksBox extends StatelessWidget {
           fontWeight: FontWeight.w400,
         ),
         filled: true,
-        fillColor: Colors.grey[100],
+        fillColor: kWhite.withOpacity(0.8), // Guna warna putih dengan opacity
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
           borderSide: BorderSide.none,
@@ -273,7 +293,7 @@ class _StudentRemarksBox extends StatelessWidget {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide(color: _kElectricBlue.withOpacity(0.4), width: 1),
+          borderSide: const BorderSide(color: kPrimary, width: 1.5), // Guna hijau bila klik
         ),
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       ),
@@ -297,7 +317,7 @@ class _SellerHeaderCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: _kWhite,
+        color: kWhite,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
@@ -313,10 +333,10 @@ class _SellerHeaderCard extends StatelessWidget {
             width: 44,
             height: 44,
             decoration: BoxDecoration(
-              color: const Color(0xFFE8EEFF),
+              color: kPrimary.withOpacity(0.1), // Hijau Pudar
               borderRadius: BorderRadius.circular(12),
             ),
-            child: const Icon(Icons.storefront_rounded, color: _kElectricBlue, size: 22),
+            child: const Icon(Icons.storefront_rounded, color: kPrimary, size: 22), // Ikon Hijau
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -376,7 +396,7 @@ class _CartItem extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: _kWhite,
+        color: kWhite,
         borderRadius: BorderRadius.circular(14),
         boxShadow: [
           BoxShadow(
@@ -393,10 +413,10 @@ class _CartItem extends StatelessWidget {
             width: 72,
             height: 72,
             decoration: BoxDecoration(
-              color: Colors.grey[200],
+              color: kPrimary.withOpacity(0.1), // Hijau pudar
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Icon(Icons.restaurant_rounded, color: Colors.grey[400], size: 28),
+            child: const Icon(Icons.restaurant_rounded, color: kPrimary, size: 28),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -415,7 +435,7 @@ class _CartItem extends StatelessWidget {
                 Text(
                   'RM${price.toStringAsFixed(2)}',
                   style: const TextStyle(
-                    color: _kVibrantOrange,
+                    color: kAccent, // Warna oren untuk harga
                     fontWeight: FontWeight.w700,
                     fontSize: 15,
                   ),
@@ -452,7 +472,7 @@ class _QuantitySelector extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: _kBg,
+        color: kWhite,
         borderRadius: BorderRadius.circular(24),
         border: Border.all(color: Colors.grey[300]!, width: 1),
       ),
@@ -517,7 +537,7 @@ class _OrderSummary extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: _kWhite,
+        color: kWhite,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
@@ -544,7 +564,7 @@ class _OrderSummary extends StatelessWidget {
           _SummaryRow(
             label: 'Delivery Fee',
             value: deliveryFee == 0 ? 'Free' : 'RM${deliveryFee.toStringAsFixed(2)}',
-            valueColor: deliveryFee == 0 ? _kGreen : null,
+            valueColor: deliveryFee == 0 ? kGreen : null,
           ),
           const SizedBox(height: 14),
           const Divider(height: 1),
@@ -565,7 +585,7 @@ class _OrderSummary extends StatelessWidget {
                 style: const TextStyle(
                   fontWeight: FontWeight.w800,
                   fontSize: 18,
-                  color: _kVibrantOrange,
+                  color: kPrimary, // Guna Hijau Utama supaya nampak legit
                 ),
               ),
             ],
@@ -623,7 +643,7 @@ class _BottomCheckoutBar extends StatelessWidget {
     return Container(
       padding: EdgeInsets.fromLTRB(16, 12, 16, 12 + bottomPad),
       decoration: BoxDecoration(
-        color: _kWhite,
+        color: kWhite,
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.08),
@@ -639,8 +659,8 @@ class _BottomCheckoutBar extends StatelessWidget {
           child: ElevatedButton(
             onPressed: onProceed,
             style: ElevatedButton.styleFrom(
-              backgroundColor: _kVibrantOrange,
-              foregroundColor: _kWhite,
+              backgroundColor: kPrimary, // Butang Checkout Hijau Premium
+              foregroundColor: kWhite,
               padding: const EdgeInsets.symmetric(vertical: 16),
               elevation: 0,
               shape: RoundedRectangleBorder(

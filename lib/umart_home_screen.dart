@@ -469,10 +469,10 @@ class _PromoBanner extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    const Icon(Icons.bolt, color: kOrange, size: 16),
+                    const Icon(Icons.trending_up_rounded, color: kOrange, size: 16),
                     const SizedBox(width: 4),
                     Text(
-                      'LIMITED TIME',
+                      'EARN EXTRA INCOME',
                       style: TextStyle(
                         color: kOrange,
                         fontSize: 11,
@@ -484,17 +484,21 @@ class _PromoBanner extends StatelessWidget {
                 ),
                 const SizedBox(height: 6),
                 const Text(
-                  'Free Delivery Week',
+                  '🏪 Turn Your Dorm Into a Store!',
                   style: TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.bold,
                     color: Colors.black87,
                   ),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  'Enjoy free delivery on all food orders this week!',
-                  style: TextStyle(color: Colors.grey[500], fontSize: 13),
+                const SizedBox(height: 8),
+                Flexible(
+                  child: Text(
+                    'Why just buy when you can earn? Join the UMART seller community and start making money today. Zero fees to start.',
+                    style: TextStyle(color: Colors.grey[600], fontSize: 13),
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
                 const SizedBox(height: 14),
                 ElevatedButton(
@@ -509,14 +513,14 @@ class _PromoBanner extends StatelessWidget {
                     ),
                     elevation: 0,
                   ),
-                  child: const Text('Order Now',
+                  child: const Text('Start Earning',
                       style: TextStyle(
                           fontWeight: FontWeight.w600, fontSize: 14)),
                 ),
               ],
             ),
           ),
-          // Decorative icon cluster
+          // Decorative storefront icon
           Stack(
             alignment: Alignment.center,
             children: [
@@ -524,7 +528,14 @@ class _PromoBanner extends StatelessWidget {
                 width: 80,
                 height: 80,
                 decoration: BoxDecoration(
-                  color: const Color(0xFFD8E0FF).withOpacity(0.6),
+                  gradient: LinearGradient(
+                    colors: [
+                      const Color(0xFFFFE0CC).withOpacity(0.7),
+                      const Color(0xFFD8E0FF).withOpacity(0.6),
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
                   borderRadius: BorderRadius.circular(20),
                 ),
               ),
@@ -535,13 +546,16 @@ class _PromoBanner extends StatelessWidget {
                   width: 55,
                   height: 55,
                   decoration: BoxDecoration(
-                    color: const Color(0xFFB8C6FF).withOpacity(0.5),
+                    color: const Color(0xFFFFB84D).withOpacity(0.3),
                     borderRadius: BorderRadius.circular(14),
                   ),
                 ),
               ),
-              const Icon(Icons.restaurant_rounded,
-                  color: Color(0xFF8099FF), size: 36),
+              const Icon(
+                Icons.storefront_rounded,
+                color: Color(0xFFFF6B00),
+                size: 42,
+              ),
             ],
           ),
         ],
