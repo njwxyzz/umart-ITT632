@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart'; 
 import 'cart_page.dart'; 
+import 'product_detail_page.dart'; // <--- JANGAN LUPA IMPORT NI!
 
 // ─── Color Constants (TEMA HIJAU BARU) ───────────────────────────────────────
 const kPrimary      = Color(0xFF4C6B3F); // Olive Green
@@ -117,107 +118,113 @@ class _ProductCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) { 
-    return Container( 
-      decoration: BoxDecoration( 
-        color: kWhite,
-        borderRadius: BorderRadius.circular(16), 
-        boxShadow: [ 
-          BoxShadow(
-            color: Colors.black.withOpacity(0.06), 
-            blurRadius: 10, 
-            offset: const Offset(0, 3), 
-          ),
-        ],
-      ),
-      clipBehavior: Clip.hardEdge, 
-      child: Stack(
-        children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start, 
-            children: [
-              Stack(
-                children: [
-                  SizedBox(
-                    height: 120,
-                    width: double.infinity, 
-                    child: Image.network( 
-                      imageUrl, 
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Container( 
-                        color: kPrimary.withOpacity(0.1), // Guna hijau lembut kalau gambar error
-                        child: const Icon(Icons.shopping_bag_outlined, size: 40, color: kPrimary),
-                      ),
-                    ),
-                  ),
-                  if (badge != null) 
-                    Positioned( 
-                      top: 8,
-                      left: 8,
-                      child: Container( 
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), 
-                        decoration: BoxDecoration(
-                          color: badgeColor ?? kAccent, // Fallback ke warna Oren kalau takde warna spesifik
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          badge!,
-                          style: const TextStyle(color: kWhite, fontSize: 10, fontWeight: FontWeight.w700),
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-              Padding(
-                padding: const EdgeInsets.all(10), 
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start, 
+    return GestureDetector( // <--- GESTURE DETECTOR DITAMBAH DI SINI
+      onTap: () {
+        // PERGI KE PRODUCT DETAIL BILA KLIK!
+        Navigator.push(context, MaterialPageRoute(builder: (_) => const ProductDetailPage()));
+      },
+      child: Container( 
+        decoration: BoxDecoration( 
+          color: kWhite,
+          borderRadius: BorderRadius.circular(16), 
+          boxShadow: [ 
+            BoxShadow(
+              color: Colors.black.withOpacity(0.06), 
+              blurRadius: 10, 
+              offset: const Offset(0, 3), 
+            ),
+          ],
+        ),
+        clipBehavior: Clip.hardEdge, 
+        child: Stack(
+          children: [
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start, 
+              children: [
+                Stack(
                   children: [
-                    Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF1A1A2E)), maxLines: 2, overflow: TextOverflow.ellipsis),
-                    const SizedBox(height: 6),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text('RM${price.toStringAsFixed(2)}', style: const TextStyle(color: kAccent, fontWeight: FontWeight.w800, fontSize: 13)), // Tukar ke Oren
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(Icons.star_rounded, color: kAccent, size: 14), // Bintang Oren
-                            const SizedBox(width: 3),
-                            Text(rating.toStringAsFixed(1), style: TextStyle(color: Colors.grey[700], fontSize: 11, fontWeight: FontWeight.w600)),
-                          ],
+                    SizedBox(
+                      height: 120,
+                      width: double.infinity, 
+                      child: Image.network( 
+                        imageUrl, 
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => Container( 
+                          color: kPrimary.withOpacity(0.1), // Guna hijau lembut kalau gambar error
+                          child: const Icon(Icons.shopping_bag_outlined, size: 40, color: kPrimary),
                         ),
-                      ],
+                      ),
                     ),
-                    const SizedBox(height: 6),
-                    Row(
-                      children: [
-                        Icon(Icons.storefront_rounded, size: 14, color: Colors.grey[500]),
-                        const SizedBox(width: 4),
-                        Expanded(child: Text(sellerName, style: TextStyle(color: Colors.grey[500], fontSize: 11, fontWeight: FontWeight.w500), maxLines: 1, overflow: TextOverflow.ellipsis)),
-                      ],
-                    ),
+                    if (badge != null) 
+                      Positioned( 
+                        top: 8,
+                        left: 8,
+                        child: Container( 
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), 
+                          decoration: BoxDecoration(
+                            color: badgeColor ?? kAccent, // Fallback ke warna Oren kalau takde warna spesifik
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            badge!,
+                            style: const TextStyle(color: kWhite, fontSize: 10, fontWeight: FontWeight.w700),
+                          ),
+                        ),
+                      ),
                   ],
                 ),
-              ),
-            ],
-          ),
-          // Butang Add (+)
-          Positioned(
-            bottom: 10,
-            right: 10,
-            child: Container(
-              width: 30, height: 30,
-              decoration: const BoxDecoration(
-                color: kPrimary, // Tukar dari Biru ke Hijau
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 2))
-                ]
-              ),
-              child: const Icon(Icons.add, color: kWhite, size: 18),
+                Padding(
+                  padding: const EdgeInsets.all(10), 
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start, 
+                    children: [
+                      Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF1A1A2E)), maxLines: 2, overflow: TextOverflow.ellipsis),
+                      const SizedBox(height: 6),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text('RM${price.toStringAsFixed(2)}', style: const TextStyle(color: kAccent, fontWeight: FontWeight.w800, fontSize: 13)), // Tukar ke Oren
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.star_rounded, color: kAccent, size: 14), // Bintang Oren
+                              const SizedBox(width: 3),
+                              Text(rating.toStringAsFixed(1), style: TextStyle(color: Colors.grey[700], fontSize: 11, fontWeight: FontWeight.w600)),
+                            ],
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          Icon(Icons.storefront_rounded, size: 14, color: Colors.grey[500]),
+                          const SizedBox(width: 4),
+                          Expanded(child: Text(sellerName, style: TextStyle(color: Colors.grey[500], fontSize: 11, fontWeight: FontWeight.w500), maxLines: 1, overflow: TextOverflow.ellipsis)),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
-          ),
-        ],
+            // Butang Add (+)
+            Positioned(
+              bottom: 10,
+              right: 10,
+              child: Container(
+                width: 30, height: 30,
+                decoration: const BoxDecoration(
+                  color: kPrimary, // Tukar dari Biru ke Hijau
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 2))
+                  ]
+                ),
+                child: const Icon(Icons.add, color: kWhite, size: 18),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

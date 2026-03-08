@@ -1,16 +1,14 @@
 import 'package:flutter/material.dart';
+import 'tracking_page.dart'; // Wajib import untuk lompat ke page tracking
 
 // ─── Color Constants (TEMA HIJAU BARU) ───────────────────────────────────────
-const kPrimary      = Color(0xFF4C6B3F); // Olive Green
-const kPrimaryLight = Color(0xFF799B61); // Lighter Olive
-const kAccent       = Color(0xFFF27B35); // Oren Lembut
-const kBg           = Color(0xFFF5F7F2); // Off-white hijau
+const kPrimary      = Color(0xFF4C6B3F); 
+const kPrimaryLight = Color(0xFF799B61); 
+const kAccent       = Color(0xFFF27B35); 
+const kBg           = Color(0xFFF5F7F2); 
 const kWhite        = Colors.white;
-const kGreen        = Color(0xFF00C48C); // Untuk 'Free' text
+const kGreen        = Color(0xFF00C48C); 
 
-// 💡 EXPLANATION 1: StatefulWidget
-// We use StatefulWidget (not StatelessWidget) because this page has a UI that CHANGES.
-// When user clicks 'QR Pay', we need the UI to redraw and show the QR box.
 class CheckoutPage extends StatefulWidget {
   const CheckoutPage({super.key});
 
@@ -19,15 +17,67 @@ class CheckoutPage extends StatefulWidget {
 }
 
 class _CheckoutPageState extends State<CheckoutPage> {
-  
-  // 💡 EXPLANATION 2: The "State" Variable
-  // This variable remembers what the user selected. Default is 'COD'.
   String _selectedPayment = 'COD';
+
+  // ─── FUNGSI MAGIK POPUP COMEL ───
+  void _showSuccessPopup() {
+    showDialog(
+      context: context,
+      barrierDismissible: false, // User tak boleh tutup dengan klik luar kotak
+      builder: (BuildContext context) {
+        return Dialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+          backgroundColor: kWhite,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Animasi Melantun (Bouncing Pop)
+                TweenAnimationBuilder(
+                  tween: Tween<double>(begin: 0.0, end: 1.0),
+                  duration: const Duration(milliseconds: 600),
+                  curve: Curves.elasticOut, // Ini yang buat dia melantun comel
+                  builder: (context, scale, child) {
+                    return Transform.scale(
+                      scale: scale,
+                      child: Container(
+                        padding: const EdgeInsets.all(24),
+                        decoration: BoxDecoration(
+                          color: kPrimary.withOpacity(0.1),
+                          shape: BoxShape.circle,
+                        ),
+                        // Ikon motor delivery
+                        child: const Icon(Icons.moped_rounded, color: kPrimary, size: 60),
+                      ),
+                    );
+                  }
+                ),
+                const SizedBox(height: 24),
+                const Text('Order Confirmed!', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: Color(0xFF1A1A2E))),
+                const SizedBox(height: 8),
+                Text('Getting your runner ready...', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey.shade500, fontSize: 14)),
+                const SizedBox(height: 32),
+                const CircularProgressIndicator(
+                  color: kAccent, // Loading oren
+                  strokeWidth: 3,
+                ),
+              ],
+            ),
+          ),
+        );
+      }
+    );
+
+    // Tunggu 2.5 saat, lepas tu tutup popup dan buka Tracking Page
+    Future.delayed(const Duration(milliseconds: 2500), () {
+      Navigator.pop(context); // Tutup Dialog
+      Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const TrackingPage())); // Lompat ke Tracking!
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
-    // 💡 EXPLANATION 3: Scaffold
-    // Scaffold is the 'skeleton' of a page. It provides the AppBar, Body, and BottomNavigationBar.
     return Scaffold(
       backgroundColor: kBg,
       appBar: AppBar(
@@ -45,7 +95,6 @@ class _CheckoutPageState extends State<CheckoutPage> {
         centerTitle: true,
       ),
       
-      // MAGIK BACKGROUND PATTERN .JPG
       body: Container(
         height: double.infinity,
         decoration: const BoxDecoration(
@@ -55,9 +104,6 @@ class _CheckoutPageState extends State<CheckoutPage> {
             opacity: 0.05,
           ),
         ),
-        // 💡 EXPLANATION 4: SingleChildScrollView
-        // SUPER IMPORTANT! This makes the screen scrollable. 
-        // If you don't use this, small phones will get the yellow/black "Overflow" error.
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(20.0),
           child: Column(
@@ -71,16 +117,14 @@ class _CheckoutPageState extends State<CheckoutPage> {
                 decoration: BoxDecoration(
                   color: kWhite,
                   borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 3)),
-                  ],
+                  boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 3))],
                 ),
                 child: Row(
                   children: [
                     Container(
                       padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(color: kAccent.withOpacity(0.1), shape: BoxShape.circle),
-                      child: const Icon(Icons.location_on, color: kAccent), // Ikon oren
+                      child: const Icon(Icons.location_on, color: kAccent), 
                     ),
                     const SizedBox(width: 16),
                     const Expanded(
@@ -95,7 +139,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
                     ),
                     TextButton(
                       onPressed: () {}, 
-                      child: const Text('Edit', style: TextStyle(color: kPrimary, fontWeight: FontWeight.bold)), // Teks edit hijau
+                      child: const Text('Edit', style: TextStyle(color: kPrimary, fontWeight: FontWeight.bold)), 
                     )
                   ],
                 ),
@@ -109,17 +153,13 @@ class _CheckoutPageState extends State<CheckoutPage> {
                 decoration: BoxDecoration(
                   color: kWhite,
                   borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 3)),
-                  ],
+                  boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 3))],
                 ),
                 child: Column(
                   children: [
-                    // 💡 EXPLANATION 5: RadioListTile
-                    // This is the clickable circle button.
                     RadioListTile<String>(
                       title: const Text('Cash on Delivery (COD)', style: TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF1A1A2E), fontSize: 14)),
-                      activeColor: kAccent, // Warna oren bila dipilih
+                      activeColor: kAccent, 
                       value: 'COD',
                       groupValue: _selectedPayment,
                       onChanged: (value) {
@@ -132,9 +172,6 @@ class _CheckoutPageState extends State<CheckoutPage> {
                     RadioListTile<String>(
                       title: const Text('Online Transfer / QR Pay', style: TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF1A1A2E), fontSize: 14)),
                       activeColor: kAccent,
-                      // 💡 EXPLANATION 7: Conditional Rendering (if statement in UI)
-                      // If the variable says 'ONLINE', Flutter will build this QR box. 
-                      // If it says 'COD', Flutter completely ignores this part.
                       value: 'ONLINE',
                       groupValue: _selectedPayment,
                       onChanged: (value) {
@@ -144,13 +181,12 @@ class _CheckoutPageState extends State<CheckoutPage> {
                       },
                     ),
                     
-                    // Expandable QR Section
                     if (_selectedPayment == 'ONLINE')
                       Container(
                         width: double.infinity,
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
-                          color: kPrimary.withOpacity(0.03), // Latar belakang hijau sangat pudar
+                          color: kPrimary.withOpacity(0.03), 
                           borderRadius: const BorderRadius.only(
                             bottomLeft: Radius.circular(16),
                             bottomRight: Radius.circular(16),
@@ -163,7 +199,6 @@ class _CheckoutPageState extends State<CheckoutPage> {
                               style: TextStyle(fontSize: 13, color: Colors.black87),
                             ),
                             const SizedBox(height: 12),
-                            // Placeholder untuk gambar QR Code
                             Container(
                               height: 140,
                               width: 140,
@@ -175,11 +210,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
                               child: const Icon(Icons.qr_code_2, size: 100, color: Color(0xFF1A1A2E)),
                             ),
                             const SizedBox(height: 16),
-                            // Butang Upload Resit
                             OutlinedButton.icon(
-                              onPressed: () {
-                                // Nanti letak logik Firebase Storage kat sini
-                              },
+                              onPressed: () {},
                               icon: const Icon(Icons.upload_file, color: kPrimary),
                               label: const Text('Upload Resit', style: TextStyle(color: kPrimary, fontWeight: FontWeight.bold)),
                               style: OutlinedButton.styleFrom(
@@ -203,9 +235,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
                 decoration: BoxDecoration(
                   color: kWhite,
                   borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 3)),
-                  ],
+                  boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 3))],
                 ),
                 child: Column(
                   children: [
@@ -232,7 +262,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         const Text('Grand Total', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF1A1A2E))),
-                        const Text('RM11.50', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 20, color: kAccent)), // Harga oren
+                        const Text('RM11.50', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 20, color: kAccent)), 
                       ],
                     ),
                   ],
@@ -249,19 +279,15 @@ class _CheckoutPageState extends State<CheckoutPage> {
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: kWhite,
-          boxShadow: [
-            BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 12, offset: const Offset(0, -4)),
-          ],
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 12, offset: const Offset(0, -4))],
         ),
         child: SafeArea(
           child: SizedBox(
             width: double.infinity,
             child: ElevatedButton(
-              onPressed: () {
-                // Nanti link ke Success Page
-              },
+              onPressed: _showSuccessPopup, // <--- PANGGIL POPUP KAT SINI!
               style: ElevatedButton.styleFrom(
-                backgroundColor: kPrimary, // Butang hijau premium
+                backgroundColor: kPrimary,
                 foregroundColor: kWhite,
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),

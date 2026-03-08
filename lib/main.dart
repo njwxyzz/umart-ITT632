@@ -7,6 +7,10 @@ import 'activity_page.dart';
 import 'profile_page.dart';
 import 'all_products_page.dart';
 import 'cart_page.dart';
+import 'product_detail_page.dart';
+import 'tracking_page.dart';
+import 'orders_page.dart';
+import 'chat_page.dart';
 
 void main() { 
   runApp(const UMartApp());
@@ -66,7 +70,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildBody() {
     switch (currentIndex) {
-      case 1: return const _PlaceholderScreen(title: 'Orders Page');
+      case 1: return const OrdersPage();
       case 2: return const ActivityPage();
       case 3: return const ProfilePage();
       default: return _buildHomeContent();
@@ -176,13 +180,20 @@ class _GradientHeader extends StatelessWidget {
               ),
               Row(
                 children: [
-                  Stack(
-                    clipBehavior: Clip.none,
-                    children: [
-                      Container(width: 40, height: 40, decoration: const BoxDecoration(color: Colors.white24, shape: BoxShape.circle), child: const Icon(Icons.chat_bubble_outline_rounded, color: kWhite, size: 20)),
-                      Positioned(top: -2, right: -2, child: Container(width: 18, height: 18, decoration: const BoxDecoration(color: kAccent, shape: BoxShape.circle), child: const Center(child: Text('3', style: TextStyle(color: kWhite, fontSize: 10, fontWeight: FontWeight.bold))))),
-                    ],
+                  // --- BUTANG CHAT YANG DAH DITAMBAH GESTURE DETECTOR ---
+                  GestureDetector(
+                    onTap: () {
+                      Navigator.push(context, MaterialPageRoute(builder: (_) => const ChatPage()));
+                    },
+                    child: Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        Container(width: 40, height: 40, decoration: const BoxDecoration(color: Colors.white24, shape: BoxShape.circle), child: const Icon(Icons.chat_bubble_outline_rounded, color: kWhite, size: 20)),
+                        Positioned(top: -2, right: -2, child: Container(width: 18, height: 18, decoration: const BoxDecoration(color: kAccent, shape: BoxShape.circle), child: const Center(child: Text('3', style: TextStyle(color: kWhite, fontSize: 10, fontWeight: FontWeight.bold))))),
+                      ],
+                    ),
                   ),
+                  // -------------------------------------------------------
                   const SizedBox(width: 10),
                   GestureDetector(
                     onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const CartPage())),
@@ -424,41 +435,46 @@ class _FoodCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 170,
-      decoration: BoxDecoration(color: kWhite, borderRadius: BorderRadius.circular(16), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 10, offset: const Offset(0, 3))]),
-      clipBehavior: Clip.hardEdge,
-      child: Stack(
-        children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Stack(
-                children: [
-                  SizedBox(height: 120, width: double.infinity, child: Image.network(item.imageUrl, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Container(color: Colors.grey[200], child: const Icon(Icons.shopping_bag_outlined, color: Colors.grey)))),
-                  if (item.badge != null) Positioned(top: 8, left: 8, child: Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: item.badgeColor, borderRadius: BorderRadius.circular(8)), child: Text(item.badge!, style: const TextStyle(color: kWhite, fontSize: 10, fontWeight: FontWeight.w700)))),
-                ],
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
+    return GestureDetector( // <--- TAMBAH INI
+      onTap: () {
+        Navigator.push(context, MaterialPageRoute(builder: (_) => const ProductDetailPage()));
+      },
+      child: Container( // <--- GANTI "return Container" JADI "child: Container"
+        width: 170,
+        decoration: BoxDecoration(color: kWhite, borderRadius: BorderRadius.circular(16), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 10, offset: const Offset(0, 3))]),
+        clipBehavior: Clip.hardEdge,
+        child: Stack(
+          children: [
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Stack(
                   children: [
-                    Text(item.label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12), maxLines: 2, overflow: TextOverflow.ellipsis),
-                    const SizedBox(height: 4),
-                    Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text('RM${item.price.toStringAsFixed(2)}', style: const TextStyle(color: kAccent, fontWeight: FontWeight.w700, fontSize: 12)), Row(mainAxisSize: MainAxisSize.min, children: [const Icon(Icons.star_rounded, color: kAccent, size: 12), const SizedBox(width: 2), Text(item.rating.toStringAsFixed(1), style: TextStyle(color: Colors.grey[700], fontSize: 10))])]),
-                    const SizedBox(height: 4),
-                    Row(children: [Icon(Icons.storefront_rounded, size: 12, color: Colors.grey[500]), const SizedBox(width: 4), Expanded(child: Text(item.sellerName, style: TextStyle(color: Colors.grey[500], fontSize: 10, fontWeight: FontWeight.w500), maxLines: 1, overflow: TextOverflow.ellipsis))]),
+                    SizedBox(height: 120, width: double.infinity, child: Image.network(item.imageUrl, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Container(color: Colors.grey[200], child: const Icon(Icons.shopping_bag_outlined, color: Colors.grey)))),
+                    if (item.badge != null) Positioned(top: 8, left: 8, child: Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: item.badgeColor, borderRadius: BorderRadius.circular(8)), child: Text(item.badge!, style: const TextStyle(color: kWhite, fontSize: 10, fontWeight: FontWeight.w700)))),
                   ],
                 ),
-              ),
-            ],
-          ),
-          Positioned(bottom: 10, right: 10, child: Container(width: 30, height: 30, decoration: const BoxDecoration(color: kPrimary, shape: BoxShape.circle), child: const Icon(Icons.add, color: kWhite, size: 18))),
-        ],
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(item.label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12), maxLines: 2, overflow: TextOverflow.ellipsis),
+                      const SizedBox(height: 4),
+                      Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text('RM${item.price.toStringAsFixed(2)}', style: const TextStyle(color: kAccent, fontWeight: FontWeight.w700, fontSize: 12)), Row(mainAxisSize: MainAxisSize.min, children: [const Icon(Icons.star_rounded, color: kAccent, size: 12), const SizedBox(width: 2), Text(item.rating.toStringAsFixed(1), style: TextStyle(color: Colors.grey[700], fontSize: 10))])]),
+                      const SizedBox(height: 4),
+                      Row(children: [Icon(Icons.storefront_rounded, size: 12, color: Colors.grey[500]), const SizedBox(width: 4), Expanded(child: Text(item.sellerName, style: TextStyle(color: Colors.grey[500], fontSize: 10, fontWeight: FontWeight.w500), maxLines: 1, overflow: TextOverflow.ellipsis))]),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            Positioned(bottom: 10, right: 10, child: Container(width: 30, height: 30, decoration: const BoxDecoration(color: kPrimary, shape: BoxShape.circle), child: const Icon(Icons.add, color: kWhite, size: 18))),
+          ],
+        ),
       ),
-    );
+    ); // <--- TUTUP GESTURE DETECTOR KAT SINI
   }
 }
 
@@ -480,7 +496,20 @@ class _TrackingBanner extends StatelessWidget {
               Container(width: 40, height: 40, decoration: BoxDecoration(color: kPrimaryLight.withOpacity(0.2), borderRadius: BorderRadius.circular(12)), child: const Icon(Icons.pedal_bike_rounded, color: kPrimary, size: 20)),
               const SizedBox(width: 12),
               Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const Text('Arriving in 5 mins', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)), Text('To Dahlia 3', style: TextStyle(color: Colors.grey[500], fontSize: 12))])),
-              ElevatedButton(onPressed: () {}, style: ElevatedButton.styleFrom(backgroundColor: kAccent, foregroundColor: kWhite, padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)), elevation: 0), child: const Text('Track', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13))),
+              ElevatedButton(
+                onPressed: () {
+                  // MAGIK: Lompat ke Tracking Page bila tekan!
+                  Navigator.push(context, MaterialPageRoute(builder: (_) => const TrackingPage()));
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: kAccent, // Warna oren
+                  foregroundColor: kWhite,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                ),
+                child: const Text('Track', style: TextStyle(fontWeight: FontWeight.bold)),
+              )
             ],
           ),
         ),
