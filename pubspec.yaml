@@ -88,3 +88,6 @@ flutter:
   assets:
   - assets/icons/
   - assets/bg_pattern.jpg
+  - assets/bg_onboard.jpg
+  - assets/bg_onboard2.jpg
+  - assets/bg_onboard3.jpg

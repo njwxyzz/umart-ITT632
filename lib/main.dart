@@ -11,7 +11,8 @@ import 'product_detail_page.dart';
 import 'tracking_page.dart';
 import 'orders_page.dart';
 import 'chat_page.dart';
-
+import 'onboarding_screen.dart'; 
+// <--- Tambah ni
 void main() { 
   runApp(const UMartApp());
 }
@@ -28,7 +29,7 @@ class UMartApp extends StatelessWidget {
         fontFamily: 'SF Pro Display',
         scaffoldBackgroundColor: const Color(0xFFF5F7F2), // Off-white dengan tone hijau sikit
       ),
-      home: const HomeScreen(), 
+      home: const OnboardingScreen(), // <---  
     );
   }
 }
