@@ -3,7 +3,8 @@
 // ============================================================================
 import 'dart:ui'; 
 import 'package:flutter/material.dart'; 
-import 'activity_page.dart';
+
+// Pages Imports
 import 'profile_page.dart';
 import 'all_products_page.dart';
 import 'cart_page.dart';
@@ -11,8 +12,9 @@ import 'product_detail_page.dart';
 import 'tracking_page.dart';
 import 'orders_page.dart';
 import 'chat_page.dart';
+import 'inbox_page.dart'; // <--- Inbox Page Baru
 import 'onboarding_screen.dart'; 
-// <--- Tambah ni
+
 void main() { 
   runApp(const UMartApp());
 }
@@ -27,9 +29,9 @@ class UMartApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         fontFamily: 'SF Pro Display',
-        scaffoldBackgroundColor: const Color(0xFFF5F7F2), // Off-white dengan tone hijau sikit
+        scaffoldBackgroundColor: const Color(0xFFF5F7F2), 
       ),
-      home: const OnboardingScreen(), // <---  
+      home: const OnboardingScreen(), 
     );
   }
 }
@@ -37,9 +39,9 @@ class UMartApp extends StatelessWidget {
 // ============================================================================
 // GLOBAL COLOR CONSTANTS (TEMA HIJAU BARU!)
 // ============================================================================
-const kPrimary      = Color(0xFF4C6B3F); // Olive Green (Hijau utama)
-const kPrimaryLight = Color(0xFF799B61); // Lighter Olive (Untuk gradient)
-const kAccent       = Color(0xFFF27B35); // Oren (Untuk butang/badge supaya menonjol)
+const kPrimary      = Color(0xFF4C6B3F); 
+const kPrimaryLight = Color(0xFF799B61); 
+const kAccent       = Color(0xFFF27B35); 
 const kBg           = Color(0xFFF5F7F2); 
 const kWhite        = Colors.white;
 
@@ -49,7 +51,7 @@ Widget _iconAsset(String path, {double radius = 12}) => ClipRRect(
     );
 
 // ============================================================================
-// HOME SCREEN
+// HOME SCREEN (Main Wrapper)
 // ============================================================================
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -69,10 +71,12 @@ class _HomeScreenState extends State<HomeScreen> {
     _FoodItem(label: 'Burger Lab', badge: '10% OFF', badgeColor: kAccent, imageUrl: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=400', price: 10.50, rating: 4.9, sellerName: 'Burger Lab'),
   ];
 
+  // Router untuk Tab Bawah
   Widget _buildBody() {
     switch (currentIndex) {
       case 1: return const OrdersPage();
-      case 3: return const ProfilePage();
+      case 2: return const InboxPage();   // <--- Link ke Inbox
+      case 3: return const ProfilePage(); // <--- Link ke Profile
       default: return _buildHomeContent();
     }
   }
@@ -110,9 +114,9 @@ class _HomeScreenState extends State<HomeScreen> {
       body: Container(
         decoration: const BoxDecoration(
           image: DecorationImage(
-            image: AssetImage('assets/bg_pattern.jpg'), // Nama fail Canva kau
-            repeat: ImageRepeat.repeat, // Jadikan dia corak berulang
-            opacity: 0.05, // 5% pudar supaya tak serabut mata
+            image: AssetImage('assets/bg_pattern.jpg'), 
+            repeat: ImageRepeat.repeat, 
+            opacity: 0.05, 
           ),
         ),
         child: Stack(
@@ -129,6 +133,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: _TrackingBanner()),
                       const SizedBox(height: 10),
                     ],
+                    // BOTTOM NAVIGATION BAR PANGGIL KAT SINI
                     Padding(
                       padding: EdgeInsets.fromLTRB(24, 0, 24, bottomPad > 0 ? bottomPad : 16),
                       child: _BottomNav(selectedIndex: currentIndex, onTap: (i) => setState(() => currentIndex = i)),
@@ -144,14 +149,8 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-class _PlaceholderScreen extends StatelessWidget {
-  final String title;
-  const _PlaceholderScreen({required this.title});
-  @override Widget build(BuildContext context) => Center(child: Text(title, style: TextStyle(fontSize: 18, color: Colors.grey[600], fontWeight: FontWeight.w500)));
-}
-
 // ============================================================================
-// GRADIENT HEADER (Olive Green)
+// GRADIENT HEADER (Header Atas Yang Dah Dicuci)
 // ============================================================================
 class _GradientHeader extends StatelessWidget {
   const _GradientHeader();
@@ -180,27 +179,22 @@ class _GradientHeader extends StatelessWidget {
               ),
               Row(
                 children: [
-                  // --- BUTANG CHAT YANG DAH DITAMBAH GESTURE DETECTOR ---
-                  GestureDetector(
-                    onTap: () {
-                      Navigator.push(context, MaterialPageRoute(builder: (_) => const ChatPage()));
-                    },
-                    child: Stack(
-                      clipBehavior: Clip.none,
-                      children: [
-                        Container(width: 40, height: 40, decoration: const BoxDecoration(color: Colors.white24, shape: BoxShape.circle), child: const Icon(Icons.chat_bubble_outline_rounded, color: kWhite, size: 20)),
-                        Positioned(top: -2, right: -2, child: Container(width: 18, height: 18, decoration: const BoxDecoration(color: kAccent, shape: BoxShape.circle), child: const Center(child: Text('3', style: TextStyle(color: kWhite, fontSize: 10, fontWeight: FontWeight.bold))))),
-                      ],
-                    ),
+                  // 1. Ikon Loceng (Notifications)
+                  Container(
+                    width: 42, height: 42,
+                    decoration: BoxDecoration(color: kWhite.withOpacity(0.2), shape: BoxShape.circle),
+                    child: const Icon(Icons.notifications_none_rounded, color: kWhite, size: 20),
                   ),
-                  // -------------------------------------------------------
-                  const SizedBox(width: 10),
+                  const SizedBox(width: 12),
+                  // 2. Ikon Troli (Cart)
                   GestureDetector(
                     onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const CartPage())),
-                    child: Container(width: 40, height: 40, decoration: const BoxDecoration(color: Colors.white24, shape: BoxShape.circle), child: const Icon(Icons.shopping_cart_outlined, color: kWhite, size: 20)),
+                    child: Container(
+                      width: 42, height: 42,
+                      decoration: BoxDecoration(color: kWhite.withOpacity(0.2), shape: BoxShape.circle),
+                      child: const Icon(Icons.shopping_cart_outlined, color: kWhite, size: 20),
+                    ),
                   ),
-                  const SizedBox(width: 10),
-                  const CircleAvatar(radius: 20, backgroundColor: kWhite, child: Text('U', style: TextStyle(color: kPrimary, fontWeight: FontWeight.bold, fontSize: 16))),
                 ],
               )
             ],
@@ -218,7 +212,7 @@ class _GradientHeader extends StatelessWidget {
 }
 
 // ============================================================================
-// CATEGORY BENTO GRID (Warna Pastel Earth Tone)
+// CATEGORY BENTO GRID 
 // ============================================================================
 class _BentoGrid extends StatelessWidget {
   final List<_FoodItem> foodItems; 
@@ -235,7 +229,7 @@ class _BentoGrid extends StatelessWidget {
               Expanded(
                 child: _BentoCard(
                   minHeight: 170,
-                  bgColor: Colors.green.shade50, // Pastel Green
+                  bgColor: Colors.green.shade50,
                   onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => AllProductPage(title: 'Food', items: foodItems))),
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -254,7 +248,7 @@ class _BentoGrid extends StatelessWidget {
                 child: Column(
                   children: [
                     _BentoCard(
-                      bgColor: Colors.orange.shade50, // Pastel Orange
+                      bgColor: Colors.orange.shade50,
                       onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const AllProductPage(title: 'Parcel', items: []))),
                       child: Row(
                         children: [
@@ -266,7 +260,7 @@ class _BentoGrid extends StatelessWidget {
                     ),
                     const SizedBox(height: 10),
                     _BentoCard(
-                      bgColor: Colors.brown.shade50, // Pastel Brown
+                      bgColor: Colors.brown.shade50,
                       onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const AllProductPage(title: 'Printing', items: []))),
                       child: Row(
                         children: [
@@ -288,7 +282,7 @@ class _BentoGrid extends StatelessWidget {
             Expanded(
               flex: 2,
               child: _BentoCard(
-                bgColor: Colors.teal.shade50, // Pastel Teal
+                bgColor: Colors.teal.shade50,
                 onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const AllProductPage(title: 'Preloved', items: []))),
                 child: Row(
                   children: [
@@ -348,7 +342,7 @@ class _BentoCard extends StatelessWidget {
 }
 
 // ============================================================================
-// PROMOTIONAL BANNER (Earthy Dark Tone)
+// PROMOTIONAL BANNER 
 // ============================================================================
 class _PromoBanner extends StatelessWidget {
   @override
@@ -356,7 +350,7 @@ class _PromoBanner extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: const Color(0xFF2E3B22), // Dark Forest Green
+        color: const Color(0xFF2E3B22), 
         borderRadius: BorderRadius.circular(24),
         boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 20, offset: const Offset(0, 10))],
       ),
@@ -435,11 +429,11 @@ class _FoodCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector( // <--- TAMBAH INI
+    return GestureDetector( 
       onTap: () {
         Navigator.push(context, MaterialPageRoute(builder: (_) => const ProductDetailPage()));
       },
-      child: Container( // <--- GANTI "return Container" JADI "child: Container"
+      child: Container( 
         width: 170,
         decoration: BoxDecoration(color: kWhite, borderRadius: BorderRadius.circular(16), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 10, offset: const Offset(0, 3))]),
         clipBehavior: Clip.hardEdge,
@@ -474,7 +468,7 @@ class _FoodCard extends StatelessWidget {
           ],
         ),
       ),
-    ); // <--- TUTUP GESTURE DETECTOR KAT SINI
+    ); 
   }
 }
 
@@ -498,11 +492,10 @@ class _TrackingBanner extends StatelessWidget {
               Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const Text('Arriving in 5 mins', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)), Text('To Dahlia 3', style: TextStyle(color: Colors.grey[500], fontSize: 12))])),
               ElevatedButton(
                 onPressed: () {
-                  // MAGIK: Lompat ke Tracking Page bila tekan!
                   Navigator.push(context, MaterialPageRoute(builder: (_) => const TrackingPage()));
                 },
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: kAccent, // Warna oren
+                  backgroundColor: kAccent,
                   foregroundColor: kWhite,
                   elevation: 0,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -519,7 +512,7 @@ class _TrackingBanner extends StatelessWidget {
 }
 
 // ============================================================================
-// BOTTOM NAVIGATION BAR
+// BOTTOM NAVIGATION BAR (FLOATING PILL DESIGN)
 // ============================================================================
 class _BottomNav extends StatelessWidget {
   final int selectedIndex;
@@ -527,35 +520,129 @@ class _BottomNav extends StatelessWidget {
 
   const _BottomNav({required this.selectedIndex, required this.onTap});
 
-  static const _icons = [Icons.home_rounded, Icons.list_alt_rounded, Icons.person_outline_rounded];
-  static const _labels = ['Home', 'Orders', 'Profile'];
-
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 64,
-      padding: const EdgeInsets.symmetric(horizontal: 8),
-      decoration: BoxDecoration(color: kWhite, borderRadius: BorderRadius.circular(32), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.10), blurRadius: 24, offset: const Offset(0, 6))]),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-        children: List.generate(_icons.length, (i) {
-          final selected = i == selectedIndex;
-          return GestureDetector(
-            onTap: () => onTap(i),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              decoration: BoxDecoration(color: selected ? kPrimary : Colors.transparent, borderRadius: BorderRadius.circular(24)),
-              child: Row(
-                children: [
-                  Icon(_icons[i], color: selected ? kWhite : Colors.grey[700], size: 22),
-                  if (selected) ...[const SizedBox(width: 6), Text(_labels[i], style: const TextStyle(color: kWhite, fontWeight: FontWeight.w600, fontSize: 13))],
-                ],
+      height: 65,
+      decoration: BoxDecoration(
+        color: kWhite,
+        borderRadius: BorderRadius.circular(35),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 20, offset: const Offset(0, 10)),
+        ],
+      ),
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          // ─── Ikon-Ikon Menu Kiri Kanan ───
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              _buildNavItem(icon: Icons.home_rounded, label: 'Home', index: 0),
+              _buildNavItem(icon: Icons.receipt_long_rounded, label: 'Orders', index: 1),
+              const SizedBox(width: 60), // Kosongkan ruang tengah
+              _buildNavItem(icon: Icons.chat_bubble_rounded, label: 'Inbox', index: 2),
+              _buildNavItem(icon: Icons.person_rounded, label: 'Profile', index: 3),
+            ],
+          ),
+          
+          // ─── BUTANG OREN TERSEMBUL (FAB) ───
+          Positioned(
+            top: -20, // Tolak naik atas sikit
+            left: 0,
+            right: 0,
+            child: GestureDetector(
+              onTap: () => _showSellActionModal(context),
+              child: Center(
+                child: Container(
+                  width: 58,
+                  height: 58,
+                  decoration: BoxDecoration(
+                    color: kAccent,
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(color: kAccent.withOpacity(0.4), blurRadius: 15, offset: const Offset(0, 8)),
+                    ],
+                    border: Border.all(color: kBg, width: 4), 
+                  ),
+                  child: const Icon(Icons.add_rounded, color: kWhite, size: 32),
+                ),
               ),
             ),
-          );
-        }),
+          ),
+        ],
       ),
+    );
+  }
+
+  // Helper Ikon Biasa
+  Widget _buildNavItem({required IconData icon, required String label, required int index}) {
+    final isSelected = selectedIndex == index;
+    return GestureDetector(
+      onTap: () => onTap(index),
+      behavior: HitTestBehavior.opaque,
+      child: SizedBox(
+        width: 50,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              color: isSelected ? kPrimary : Colors.grey.shade400,
+              size: isSelected ? 26 : 24,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: TextStyle(
+                color: isSelected ? kPrimary : Colors.grey.shade400,
+                fontSize: 10,
+                fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Modal Pop-Up Bila Butang [+] Ditekan
+  void _showSellActionModal(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return Container(
+          padding: const EdgeInsets.all(24),
+          decoration: const BoxDecoration(
+            color: kWhite,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2))),
+              const SizedBox(height: 24),
+              const Icon(Icons.storefront_rounded, color: kPrimary, size: 50),
+              const SizedBox(height: 16),
+              const Text('Start Selling!', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: Color(0xFF1A1A2E))),
+              const SizedBox(height: 8),
+              Text('Turn your dorm into a store. Join as a seller to list your food or preloved items.', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey.shade600, fontSize: 14)),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                height: 54,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.pop(context),
+                  style: ElevatedButton.styleFrom(backgroundColor: kPrimary, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
+                  child: const Text('Join UMART Sellers', style: TextStyle(color: kWhite, fontSize: 16, fontWeight: FontWeight.bold)),
+                ),
+              ),
+              const SizedBox(height: 10),
+            ],
+          ),
+        );
+      }
     );
   }
 }
