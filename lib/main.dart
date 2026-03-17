@@ -72,7 +72,6 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildBody() {
     switch (currentIndex) {
       case 1: return const OrdersPage();
-      case 2: return const ActivityPage();
       case 3: return const ProfilePage();
       default: return _buildHomeContent();
     }
@@ -528,8 +527,8 @@ class _BottomNav extends StatelessWidget {
 
   const _BottomNav({required this.selectedIndex, required this.onTap});
 
-  static const _icons = [Icons.home_rounded, Icons.list_alt_rounded, Icons.show_chart_rounded, Icons.person_outline_rounded];
-  static const _labels = ['Home', 'Orders', 'Activity', 'Profile'];
+  static const _icons = [Icons.home_rounded, Icons.list_alt_rounded, Icons.person_outline_rounded];
+  static const _labels = ['Home', 'Orders', 'Profile'];
 
   @override
   Widget build(BuildContext context) {

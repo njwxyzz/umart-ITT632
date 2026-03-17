@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'edit_profile_page.dart';
+import 'settings_page.dart';
 
 // ─── Color Constants (TEMA HIJAU BARU) ───────────────────────────────────────
 const kPrimary      = Color(0xFF4C6B3F); // Olive Green
@@ -75,10 +77,15 @@ class ProfilePage extends StatelessWidget {
                   children: [
                     const Text('My Profile', style: TextStyle(color: Color(0xFF1A1A2E), fontSize: 24, fontWeight: FontWeight.w800, letterSpacing: -0.5)),
                     // Settings icon
-                    Container(
-                      width: 40, height: 40,
-                      decoration: BoxDecoration(color: kWhite, borderRadius: BorderRadius.circular(12), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, 2))]),
-                      child: const Icon(Icons.settings_outlined, size: 18, color: Color(0xFF1A1A2E)),
+                    GestureDetector(
+                      onTap: () {
+                        Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsPage()));
+                      },
+                      child: Container(
+                        width: 40, height: 40,
+                        decoration: BoxDecoration(color: kWhite, borderRadius: BorderRadius.circular(12), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, 2))]),
+                        child: const Icon(Icons.settings_outlined, size: 18, color: Color(0xFF1A1A2E)),
+                      ),
                     ),
                   ],
                 ),
@@ -195,7 +202,9 @@ class _ProfileCard extends StatelessWidget {
           const SizedBox(height: 16),
           // Edit Profile Button
           GestureDetector(
-            onTap: () {},
+            onTap: () {
+              Navigator.push(context, MaterialPageRoute(builder: (_) => const EditProfilePage()));
+            },
             child: Container(
               width: double.infinity, height: 42,
               decoration: BoxDecoration(color: kWhite.withOpacity(0.15), borderRadius: BorderRadius.circular(14), border: Border.all(color: kWhite.withOpacity(0.3), width: 1)),
