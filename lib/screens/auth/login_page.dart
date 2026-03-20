@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'main.dart';
-import 'register_page.dart'; // Wajib ada untuk butang Sign Up
+import '../../main.dart';
+import 'register_page.dart'; 
 
 const kPrimary      = Color(0xFF4C6B3F); 
 const kPrimaryLight = Color(0xFF799B61); 

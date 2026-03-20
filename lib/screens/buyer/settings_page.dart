@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'edit_profile_page.dart'; // To link Manage Profile
-import 'login_page.dart'; // To link Logout
+import '../auth/login_page.dart'; // To link Logout
 
 // --- Color Constants ---
 const kPrimary      = Color(0xFF4C6B3F); 

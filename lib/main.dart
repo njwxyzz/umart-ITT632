@@ -5,15 +5,16 @@ import 'dart:ui';
 import 'package:flutter/material.dart'; 
 
 // Pages Imports
-import 'profile_page.dart';
-import 'all_products_page.dart';
-import 'cart_page.dart';
-import 'product_detail_page.dart';
-import 'tracking_page.dart';
-import 'orders_page.dart';
-import 'chat_page.dart';
-import 'inbox_page.dart'; // <--- Inbox Page Baru
-import 'onboarding_screen.dart'; 
+import 'screens/buyer/profile_page.dart';
+import 'screens/buyer/all_products_page.dart';
+import 'screens/buyer/cart_page.dart';
+import 'screens/buyer/product_detail_page.dart';
+import 'screens/buyer/tracking_page.dart';
+import 'screens/buyer/orders_page.dart';
+import 'screens/buyer/chat_page.dart';
+import 'screens/buyer/inbox_page.dart'; // <--- Inbox Page Baru
+import 'screens/auth/onboarding_screen.dart'; 
+import 'screens/seller/seller_registration_page.dart';
 
 void main() { 
   runApp(const UMartApp());
@@ -633,7 +634,10 @@ class _BottomNav extends StatelessWidget {
                 width: double.infinity,
                 height: 54,
                 child: ElevatedButton(
-                  onPressed: () => Navigator.pop(context),
+                  onPressed: () {
+                    // LOMPAT KE PAGE SELLER REGISTRATION!
+                    Navigator.push(context, MaterialPageRoute(builder: (_) => const SellerRegistrationPage()));
+                  },
                   style: ElevatedButton.styleFrom(backgroundColor: kPrimary, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
                   child: const Text('Join UMART Sellers', style: TextStyle(color: kWhite, fontSize: 16, fontWeight: FontWeight.bold)),
                 ),
