@@ -11,10 +11,10 @@ import 'screens/buyer/cart_page.dart';
 import 'screens/buyer/product_detail_page.dart';
 import 'screens/buyer/tracking_page.dart';
 import 'screens/buyer/orders_page.dart';
-import 'screens/buyer/chat_page.dart';
 import 'screens/buyer/inbox_page.dart'; // <--- Inbox Page Baru
 import 'screens/auth/onboarding_screen.dart'; 
 import 'screens/seller/seller_registration_page.dart';
+import 'screens/buyer/store_profile_page.dart';
 
 void main() { 
   runApp(const UMartApp());
@@ -432,6 +432,7 @@ class _FoodCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return GestureDetector( 
       onTap: () {
+        // --- MAIN TAP: Opens Product Detail ---
         Navigator.push(context, MaterialPageRoute(builder: (_) => const ProductDetailPage()));
       },
       child: Container( 
@@ -459,7 +460,27 @@ class _FoodCard extends StatelessWidget {
                       const SizedBox(height: 4),
                       Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text('RM${item.price.toStringAsFixed(2)}', style: const TextStyle(color: kAccent, fontWeight: FontWeight.w700, fontSize: 12)), Row(mainAxisSize: MainAxisSize.min, children: [const Icon(Icons.star_rounded, color: kAccent, size: 12), const SizedBox(width: 2), Text(item.rating.toStringAsFixed(1), style: TextStyle(color: Colors.grey[700], fontSize: 10))])]),
                       const SizedBox(height: 4),
-                      Row(children: [Icon(Icons.storefront_rounded, size: 12, color: Colors.grey[500]), const SizedBox(width: 4), Expanded(child: Text(item.sellerName, style: TextStyle(color: Colors.grey[500], fontSize: 10, fontWeight: FontWeight.w500), maxLines: 1, overflow: TextOverflow.ellipsis))]),
+                      
+                      // --- NEW: SECONDARY TAP FOR STORE PROFILE ---
+                      GestureDetector(
+                        onTap: () {
+                          // This specifically opens the Store Profile!
+                          Navigator.push(context, MaterialPageRoute(builder: (_) => const StoreProfilePage()));
+                        },
+                        behavior: HitTestBehavior.opaque, // Ensures the tap is caught here, not by the parent
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 4.0), // Adds a bit of padding to make it easier to tap
+                          child: Row(
+                            children: [
+                              Icon(Icons.storefront_rounded, size: 12, color: Colors.grey[500]), 
+                              const SizedBox(width: 4), 
+                              Expanded(child: Text(item.sellerName, style: TextStyle(color: Colors.grey[500], fontSize: 10, fontWeight: FontWeight.w500), maxLines: 1, overflow: TextOverflow.ellipsis))
+                            ]
+                          ),
+                        ),
+                      ),
+                      // ---------------------------------------------
+                      
                     ],
                   ),
                 ),
@@ -472,7 +493,6 @@ class _FoodCard extends StatelessWidget {
     ); 
   }
 }
-
 // ============================================================================
 // LIVE TRACKING BANNER
 // ============================================================================

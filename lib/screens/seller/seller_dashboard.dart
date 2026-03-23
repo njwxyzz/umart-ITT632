@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'add_product_page.dart';
+import 'seller_orders_page.dart';
 
 // ─── Color Constants ─────────────────────────────────────────────────────────
 const kPrimary = Color(0xFF4C6B3F); 
@@ -27,7 +28,9 @@ class SellerDashboard extends StatelessWidget {
         actions: [
           IconButton(
             icon: const Icon(Icons.settings_outlined, color: kWhite),
-            onPressed: () {},
+            onPressed: () {
+              Navigator.push(context, MaterialPageRoute(builder: (_) => const SellerOrdersPage()));
+            },
           )
         ],
       ),

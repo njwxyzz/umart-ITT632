@@ -294,7 +294,7 @@ class _AddProductPageState extends State<AddProductPage> {
           contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
         ),
         hint: Text('Select category', style: TextStyle(color: Colors.grey.shade400, fontSize: 14, fontWeight: FontWeight.w400)),
-        value: _selectedCategory,
+        initialValue: _selectedCategory,
         icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.grey),
         dropdownColor: kWhite,
         borderRadius: BorderRadius.circular(16),

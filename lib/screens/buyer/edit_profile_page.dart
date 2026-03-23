@@ -129,7 +129,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
                   border: InputBorder.none,
                   contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
                 ),
-                value: _selectedCollege,
+                initialValue: _selectedCollege,
                 icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.grey),
                 items: _colleges.map((String val) {
                   return DropdownMenuItem(
