@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "443808242441",
+    "project_id": "umart-app-3bd8a",
+    "storage_bucket": "umart-app-3bd8a.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:443808242441:android:753f250dff20fc9023d1d8",
+        "android_client_info": {
+          "package_name": "com.example.umart_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBfVazZ6U3290F2lyx4sQwSqFnOUntUDpg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

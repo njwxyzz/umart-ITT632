@@ -3,6 +3,8 @@
 // ============================================================================
 import 'dart:ui'; 
 import 'package:flutter/material.dart'; 
+import 'package:firebase_core/firebase_core.dart'; // Tambah ni
+import 'firebase_options.dart'; // Tambah ni
 
 // Pages Imports
 import 'screens/buyer/profile_page.dart';
@@ -16,8 +18,16 @@ import 'screens/auth/onboarding_screen.dart';
 import 'screens/seller/seller_registration_page.dart';
 import 'screens/buyer/store_profile_page.dart';
 
-void main() { 
-  runApp(const UMartApp());
+void main() async {
+  // Wajib tambah line ni bila nak guna Firebase
+  WidgetsFlutterBinding.ensureInitialized(); 
+  
+  // Ini kod rasmi hidupkan Firebase
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+  
+  runApp(const UMartApp()); 
 }
 
 class UMartApp extends StatelessWidget { 
