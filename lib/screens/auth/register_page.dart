@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart'; // add this for Firebase Auth
 
 // --- Color Constants ---
 const kPrimary      = Color(0xFF4C6B3F); 
@@ -6,24 +7,122 @@ const kAccent       = Color(0xFFF27B35);
 const kBg           = Color(0xFFF5F7F2); 
 const kWhite        = Colors.white;
 
-class RegisterPage extends StatefulWidget {
-  const RegisterPage({super.key});
+class RegisterPage extends StatefulWidget { // stateful because we need to manage form state and loading state
+  const RegisterPage({super.key});  // constructor
 
   @override
-  State<RegisterPage> createState() => _RegisterPageState();
+  State<RegisterPage> createState() => _RegisterPageState(); // create state for this page
 }
 
 class _RegisterPageState extends State<RegisterPage> {
-  bool _obscurePassword = true;
-  String? _selectedCollege;
+  // --- controller for each input field (important to dispose) ---
+  final TextEditingController _nameController = TextEditingController(); // for full name input
+  final TextEditingController _studentIdController = TextEditingController();
+  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _phoneController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
+
+  bool _obscurePassword = true;  // to toggle password visibility
+  bool _isLoading = false; // to show loading spinner when processing registration
+  String? _selectedCollege; // to store selected college from dropdown
   
   // Dummy data for college selection
   final List<String> _colleges = [
-    'Kolej Dahlia', 
-    'Kolej Meranti', 
-    'Kolej Delima', 
+    'Kolej Dahlia 1', 
+    'Kolej Dahlia 2' , 
+    'Kolej Dahlia 3', 
+    'Kolej Kesinai 1',
+    'Kolej Kesinai 2',
+    'Kolej Kesinai 3',
+    'Kolej Cengal 1',
+    'Kolej Cengal 2', 
+    'Kolej Cengal 3',
+    'Kolej Cengal 4',
+    'Kolej Cengal 5',
+    'Kolej Cengal 6',
+    'Kolej Cengal 7',
     'Non-Resident (NR)'
   ];
+
+  // --- Function to handle user registration ---
+  Future<void> _registerUser() async {
+    final email = _emailController.text.trim();
+    final password = _passwordController.text.trim();
+
+    // 1. check if email & password are not empty
+    if (email.isEmpty || password.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Please fill in your email and password.")),
+      );
+      return;
+    }
+
+    // 2. The UiTM Filter (only @student.uitm.edu.my)
+    if (!email.endsWith('@student.uitm.edu.my')) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Sorry, only a verified uitm emails are allowed!"),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    // 3. Proses Register
+    setState(() {
+      _isLoading = true; // start loading
+    });
+
+    try {
+      // call Firebase Auth to create user with email & password
+      UserCredential userCredential = await FirebaseAuth.instance.createUserWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+
+      // if success, you can also save additional user info (like name, student ID, etc) to Firestore here if needed
+      setState(() => _isLoading = false);
+      
+      if (mounted) { //make sure widget still exist before showing snackbar
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Successfully registered! Please login."),
+            backgroundColor: Colors.green,
+          ),
+        );
+        // go back to login page after successful registration
+        Navigator.pop(context);
+      }
+
+    } on FirebaseAuthException catch (e) {
+      // if error occurs, stop loading and show error message
+      setState(() => _isLoading = false);
+      
+      String errorMsg = "An error occurred.";
+      if (e.code == 'weak-password') {
+        errorMsg = 'Password is too weak (minimum 6 characters).';
+      } else if (e.code == 'email-already-in-use') {
+        errorMsg = 'This email is already in use.';
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(errorMsg), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    // dispose all controllers to free up resources
+    _nameController.dispose();
+    _studentIdController.dispose();
+    _emailController.dispose();
+    _phoneController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -31,7 +130,7 @@ class _RegisterPageState extends State<RegisterPage> {
       backgroundColor: kBg,
       body: Stack(
         children: [
-          // 1. TOP GLOW EFFECT (Subtle primary color glow)
+          // 1. TOP GLOW EFFECT
           Positioned(
             top: -100,
             left: 0,
@@ -86,18 +185,18 @@ class _RegisterPageState extends State<RegisterPage> {
                   const SizedBox(height: 32),
 
                   // Input 1: Full Name
-                  _buildCleanTextField(hint: 'Full Name'),
+                  _buildCleanTextField(hint: 'Full Name', controller: _nameController),
                   const SizedBox(height: 16),
 
                   // Input 2: Student ID
-                  _buildCleanTextField(hint: 'Student ID'),
+                  _buildCleanTextField(hint: 'Student ID', controller: _studentIdController),
                   const SizedBox(height: 16),
 
                   // Input 3: Email Address
-                  _buildCleanTextField(hint: 'Email Address'),
+                  _buildCleanTextField(hint: 'Email Address', controller: _emailController, isEmail: true),
                   const SizedBox(height: 16),
 
-                  // Input 4: College Selection (Dropdown style)
+                  // Input 4: College Selection
                   Container(
                     decoration: BoxDecoration(
                       color: kWhite,
@@ -123,7 +222,7 @@ class _RegisterPageState extends State<RegisterPage> {
                   ),
                   const SizedBox(height: 16),
 
-                  // Input 5: Phone Number with Country Code Prefix
+                  // Input 5: Phone Number
                   Container(
                     decoration: BoxDecoration(
                       color: kWhite,
@@ -131,21 +230,20 @@ class _RegisterPageState extends State<RegisterPage> {
                     ),
                     child: Row(
                       children: [
-                        // Country Code Prefix
-                        Padding(
-                          padding: const EdgeInsets.only(left: 20.0, right: 10.0),
+                        const Padding(
+                          padding: EdgeInsets.only(left: 20.0, right: 10.0),
                           child: Row(
                             children: [
-                              Text('🇲🇾', style: TextStyle(fontSize: 18)), // Malaysia flag emoji
+                              Text('🇲🇾', style: TextStyle(fontSize: 18)),
                               SizedBox(width: 8),
                               Icon(Icons.keyboard_arrow_down_rounded, color: Colors.grey, size: 20),
                             ],
                           ),
                         ),
                         Container(width: 1, height: 24, color: Colors.grey.shade300),
-                        // Phone Number Input
                         Expanded(
                           child: TextField(
+                            controller: _phoneController,
                             keyboardType: TextInputType.phone,
                             style: const TextStyle(fontSize: 15, color: Colors.black87, fontWeight: FontWeight.w500),
                             decoration: InputDecoration(
@@ -165,6 +263,7 @@ class _RegisterPageState extends State<RegisterPage> {
                   _buildCleanTextField(
                     hint: '••••••••',
                     isPassword: true,
+                    controller: _passwordController,
                   ),
 
                   const SizedBox(height: 40),
@@ -174,18 +273,18 @@ class _RegisterPageState extends State<RegisterPage> {
                     width: double.infinity,
                     height: 56,
                     child: ElevatedButton(
-                      onPressed: () {
-                        // TODO: Implement Firebase Registration Logic here
-                      },
+                      onPressed: _isLoading ? null : _registerUser, // Kalau tgh loading, disable butang
                       style: ElevatedButton.styleFrom(
                         backgroundColor: kPrimary,
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         elevation: 0,
                       ),
-                      child: const Text(
-                        'Register', 
-                        style: TextStyle(color: kWhite, fontSize: 16, fontWeight: FontWeight.bold)
-                      ),
+                      child: _isLoading 
+                        ? const CircularProgressIndicator(color: kWhite) // Tunjuk pusing-pusing kalau loading
+                        : const Text(
+                          'Register', 
+                          style: TextStyle(color: kWhite, fontSize: 16, fontWeight: FontWeight.bold)
+                        ),
                     ),
                   ),
 
@@ -200,7 +299,7 @@ class _RegisterPageState extends State<RegisterPage> {
                         style: TextStyle(color: Colors.grey.shade600, fontSize: 14)
                       ),
                       GestureDetector(
-                        onTap: () => Navigator.pop(context), // Goes back to Login Page
+                        onTap: () => Navigator.pop(context),
                         child: const Text(
                           'Log in', 
                           style: TextStyle(color: kPrimary, fontWeight: FontWeight.bold, fontSize: 14)
@@ -218,20 +317,26 @@ class _RegisterPageState extends State<RegisterPage> {
     );
   }
 
-  // HELPER WIDGET: Clean Text Field matching the reference image
-  Widget _buildCleanTextField({required String hint, bool isPassword = false}) {
+  // HELPER WIDGET (to avoid repeating code for each TextField)
+  Widget _buildCleanTextField({
+    required String hint, 
+    bool isPassword = false, 
+    bool isEmail = false,
+    TextEditingController? controller
+  }) {
     return Container(
       decoration: BoxDecoration(
         color: kWhite,
         borderRadius: BorderRadius.circular(12),
       ),
       child: TextField(
+        controller: controller, // assign the controller passed from parameters
         obscureText: isPassword ? _obscurePassword : false,
+        keyboardType: isEmail ? TextInputType.emailAddress : TextInputType.text,
         style: const TextStyle(fontSize: 15, color: Colors.black87, fontWeight: FontWeight.w500),
         decoration: InputDecoration(
           hintText: hint,
           hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 14),
-          // Add eye icon only if it's a password field
           suffixIcon: isPassword 
               ? IconButton(
                   icon: Icon(

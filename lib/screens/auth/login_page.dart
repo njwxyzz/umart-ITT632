@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import '../../main.dart';
+import 'package:firebase_auth/firebase_auth.dart'; // Wajib import untuk Login
+import '../../main.dart'; // Make sure this path to HomeScreen is correct
 import 'register_page.dart'; 
 
 const kPrimary      = Color(0xFF4C6B3F); 
@@ -16,8 +17,75 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> {
+  // --- Controllers for Input Fields ---
+  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
+
   bool _obscurePassword = true;
-  bool _rememberMe = false; // Untuk checkbox
+  bool _rememberMe = false; // For checkbox
+  bool _isLoading = false; // For button loading state
+
+  // --- Firebase Login Logic ---
+  Future<void> _loginUser() async {
+    final email = _emailController.text.trim();
+    final password = _passwordController.text.trim();
+
+    // 1. Check if fields are empty
+    if (email.isEmpty || password.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Please enter both email and password.")),
+      );
+      return;
+    }
+
+    // 2. Start loading
+    setState(() => _isLoading = true);
+
+    try {
+      // 3. Request login from Firebase
+      await FirebaseAuth.instance.signInWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+
+      // Stop loading
+      setState(() => _isLoading = false);
+
+      // 4. If success, navigate to HomeScreen
+      if (mounted) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const HomeScreen())
+        );
+      }
+
+    } on FirebaseAuthException catch (e) {
+      // Stop loading if error occurs
+      setState(() => _isLoading = false);
+      
+      String errorMsg = "An error occurred.";
+      // Customize error messages based on Firebase codes
+      if (e.code == 'user-not-found' || e.code == 'invalid-credential' || e.code == 'wrong-password') {
+        errorMsg = 'Incorrect email or password.';
+      } else if (e.code == 'invalid-email') {
+        errorMsg = 'Please enter a valid email format.';
+      }
+
+      // Show error popup
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(errorMsg), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    // Clean up memory
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -25,7 +93,7 @@ class _LoginPageState extends State<LoginPage> {
       backgroundColor: kBg,
       body: Stack(
         children: [
-          // ─── 1. GLOW LEMBUT KAT ATAS (Ala-ala reference kau) ───
+          // --- 1. TOP SOFT GLOW EFFECT ---
           Positioned(
             top: -100,
             left: 0,
@@ -36,7 +104,7 @@ class _LoginPageState extends State<LoginPage> {
                 shape: BoxShape.circle,
                 boxShadow: [
                   BoxShadow(
-                    color: kPrimary.withOpacity(0.15), // Glow warna hijau lembut
+                    color: kPrimary.withOpacity(0.15), 
                     blurRadius: 100,
                     spreadRadius: 50,
                   ),
@@ -45,7 +113,7 @@ class _LoginPageState extends State<LoginPage> {
             ),
           ),
 
-          // ─── 2. KANDUNGAN UTAMA ───
+          // --- 2. MAIN CONTENT ---
           SafeArea(
             child: SingleChildScrollView(
               padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 20.0),
@@ -54,10 +122,9 @@ class _LoginPageState extends State<LoginPage> {
                 children: [
                   const SizedBox(height: 20),
               
-                  
                   const SizedBox(height: 40),
 
-                  // Tajuk (Rapat Kiri)
+                  // Header Texts
                   const Text(
                     'Sign in to your\nAccount',
                     style: TextStyle(fontSize: 32, fontWeight: FontWeight.w900, color: Color(0xFF1A1A2E), height: 1.2, letterSpacing: -0.5),
@@ -70,27 +137,29 @@ class _LoginPageState extends State<LoginPage> {
                   
                   const SizedBox(height: 40),
 
-                  // Kotak Input 1: Email / Student ID
+                  // Input 1: Email 
                   _buildCleanTextField(
                     hint: 'Student ID or Email',
                     isPassword: false,
+                    controller: _emailController,
                   ),
                   
                   const SizedBox(height: 16),
 
-                  // Kotak Input 2: Password
+                  // Input 2: Password
                   _buildCleanTextField(
                     hint: '••••••••',
                     isPassword: true,
+                    controller: _passwordController,
                   ),
 
                   const SizedBox(height: 16),
 
-                  // Barisan Remember Me & Forgot Password
+                  // Remember Me & Forgot Password Row
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      // Checkbox Remember Me
+                      // Remember Me Checkbox
                       Row(
                         children: [
                           SizedBox(
@@ -108,7 +177,7 @@ class _LoginPageState extends State<LoginPage> {
                           Text('Remember me', style: TextStyle(color: Colors.grey.shade700, fontSize: 13, fontWeight: FontWeight.w500)),
                         ],
                       ),
-                      // Forgot Password
+                      // Forgot Password Link
                       TextButton(
                         onPressed: () {},
                         style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(50, 30)),
@@ -119,24 +188,26 @@ class _LoginPageState extends State<LoginPage> {
 
                   const SizedBox(height: 24),
 
-                  // Butang Log In (Solid Warna Hijau)
+                  // Login Button
                   SizedBox(
                     width: double.infinity,
                     height: 56,
                     child: ElevatedButton(
-                      onPressed: () => Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => const HomeScreen())),
+                      onPressed: _isLoading ? null : _loginUser, // Disable if loading
                       style: ElevatedButton.styleFrom(
                         backgroundColor: kPrimary,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), // Kurang sikit bulat dia ikut gambar
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         elevation: 0,
                       ),
-                      child: const Text('Log In', style: TextStyle(color: kWhite, fontSize: 16, fontWeight: FontWeight.bold)),
+                      child: _isLoading 
+                        ? const CircularProgressIndicator(color: kWhite) 
+                        : const Text('Log In', style: TextStyle(color: kWhite, fontSize: 16, fontWeight: FontWeight.bold)),
                     ),
                   ),
 
                   const SizedBox(height: 30),
 
-                  // Divider "Or"
+                  // "Or" Divider
                   Row(
                     children: [
                       Expanded(child: Divider(color: Colors.grey.shade300)),
@@ -147,27 +218,31 @@ class _LoginPageState extends State<LoginPage> {
 
                   const SizedBox(height: 30),
 
-                  // Butang Continue with Google
+                  // Continue with Google Button
                   _buildSocialButton(
                     text: 'Continue with Google',
                     icon: Icons.g_mobiledata_rounded,
                     iconColor: Colors.red,
-                    onTap: () {},
+                    onTap: () {
+                      // TODO: Implement Google Sign-In later
+                    },
                   ),
 
                   const SizedBox(height: 16),
 
-                  // Butang Continue with Facebook
+                  // Continue with Facebook Button
                   _buildSocialButton(
                     text: 'Continue with Facebook',
                     icon: Icons.facebook_rounded,
                     iconColor: Colors.blue,
-                    onTap: () {},
+                    onTap: () {
+                      // TODO: Implement Facebook Sign-In later
+                    },
                   ),
 
                   const SizedBox(height: 40),
 
-                  // Sign Up Link kat bawah sekali
+                  // Sign Up Link at the bottom
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
@@ -188,8 +263,8 @@ class _LoginPageState extends State<LoginPage> {
     );
   }
 
-  // WIDGET BANTUAN: Kotak Input Tanpa Ikon Tepi
-  Widget _buildCleanTextField({required String hint, required bool isPassword}) {
+  // HELPER WIDGET: Input Field Without Side Icon
+  Widget _buildCleanTextField({required String hint, required bool isPassword, required TextEditingController controller}) {
     return Container(
       decoration: BoxDecoration(
         color: kWhite,
@@ -199,12 +274,13 @@ class _LoginPageState extends State<LoginPage> {
         ],
       ),
       child: TextField(
+        controller: controller, // Essential to capture input
         obscureText: isPassword ? _obscurePassword : false,
         style: const TextStyle(fontSize: 15, color: Colors.black87, fontWeight: FontWeight.w500),
         decoration: InputDecoration(
           hintText: hint,
           hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 14),
-          // Kalau password, letak ikon mata. Kalau tak, kosong je.
+          // Add eye icon only if it's a password field
           suffixIcon: isPassword 
               ? IconButton(
                   icon: Icon(_obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined, color: Colors.grey.shade400, size: 20),
@@ -218,7 +294,7 @@ class _LoginPageState extends State<LoginPage> {
     );
   }
 
-  // WIDGET BANTUAN: Butang Sosial Full Width
+  // HELPER WIDGET: Full Width Social Button
   Widget _buildSocialButton({required String text, required IconData icon, required Color iconColor, required VoidCallback onTap}) {
     return SizedBox(
       width: double.infinity,
@@ -227,9 +303,9 @@ class _LoginPageState extends State<LoginPage> {
         onPressed: onTap,
         style: OutlinedButton.styleFrom(
           backgroundColor: kWhite,
-          side: const BorderSide(color: Colors.transparent), // Takde border keras
+          side: const BorderSide(color: Colors.transparent),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          elevation: 1, // Kasi bayang-bayang nipis macam dalam gambar
+          elevation: 1, 
           shadowColor: Colors.black12,
         ),
         child: Row(
