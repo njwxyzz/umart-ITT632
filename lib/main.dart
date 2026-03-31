@@ -2,9 +2,13 @@
 // IMPORTS & MAIN ENTRY POINT
 // ============================================================================
 import 'dart:ui'; 
-import 'package:flutter/material.dart'; 
-import 'package:firebase_core/firebase_core.dart'; // Tambah ni
-import 'firebase_options.dart'; // Tambah ni
+import 'package:flutter/material.dart';
+
+
+import 'package:firebase_core/firebase_core.dart'; 
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'firebase_options.dart';
 
 // Pages Imports
 import 'screens/buyer/profile_page.dart';
@@ -13,7 +17,7 @@ import 'screens/buyer/cart_page.dart';
 import 'screens/buyer/product_detail_page.dart';
 import 'screens/buyer/tracking_page.dart';
 import 'screens/buyer/orders_page.dart';
-import 'screens/buyer/inbox_page.dart'; // <--- Inbox Page Baru
+import 'screens/buyer/inbox_page.dart'; 
 import 'screens/auth/onboarding_screen.dart'; 
 import 'screens/seller/seller_registration_page.dart';
 import 'screens/buyer/store_profile_page.dart';
@@ -161,10 +165,67 @@ class _HomeScreenState extends State<HomeScreen> {
 }
 
 // ============================================================================
-// GRADIENT HEADER (Header Atas Yang Dah Dicuci)
+// GRADIENT HEADER (Upgraded Top Header!)
 // ============================================================================
-class _GradientHeader extends StatelessWidget {
-  const _GradientHeader();
+class _GradientHeader extends StatefulWidget {
+  const _GradientHeader({super.key});
+
+  @override
+  State<_GradientHeader> createState() => _GradientHeaderState();
+}
+
+class _GradientHeaderState extends State<_GradientHeader> {
+  String _userName = "Student"; // Default name while waiting for loading
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchProfileData(); // Call function to fetch data when screen opens
+  }
+
+// --- Function to Fetch Name Data from Firestore ---
+  Future<void> _fetchProfileData() async {
+    try {
+      User? currentUser = FirebaseAuth.instance.currentUser;
+      
+      if (currentUser != null) {
+        DocumentSnapshot userDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(currentUser.uid)
+            .get();
+
+        if (userDoc.exists && mounted) {
+          setState(() {
+            String fullName = userDoc['fullName'] ?? 'Student';
+            _userName = fullName.split(' ')[0]; 
+            _isLoading = false;
+          });
+        } else {
+          // ---> LUBANG DITUTUP KAT SINI <---
+          // User berjaya login, TAPI fail profil Firestore dia takde!
+          print("DEBUG SENIOR: Akaun auth ada, tapi fail Firestore tak wujud untuk UID: ${currentUser.uid}");
+          if (mounted) {
+            setState(() {
+              _userName = "User (No Data)"; 
+              _isLoading = false; // Matikan loading!
+            });
+          }
+        }
+      } else {
+        // Kalau memang takde orang login langsung
+        if (mounted) {
+          setState(() {
+            _userName = "Guest";
+            _isLoading = false;
+          });
+        }
+      }
+    } catch (e) {
+      print("Oops, error fetching data: $e");
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -180,24 +241,33 @@ class _GradientHeader extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Column(
+              Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Current Location', style: TextStyle(color: Colors.white70, fontSize: 12)),
-                  SizedBox(height: 4),
-                  Row(children: [Icon(Icons.location_on, color: kWhite, size: 16), SizedBox(width: 4), Text('UiTM Perlis, Kolej Dahlia', style: TextStyle(color: kWhite, fontWeight: FontWeight.bold, fontSize: 14))]),
+                  Text(
+                    _isLoading ? 'Loading...' : 'Hi, $_userName! 👋', 
+                    style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)
+                  ),
+                  const SizedBox(height: 4),
+                  const Row(children: [Icon(Icons.location_on, color: kWhite, size: 14), SizedBox(width: 4), Text('UiTM Perlis, Kolej Dahlia', style: TextStyle(color: Colors.white70, fontSize: 12))]),
                 ],
               ),
               Row(
                 children: [
-                  // 1. Ikon Loceng (Notifications)
-                  Container(
-                    width: 42, height: 42,
-                    decoration: BoxDecoration(color: kWhite.withOpacity(0.2), shape: BoxShape.circle),
-                    child: const Icon(Icons.notifications_none_rounded, color: kWhite, size: 20),
+                  // I added a Logout button (exit door icon) so you can easily test switching accounts
+                  GestureDetector(
+                    onTap: () async {
+                      await FirebaseAuth.instance.signOut();
+                      Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => const OnboardingScreen())); 
+                    },
+                    child: Container(
+                      width: 42, height: 42,
+                      decoration: BoxDecoration(color: kWhite.withOpacity(0.2), shape: BoxShape.circle),
+                      child: const Icon(Icons.logout_rounded, color: kWhite, size: 20),
+                    ),
                   ),
                   const SizedBox(width: 12),
-                  // 2. Ikon Troli (Cart)
+                  // Cart Button
                   GestureDetector(
                     onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const CartPage())),
                     child: Container(
