@@ -4,7 +4,6 @@
 import 'dart:ui'; 
 import 'package:flutter/material.dart';
 
-
 import 'package:firebase_core/firebase_core.dart'; 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -23,10 +22,10 @@ import 'screens/seller/seller_registration_page.dart';
 import 'screens/buyer/store_profile_page.dart';
 
 void main() async {
-  // Wajib tambah line ni bila nak guna Firebase
+  // Required when using Firebase
   WidgetsFlutterBinding.ensureInitialized(); 
   
-  // Ini kod rasmi hidupkan Firebase
+  // Initialize Firebase officially
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
@@ -52,7 +51,7 @@ class UMartApp extends StatelessWidget {
 }
 
 // ============================================================================
-// GLOBAL COLOR CONSTANTS (TEMA HIJAU BARU!)
+// GLOBAL COLOR CONSTANTS (NEW GREEN THEME!)
 // ============================================================================
 const kPrimary      = Color(0xFF4C6B3F); 
 const kPrimaryLight = Color(0xFF799B61); 
@@ -79,19 +78,79 @@ class _HomeScreenState extends State<HomeScreen> {
   int currentIndex = 0;
   bool hasActiveOrder = true;
 
-  final List<_FoodItem> _foodItems = const [
-    _FoodItem(label: 'Mak Cik Nasi Lemak', badge: '20% OFF', badgeColor: kAccent, imageUrl: 'https://images.unsplash.com/photo-1512058564366-18510be2db19?w=400', price: 8.50, rating: 4.8, sellerName: 'Mak Cik Nasi Lemak'),
-    _FoodItem(label: 'Ramen House', badge: null, badgeColor: null, imageUrl: 'https://images.unsplash.com/photo-1569718212165-3a8278d5f624?w=400', price: 15.90, rating: 4.7, sellerName: 'Ramen House'),
-    _FoodItem(label: 'Bake P...', badge: 'Free deli', badgeColor: kPrimary, imageUrl: 'https://images.unsplash.com/photo-1555507036-ab1f4038808a?w=400', price: 6.20, rating: 4.6, sellerName: 'Bake P Bakery'),
-    _FoodItem(label: 'Burger Lab', badge: '10% OFF', badgeColor: kAccent, imageUrl: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=400', price: 10.50, rating: 4.9, sellerName: 'Burger Lab'),
-  ];
+  List<_FoodItem> _foodItems = []; // To hold fetched products from database
+  bool _isLoadingProducts = true; // Loading state for products
 
-  // Router untuk Tab Bawah
+  @override
+  void initState() {
+    super.initState();
+    _fetchProductsData(); // Auto-fetch products when screen opens
+  }
+
+  // --- Function to Fetch Products from Firestore ---
+  Future<void> _fetchProductsData() async {
+    try {
+      print("🚨 RADAR: Mula ketuk pintu Firebase...");
+
+      // Minta izin masuk bilik 'products'
+      QuerySnapshot snapshot = await FirebaseFirestore.instance.collection('products').get();
+      
+      print("🚨 RADAR: Pintu terbuka! Jumpa ${snapshot.docs.length} barang dalam laci 'products'.");
+
+      List<_FoodItem> productList = [];
+      
+      // Proses setiap barang yang ada dalam laci tu
+      for (var doc in snapshot.docs) {
+        var data = doc.data() as Map<String, dynamic>;
+        print("🚨 RADAR: Tengah baca data -> ${data['name']}");
+
+        // --- CARA PALING SELAMAT BACA NOMBOR DARI FIREBASE ---
+        // Kadang-kadang Firebase hantar int64, kadang-kadang hantar double. Ini ubat dia:
+        double harga = 0.0;
+        if (data['price'] != null) {
+          harga = data['price'] is num ? (data['price'] as num).toDouble() : double.tryParse(data['price'].toString()) ?? 0.0;
+        }
+
+        double rating = 0.0;
+        if (data['rating'] != null) {
+          rating = data['rating'] is num ? (data['rating'] as num).toDouble() : double.tryParse(data['rating'].toString()) ?? 0.0;
+        }
+        // -----------------------------------------------------
+
+        productList.add(
+          _FoodItem(
+            label: data['name'] ?? 'Barang Tanpa Nama',
+            badge: data['badge'], 
+            badgeColor: data['badge'] != null ? kAccent : null, 
+            imageUrl: data['imageUrl'] ?? 'https://via.placeholder.com/150',
+            price: harga,
+            rating: rating,
+            sellerName: data['sellerName'] ?? 'Unknown Seller',
+            category: data['category'] ?? 'Others', 
+          )
+        );
+      }
+
+      // Masukkan senarai tu ke dalam app dan matikan loading
+      if (mounted) {
+        setState(() {
+          _foodItems = productList;
+          _isLoadingProducts = false; 
+        });
+        print("🚨 RADAR: Siap! Berjaya papar ${_foodItems.length} barang kat skrin.");
+      }
+    } catch (e) {
+      print("🚨 ERROR TERUK: Gagal tarik products sebab -> $e");
+      if (mounted) setState(() => _isLoadingProducts = false);
+    }
+  }
+
+  // Bottom Tab Router
   Widget _buildBody() {
     switch (currentIndex) {
       case 1: return const OrdersPage();
-      case 2: return const InboxPage();   // <--- Link ke Inbox
-      case 3: return const ProfilePage(); // <--- Link ke Profile
+      case 2: return const InboxPage();   // <--- Link to Inbox
+      case 3: return const ProfilePage(); // <--- Link to Profile
       default: return _buildHomeContent();
     }
   }
@@ -109,11 +168,19 @@ class _HomeScreenState extends State<HomeScreen> {
         children: [
           const _GradientHeader(),
           const SizedBox(height: 20),
-          Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: _BentoGrid(foodItems: _foodItems)),
-          const SizedBox(height: 20),
-          Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: _PromoBanner()),
-          const SizedBox(height: 20),
-          _FoodCarousel(items: _foodItems, onSeeAll: _openAllProductPage),
+          
+          // If loading, show spinner. Else, show the actual products.
+          _isLoadingProducts 
+              ? const Center(child: Padding(padding: EdgeInsets.all(40.0), child: CircularProgressIndicator(color: kPrimary)))
+              : Column(
+                  children: [
+                    Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: _BentoGrid(foodItems: _foodItems)),
+                    const SizedBox(height: 20),
+                    Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: _PromoBanner()),
+                    const SizedBox(height: 20),
+                    _FoodCarousel(items: _foodItems, onSeeAll: _openAllProductPage),
+                  ],
+                ),
         ],
       ),
     );
@@ -148,7 +215,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: _TrackingBanner()),
                       const SizedBox(height: 10),
                     ],
-                    // BOTTOM NAVIGATION BAR PANGGIL KAT SINI
+                    // CALL BOTTOM NAVIGATION BAR HERE
                     Padding(
                       padding: EdgeInsets.fromLTRB(24, 0, 24, bottomPad > 0 ? bottomPad : 16),
                       child: _BottomNav(selectedIndex: currentIndex, onTap: (i) => setState(() => currentIndex = i)),
@@ -184,7 +251,7 @@ class _GradientHeaderState extends State<_GradientHeader> {
     _fetchProfileData(); // Call function to fetch data when screen opens
   }
 
-// --- Function to Fetch Name Data from Firestore ---
+  // --- Function to Fetch Name Data from Firestore ---
   Future<void> _fetchProfileData() async {
     try {
       User? currentUser = FirebaseAuth.instance.currentUser;
@@ -202,18 +269,18 @@ class _GradientHeaderState extends State<_GradientHeader> {
             _isLoading = false;
           });
         } else {
-          // ---> LUBANG DITUTUP KAT SINI <---
-          // User berjaya login, TAPI fail profil Firestore dia takde!
-          print("DEBUG SENIOR: Akaun auth ada, tapi fail Firestore tak wujud untuk UID: ${currentUser.uid}");
+          // FIX: HANDLE MISSING DATA
+          // User logged in, BUT Firestore profile document is missing!
+          print("DEBUG SENIOR: Auth account exists, but no Firestore file for UID: ${currentUser.uid}");
           if (mounted) {
             setState(() {
               _userName = "User (No Data)"; 
-              _isLoading = false; // Matikan loading!
+              _isLoading = false; // Stop loading!
             });
           }
         }
       } else {
-        // Kalau memang takde orang login langsung
+        // If no user is logged in at all
         if (mounted) {
           setState(() {
             _userName = "Guest";
@@ -467,8 +534,18 @@ class _FoodItem {
   final double price;
   final double rating;
   final String sellerName;
+  final String category; // <-- NEW: Added category property!
 
-  const _FoodItem({required this.label, required this.badge, required this.badgeColor, required this.imageUrl, required this.price, required this.rating, required this.sellerName});
+  const _FoodItem({
+    required this.label, 
+    required this.badge, 
+    required this.badgeColor, 
+    required this.imageUrl, 
+    required this.price, 
+    required this.rating, 
+    required this.sellerName,
+    required this.category, // <-- NEW: Required parameter for category
+  });
 }
 
 class _FoodCarousel extends StatelessWidget {
@@ -541,7 +618,7 @@ class _FoodCard extends StatelessWidget {
                       Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text('RM${item.price.toStringAsFixed(2)}', style: const TextStyle(color: kAccent, fontWeight: FontWeight.w700, fontSize: 12)), Row(mainAxisSize: MainAxisSize.min, children: [const Icon(Icons.star_rounded, color: kAccent, size: 12), const SizedBox(width: 2), Text(item.rating.toStringAsFixed(1), style: TextStyle(color: Colors.grey[700], fontSize: 10))])]),
                       const SizedBox(height: 4),
                       
-                      // --- NEW: SECONDARY TAP FOR STORE PROFILE ---
+                      // --- SECONDARY TAP FOR STORE PROFILE ---
                       GestureDetector(
                         onTap: () {
                           // This specifically opens the Store Profile!
@@ -549,7 +626,7 @@ class _FoodCard extends StatelessWidget {
                         },
                         behavior: HitTestBehavior.opaque, // Ensures the tap is caught here, not by the parent
                         child: Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 4.0), // Adds a bit of padding to make it easier to tap
+                          padding: const EdgeInsets.symmetric(vertical: 4.0), // Adds padding to make it easier to tap
                           child: Row(
                             children: [
                               Icon(Icons.storefront_rounded, size: 12, color: Colors.grey[500]), 
@@ -635,21 +712,21 @@ class _BottomNav extends StatelessWidget {
       child: Stack(
         clipBehavior: Clip.none,
         children: [
-          // ─── Ikon-Ikon Menu Kiri Kanan ───
+          // ─── Left & Right Menu Icons ───
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
               _buildNavItem(icon: Icons.home_rounded, label: 'Home', index: 0),
               _buildNavItem(icon: Icons.receipt_long_rounded, label: 'Orders', index: 1),
-              const SizedBox(width: 60), // Kosongkan ruang tengah
+              const SizedBox(width: 60), // Leave center space empty for the FAB
               _buildNavItem(icon: Icons.chat_bubble_rounded, label: 'Inbox', index: 2),
               _buildNavItem(icon: Icons.person_rounded, label: 'Profile', index: 3),
             ],
           ),
           
-          // ─── BUTANG OREN TERSEMBUL (FAB) ───
+          // ─── FLOATING ORANGE BUTTON (FAB) ───
           Positioned(
-            top: -20, // Tolak naik atas sikit
+            top: -20, // Push it up slightly
             left: 0,
             right: 0,
             child: GestureDetector(
@@ -676,7 +753,7 @@ class _BottomNav extends StatelessWidget {
     );
   }
 
-  // Helper Ikon Biasa
+  // Standard Icon Helper
   Widget _buildNavItem({required IconData icon, required String label, required int index}) {
     final isSelected = selectedIndex == index;
     return GestureDetector(
@@ -707,7 +784,7 @@ class _BottomNav extends StatelessWidget {
     );
   }
 
-  // Modal Pop-Up Bila Butang [+] Ditekan
+  // Pop-Up Modal When [+] Button is Tapped
   void _showSellActionModal(BuildContext context) {
     showModalBottomSheet(
       context: context,
@@ -735,7 +812,7 @@ class _BottomNav extends StatelessWidget {
                 height: 54,
                 child: ElevatedButton(
                   onPressed: () {
-                    // LOMPAT KE PAGE SELLER REGISTRATION!
+                    // JUMP TO SELLER REGISTRATION PAGE!
                     Navigator.push(context, MaterialPageRoute(builder: (_) => const SellerRegistrationPage()));
                   },
                   style: ElevatedButton.styleFrom(backgroundColor: kPrimary, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
