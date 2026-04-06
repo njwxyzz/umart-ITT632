@@ -90,22 +90,20 @@ class _HomeScreenState extends State<HomeScreen> {
   // --- Function to Fetch Products from Firestore ---
   Future<void> _fetchProductsData() async {
     try {
-      print("🚨 RADAR: Mula ketuk pintu Firebase...");
+      print("🚨 RADAR: Fetching from Firebase...");
 
-      // Minta izin masuk bilik 'products'
+      // Get collection 'products'
       QuerySnapshot snapshot = await FirebaseFirestore.instance.collection('products').get();
       
-      print("🚨 RADAR: Pintu terbuka! Jumpa ${snapshot.docs.length} barang dalam laci 'products'.");
+      print("🚨 RADAR: Success! Found ${snapshot.docs.length} items.");
 
       List<_FoodItem> productList = [];
       
-      // Proses setiap barang yang ada dalam laci tu
       for (var doc in snapshot.docs) {
         var data = doc.data() as Map<String, dynamic>;
-        print("🚨 RADAR: Tengah baca data -> ${data['name']}");
+        print("🚨 RADAR: Reading data -> ${data['name']}");
 
-        // --- CARA PALING SELAMAT BACA NOMBOR DARI FIREBASE ---
-        // Kadang-kadang Firebase hantar int64, kadang-kadang hantar double. Ini ubat dia:
+        // --- SAFELY PARSE NUMBERS ---
         double harga = 0.0;
         if (data['price'] != null) {
           harga = data['price'] is num ? (data['price'] as num).toDouble() : double.tryParse(data['price'].toString()) ?? 0.0;
@@ -115,11 +113,10 @@ class _HomeScreenState extends State<HomeScreen> {
         if (data['rating'] != null) {
           rating = data['rating'] is num ? (data['rating'] as num).toDouble() : double.tryParse(data['rating'].toString()) ?? 0.0;
         }
-        // -----------------------------------------------------
 
         productList.add(
           _FoodItem(
-            label: data['name'] ?? 'Barang Tanpa Nama',
+            label: data['name'] ?? 'Unknown Item', // English fallback
             badge: data['badge'], 
             badgeColor: data['badge'] != null ? kAccent : null, 
             imageUrl: data['imageUrl'] ?? 'https://via.placeholder.com/150',
@@ -127,20 +124,20 @@ class _HomeScreenState extends State<HomeScreen> {
             rating: rating,
             sellerName: data['sellerName'] ?? 'Unknown Seller',
             category: data['category'] ?? 'Others', 
+            description: data['description'] ?? 'No description available.', // English fallback
           )
         );
       }
 
-      // Masukkan senarai tu ke dalam app dan matikan loading
       if (mounted) {
         setState(() {
           _foodItems = productList;
           _isLoadingProducts = false; 
         });
-        print("🚨 RADAR: Siap! Berjaya papar ${_foodItems.length} barang kat skrin.");
+        print("🚨 RADAR: Done! Displaying ${_foodItems.length} items on screen.");
       }
     } catch (e) {
-      print("🚨 ERROR TERUK: Gagal tarik products sebab -> $e");
+      print("🚨 CRITICAL ERROR: Failed to fetch products -> $e");
       if (mounted) setState(() => _isLoadingProducts = false);
     }
   }
@@ -149,8 +146,8 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildBody() {
     switch (currentIndex) {
       case 1: return const OrdersPage();
-      case 2: return const InboxPage();   // <--- Link to Inbox
-      case 3: return const ProfilePage(); // <--- Link to Profile
+      case 2: return const InboxPage();   
+      case 3: return const ProfilePage(); 
       default: return _buildHomeContent();
     }
   }
@@ -169,7 +166,6 @@ class _HomeScreenState extends State<HomeScreen> {
           const _GradientHeader(),
           const SizedBox(height: 20),
           
-          // If loading, show spinner. Else, show the actual products.
           _isLoadingProducts 
               ? const Center(child: Padding(padding: EdgeInsets.all(40.0), child: CircularProgressIndicator(color: kPrimary)))
               : Column(
@@ -192,7 +188,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return Scaffold(
       backgroundColor: kBg,
-      // BACKGROUND PATTERN 
       body: Container(
         decoration: const BoxDecoration(
           image: DecorationImage(
@@ -215,7 +210,6 @@ class _HomeScreenState extends State<HomeScreen> {
                       Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: _TrackingBanner()),
                       const SizedBox(height: 10),
                     ],
-                    // CALL BOTTOM NAVIGATION BAR HERE
                     Padding(
                       padding: EdgeInsets.fromLTRB(24, 0, 24, bottomPad > 0 ? bottomPad : 16),
                       child: _BottomNav(selectedIndex: currentIndex, onTap: (i) => setState(() => currentIndex = i)),
@@ -232,7 +226,7 @@ class _HomeScreenState extends State<HomeScreen> {
 }
 
 // ============================================================================
-// GRADIENT HEADER (Upgraded Top Header!)
+// GRADIENT HEADER 
 // ============================================================================
 class _GradientHeader extends StatefulWidget {
   const _GradientHeader({super.key});
@@ -242,16 +236,15 @@ class _GradientHeader extends StatefulWidget {
 }
 
 class _GradientHeaderState extends State<_GradientHeader> {
-  String _userName = "Student"; // Default name while waiting for loading
+  String _userName = "Student"; 
   bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _fetchProfileData(); // Call function to fetch data when screen opens
+    _fetchProfileData(); 
   }
 
-  // --- Function to Fetch Name Data from Firestore ---
   Future<void> _fetchProfileData() async {
     try {
       User? currentUser = FirebaseAuth.instance.currentUser;
@@ -269,18 +262,15 @@ class _GradientHeaderState extends State<_GradientHeader> {
             _isLoading = false;
           });
         } else {
-          // FIX: HANDLE MISSING DATA
-          // User logged in, BUT Firestore profile document is missing!
           print("DEBUG SENIOR: Auth account exists, but no Firestore file for UID: ${currentUser.uid}");
           if (mounted) {
             setState(() {
-              _userName = "User (No Data)"; 
-              _isLoading = false; // Stop loading!
+              _userName = "User"; 
+              _isLoading = false; 
             });
           }
         }
       } else {
-        // If no user is logged in at all
         if (mounted) {
           setState(() {
             _userName = "Guest";
@@ -321,7 +311,6 @@ class _GradientHeaderState extends State<_GradientHeader> {
               ),
               Row(
                 children: [
-                  // I added a Logout button (exit door icon) so you can easily test switching accounts
                   GestureDetector(
                     onTap: () async {
                       await FirebaseAuth.instance.signOut();
@@ -334,7 +323,6 @@ class _GradientHeaderState extends State<_GradientHeader> {
                     ),
                   ),
                   const SizedBox(width: 12),
-                  // Cart Button
                   GestureDetector(
                     onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const CartPage())),
                     child: Container(
@@ -534,7 +522,8 @@ class _FoodItem {
   final double price;
   final double rating;
   final String sellerName;
-  final String category; // <-- NEW: Added category property!
+  final String category;
+  final String description;
 
   const _FoodItem({
     required this.label, 
@@ -544,7 +533,8 @@ class _FoodItem {
     required this.price, 
     required this.rating, 
     required this.sellerName,
-    required this.category, // <-- NEW: Required parameter for category
+    required this.category, 
+    required this.description,
   });
 }
 
@@ -590,7 +580,14 @@ class _FoodCard extends StatelessWidget {
     return GestureDetector( 
       onTap: () {
         // --- MAIN TAP: Opens Product Detail ---
-        Navigator.push(context, MaterialPageRoute(builder: (_) => const ProductDetailPage()));
+        Navigator.push(context, MaterialPageRoute(builder: (_) => ProductDetailPage(
+          name: item.label,
+          price: item.price,
+          imageUrl: item.imageUrl,
+          rating: item.rating,
+          sellerName: item.sellerName,
+          description: item.description,
+        )));
       },
       child: Container( 
         width: 170,
@@ -621,12 +618,11 @@ class _FoodCard extends StatelessWidget {
                       // --- SECONDARY TAP FOR STORE PROFILE ---
                       GestureDetector(
                         onTap: () {
-                          // This specifically opens the Store Profile!
                           Navigator.push(context, MaterialPageRoute(builder: (_) => const StoreProfilePage()));
                         },
-                        behavior: HitTestBehavior.opaque, // Ensures the tap is caught here, not by the parent
+                        behavior: HitTestBehavior.opaque, 
                         child: Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 4.0), // Adds padding to make it easier to tap
+                          padding: const EdgeInsets.symmetric(vertical: 4.0), 
                           child: Row(
                             children: [
                               Icon(Icons.storefront_rounded, size: 12, color: Colors.grey[500]), 

@@ -1,31 +1,43 @@
 import 'package:flutter/material.dart';
 import 'cart_page.dart';
 
-// ─── Color Constants (TEMA HIJAU BARU) ───────────────────────────────────────
+// ─── Color Constants ───────────────────────────────────────
 const kPrimary      = Color(0xFF4C6B3F); 
 const kAccent       = Color(0xFFF27B35); 
 const kBg           = Color(0xFFF5F7F2); 
 const kWhite        = Colors.white;
 
 class ProductDetailPage extends StatefulWidget {
-  const ProductDetailPage({super.key});
+  final String name;
+  final double price;
+  final String imageUrl;
+  final double rating;
+  final String sellerName; 
+  final String description; 
+
+  const ProductDetailPage({
+    super.key,
+    required this.name,
+    required this.price,
+    required this.imageUrl,
+    required this.rating,
+    required this.sellerName, 
+    required this.description, 
+  });
 
   @override
   State<ProductDetailPage> createState() => _ProductDetailPageState();
 }
 
 class _ProductDetailPageState extends State<ProductDetailPage> {
-  // State untuk Add-ons & Kuantiti
   int _quantity = 1;
-  final double _basePrice = 12.50;
   
   bool _extraSambal = false;
   bool _addTelurMata = false;
   bool _extraRice = false;
 
-  // Kira total harga (Base Price + Add-ons) * Kuantiti
   double get _totalPrice {
-    double total = _basePrice;
+    double total = widget.price; 
     if (_extraSambal) total += 1.50;
     if (_addTelurMata) total += 2.00;
     if (_extraRice) total += 2.00;
@@ -34,9 +46,11 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
 
   @override
   Widget build(BuildContext context) {
+    // MAGIK: Check kalau nama barang ada perkataan "nasi lemak"
+    bool isNasiLemak = widget.name.toLowerCase().contains('nasi lemak');
+
     return Scaffold(
       backgroundColor: kBg,
-      // Bahagian Bawah (Bottom Bar) - Sticky Add To Cart
       bottomNavigationBar: Container(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
         decoration: BoxDecoration(
@@ -47,7 +61,6 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
         child: SafeArea(
           child: Row(
             children: [
-              // Quantity Selector
               Container(
                 decoration: BoxDecoration(color: kBg, borderRadius: BorderRadius.circular(30), border: Border.all(color: Colors.grey.shade200)),
                 child: Row(
@@ -67,11 +80,9 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                 ),
               ),
               const SizedBox(width: 16),
-              // Add to Cart Button
               Expanded(
                 child: ElevatedButton(
                   onPressed: () {
-                    // Tunjuk notification berjaya!
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
                         content: const Text('Added to cart! 🛒'),
@@ -82,13 +93,13 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                     );
                   },
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: kPrimary, // Butang Hijau Premium
+                    backgroundColor: kPrimary, 
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                     elevation: 0,
                   ),
                   child: Text(
-                    'Add to Cart - RM${_totalPrice.toStringAsFixed(2)}',
+                    'Add to Cart - RM${_totalPrice.toStringAsFixed(2)}', 
                     style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: kWhite),
                   ),
                 ),
@@ -97,12 +108,10 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
           ),
         ),
       ),
-      // Bahagian Body (Scrollable)
       body: CustomScrollView(
         slivers: [
-          // Header Image (Gambar Besar)
           SliverAppBar(
-            expandedHeight: 300, // Tinggi gambar
+            expandedHeight: 300, 
             pinned: true,
             backgroundColor: kPrimary,
             iconTheme: const IconThemeData(color: kWhite),
@@ -130,22 +139,21 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
             ],
             flexibleSpace: FlexibleSpaceBar(
               background: Image.network(
-                'https://images.unsplash.com/photo-1512058564366-18510be2db19?w=800', // Gambar Nasi Lemak HD
+                widget.imageUrl, 
                 fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => Container(color: Colors.grey[300], child: const Icon(Icons.broken_image, size: 50, color: Colors.grey)),
               ),
             ),
           ),
           
-          // Bahagian Kandungan Bawah Gambar
           SliverToBoxAdapter(
             child: Container(
               decoration: const BoxDecoration(
-                color: kBg, // Kita pakai warna tema bg
+                color: kBg, 
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Corak pattern kat belakang text
                   Container(
                     width: double.infinity,
                     decoration: const BoxDecoration(
@@ -161,36 +169,42 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            // Nama Makanan
-                            const Expanded(
+                            Expanded(
                               child: Text(
-                                'Nasi Lemak Ayam Berempah',
-                                style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: Color(0xFF1A1A2E), height: 1.2),
+                                widget.name, 
+                                style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: Color(0xFF1A1A2E), height: 1.2),
                               ),
                             ),
-                            // Harga Besar
                             Text(
-                              'RM12.50',
-                              style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: kAccent), // Warna Oren
+                              'RM${widget.price.toStringAsFixed(2)}', 
+                              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: kAccent), 
                             ),
                           ],
                         ),
                         const SizedBox(height: 8),
-                        // Rating & Reviews
                         Row(
                           children: [
                             const Icon(Icons.star_rounded, color: kAccent, size: 18),
                             const SizedBox(width: 4),
-                            const Text('4.8', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                            const SizedBox(width: 6),
-                            Text('(200+ reviews)', style: TextStyle(color: Colors.grey[500], fontSize: 12)),
+                            Text(widget.rating.toStringAsFixed(1), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)), 
+                            const SizedBox(width: 8),
+                            // --- NAMA SELLER KAT SINI ---
+                            Icon(Icons.storefront_rounded, size: 16, color: Colors.grey[500]),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: Text(
+                                'Sold by ${widget.sellerName}', 
+                                style: TextStyle(color: Colors.grey[600], fontSize: 13, fontWeight: FontWeight.bold),
+                                maxLines: 1, overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
                           ],
                         ),
                         const SizedBox(height: 16),
-                        // Deskripsi
+                        // --- DESCRIPTION DARI FIREBASE KAT SINI ---
                         Text(
-                          'Our signature fragrant coconut milk rice served with spiced fried chicken, spicy house-made sambal, crispy anchovies, roasted peanuts, and a fresh hard-boiled egg on a traditional banana leaf.',
-                          style: TextStyle(color: Colors.grey[600], fontSize: 14, height: 1.5),
+                          widget.description, 
+                          style: TextStyle(color: Colors.grey[700], fontSize: 14, height: 1.5),
                         ),
                       ],
                     ),
@@ -198,23 +212,24 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
 
                   const SizedBox(height: 16),
 
-                  // Bahagian Add-ons
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('Customize Add-ons', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF1A1A2E))),
-                        const SizedBox(height: 12),
-                        
-                        // Senarai Checkbox
-                        _buildAddonTile('Extra Sambal', '+RM1.50', _extraSambal, (val) => setState(() => _extraSambal = val!)),
-                        _buildAddonTile('Add Telur Mata (Fried Egg)', '+RM2.00', _addTelurMata, (val) => setState(() => _addTelurMata = val!)),
-                        _buildAddonTile('Extra Rice', '+RM2.00', _extraRice, (val) => setState(() => _extraRice = val!)),
-                      ],
+                  // KOTAK ADD-ONS (Hanya keluar kalau makanan tu Nasi Lemak)
+                  if (isNasiLemak)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('Customize Add-ons', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF1A1A2E))),
+                          const SizedBox(height: 12),
+                          
+                          _buildAddonTile('Extra Sambal', '+RM1.50', _extraSambal, (val) => setState(() => _extraSambal = val!)),
+                          _buildAddonTile('Add Telur Mata (Fried Egg)', '+RM2.00', _addTelurMata, (val) => setState(() => _addTelurMata = val!)),
+                          _buildAddonTile('Extra Rice', '+RM2.00', _extraRice, (val) => setState(() => _extraRice = val!)),
+                        ],
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 40), // Ruang kosong sikit kat bawah
+                  
+                  const SizedBox(height: 40), 
                 ],
               ),
             ),
@@ -224,7 +239,6 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     );
   }
 
-  // Widget bantuan untuk buat baris Checkbox nampak kemas
   Widget _buildAddonTile(String title, String price, bool value, ValueChanged<bool?> onChanged) {
     return Container(
       margin: const EdgeInsets.only(bottom: 10),

@@ -88,6 +88,7 @@ class AllProductPage extends StatelessWidget {
                       badge: item.badge,
                       badgeColor: item.badgeColor,
                       imageUrl: item.imageUrl,
+                      description: item.description,
                     );
                   },
                 )
@@ -105,6 +106,7 @@ class _ProductCard extends StatelessWidget {
   final String? badge; 
   final Color? badgeColor; 
   final String imageUrl; 
+  final String description;
 
   const _ProductCard({
     required this.title, 
@@ -113,15 +115,25 @@ class _ProductCard extends StatelessWidget {
     required this.sellerName, 
     this.badge, 
     this.badgeColor, 
-    required this.imageUrl
+    required this.imageUrl,
+    required this.description,
+
   }); 
 
   @override
   Widget build(BuildContext context) { 
-    return GestureDetector( // <--- GESTURE DETECTOR DITAMBAH DI SINI
+    return GestureDetector(
       onTap: () {
-        // PERGI KE PRODUCT DETAIL BILA KLIK!
-        Navigator.push(context, MaterialPageRoute(builder: (_) => const ProductDetailPage()));
+        // --- BAWA DATA BARANG MASUK KE BILIK DETAIL ---
+        Navigator.push(context, MaterialPageRoute(builder: (_) => ProductDetailPage(
+          name: title,        // Ambil dari variable _ProductCard
+          price: price,       // Ambil dari variable _ProductCard
+          imageUrl: imageUrl, // Ambil dari variable _ProductCard
+          rating: rating,     // Ambil dari variable 
+          sellerName: sellerName, // Ambil dari variable _ProductCard
+          description: description, // Ambil dari variable _ProductCard
+          
+        )));
       },
       child: Container( 
         decoration: BoxDecoration( 

@@ -12,12 +12,40 @@ class StoreProfilePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // --- Dummy Products for this specific store ---
+    // --- Dummy Products for this specific store (UPDATED WITH DESCRIPTION & SELLER NAME) ---
     final List<Map<String, dynamic>> storeProducts = [
-      {'name': 'Nasi Lemak Ayam Goreng', 'price': 8.50, 'rating': 4.8, 'image': 'https://images.unsplash.com/photo-1512058564366-18510be2db19?w=400'},
-      {'name': 'Nasi Lemak Biasa', 'price': 4.00, 'rating': 4.7, 'image': 'https://images.unsplash.com/photo-1607631568010-a87245c0daf7?w=400'},
-      {'name': 'Teh Tarik Ikat Tepi', 'price': 3.00, 'rating': 4.9, 'image': 'https://images.unsplash.com/photo-1576092768241-dec231879fc3?w=400'},
-      {'name': 'Karipap Pusing (3pcs)', 'price': 2.00, 'rating': 4.5, 'image': 'https://images.unsplash.com/photo-1626804475297-41609ea004eb?w=400'},
+      {
+        'name': 'Nasi Lemak Ayam Goreng', 
+        'price': 8.50, 
+        'rating': 4.8, 
+        'image': 'https://images.unsplash.com/photo-1512058564366-18510be2db19?w=400',
+        'description': 'Our signature fragrant coconut milk rice served with spiced fried chicken, spicy house-made sambal, crispy anchovies, and roasted peanuts.',
+        'sellerName': 'Mak Cik Siti Nasi Lemak'
+      },
+      {
+        'name': 'Nasi Lemak Biasa', 
+        'price': 4.00, 
+        'rating': 4.7, 
+        'image': 'https://images.unsplash.com/photo-1607631568010-a87245c0daf7?w=400',
+        'description': 'Classic hot and fresh Nasi Lemak served with boiled egg, peanuts, anchovies, and our special spicy sambal.',
+        'sellerName': 'Mak Cik Siti Nasi Lemak'
+      },
+      {
+        'name': 'Teh Tarik Ikat Tepi', 
+        'price': 3.00, 
+        'rating': 4.9, 
+        'image': 'https://images.unsplash.com/photo-1576092768241-dec231879fc3?w=400',
+        'description': 'Authentic Malaysian pulled milk tea. Perfectly sweet and frothy, served in a classic ikat tepi plastic bag.',
+        'sellerName': 'Mak Cik Siti Nasi Lemak'
+      },
+      {
+        'name': 'Karipap Pusing (3pcs)', 
+        'price': 2.00, 
+        'rating': 4.5, 
+        'image': 'https://images.unsplash.com/photo-1626804475297-41609ea004eb?w=400',
+        'description': 'Crispy spiral curry puffs stuffed with a flavorful potato and chicken curry filling. Best served hot.',
+        'sellerName': 'Mak Cik Siti Nasi Lemak'
+      },
     ];
 
     return Scaffold(
@@ -100,7 +128,7 @@ class StoreProfilePage extends StatelessWidget {
                                 children: [
                                   Icon(Icons.location_on_rounded, color: kAccent, size: 16),
                                   SizedBox(width: 4),
-                                  Text('Kolej Dahlia 3, Bilik 204', style: TextStyle(color: Colors.black54, fontSize: 13, fontWeight: FontWeight.w500)),
+                                  Text('Kolej Dahlia 3, Room 204', style: TextStyle(color: Colors.black54, fontSize: 13, fontWeight: FontWeight.w500)),
                                 ],
                               ),
                             ],
@@ -160,8 +188,15 @@ class StoreProfilePage extends StatelessWidget {
   Widget _buildProductCard(BuildContext context, Map<String, dynamic> product) {
     return GestureDetector(
       onTap: () {
-        // Navigate to the existing Product Detail Page
-        Navigator.push(context, MaterialPageRoute(builder: (_) => const ProductDetailPage()));
+        // --- BAWA DATA BARANG MASUK KE BILIK DETAIL ---
+        Navigator.push(context, MaterialPageRoute(builder: (_) => ProductDetailPage(
+          name: product['name'],
+          price: product['price'],
+          imageUrl: product['image'], 
+          rating: product['rating'],
+          sellerName: product['sellerName'],    // <-- POKET BARU (Dari Dummy Data)
+          description: product['description'],  // <-- POKET BARU (Dari Dummy Data)
+        )));
       },
       child: Container(
         decoration: BoxDecoration(
