@@ -20,6 +20,7 @@ import 'screens/buyer/inbox_page.dart';
 import 'screens/auth/onboarding_screen.dart'; 
 import 'screens/seller/seller_registration_page.dart';
 import 'screens/buyer/store_profile_page.dart';
+import 'screens/buyer/cart_manager.dart';
 
 void main() async {
   // Required when using Firebase
@@ -323,12 +324,43 @@ class _GradientHeaderState extends State<_GradientHeader> {
                     ),
                   ),
                   const SizedBox(width: 12),
+                  // Cart Button dengan LIVE BADGE
                   GestureDetector(
                     onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const CartPage())),
-                    child: Container(
-                      width: 42, height: 42,
-                      decoration: BoxDecoration(color: kWhite.withOpacity(0.2), shape: BoxShape.circle),
-                      child: const Icon(Icons.shopping_cart_outlined, color: kWhite, size: 20),
+                    child: Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        Container(
+                          width: 42, height: 42,
+                          decoration: BoxDecoration(color: kWhite.withOpacity(0.2), shape: BoxShape.circle),
+                          child: const Icon(Icons.shopping_cart_outlined, color: kWhite, size: 20),
+                        ),
+                        // INI MAGIK BADGE KITA!
+                        ValueListenableBuilder<int>(
+                          valueListenable: CartManager.instance.cartItemCount, // Dia dengar walkie-talkie
+                          builder: (context, count, child) {
+                            // Kalau troli kosong, jangan tunjuk badge
+                            if (count == 0) return const SizedBox.shrink(); 
+                            
+                            return Positioned(
+                              top: -2,
+                              right: -2,
+                              child: Container(
+                                padding: const EdgeInsets.all(6),
+                                decoration: BoxDecoration(
+                                  color: kAccent, // Warna Oren Lembut
+                                  shape: BoxShape.circle,
+                                  border: Border.all(color: kPrimary, width: 2), // Letak border hijau sikit biar pop
+                                ),
+                                child: Text(
+                                  '$count',
+                                  style: const TextStyle(color: kWhite, fontSize: 10, fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ],
                     ),
                   ),
                 ],

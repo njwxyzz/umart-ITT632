@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'tracking_page.dart'; // Required to route to tracking page
+import 'tracking_page.dart'; 
+import 'cart_manager.dart'; // <-- PENTING: Panggil otak troli kita
 
 // --- Color Constants ---
 const kPrimary      = Color(0xFF4C6B3F); 
@@ -19,6 +20,12 @@ class CheckoutPage extends StatefulWidget {
 class _CheckoutPageState extends State<CheckoutPage> {
   // Track selected payment method ('COD' or 'ONLINE')
   String _selectedPayment = 'COD';
+
+  // --- AMBIL DATA DARI CART MANAGER ---
+  List<CartItem> get _items => CartManager.instance.items;
+  double get _subtotal => CartManager.instance.totalPrice;
+  double get _deliveryFee => _subtotal >= 15.0 ? 0.0 : 3.00; // Kalau beli lebih RM15, free delivery
+  double get _total => _subtotal + _deliveryFee;
 
   // --- THE CUTE BOUNCING SUCCESS POPUP ---
   void _showSuccessPopup() {
@@ -69,8 +76,9 @@ class _CheckoutPageState extends State<CheckoutPage> {
       }
     );
 
-    // Wait 2.5 seconds, pop dialog, and push to Tracking Page
+    // Wait 2.5 seconds, clear cart, pop dialog, and push to Tracking Page
     Future.delayed(const Duration(milliseconds: 2500), () {
+      CartManager.instance.clearCart(); // KOSONGKAN TROLI LEPAS BAYAR
       Navigator.pop(context); // Close Dialog
       Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const TrackingPage()));
     });
@@ -157,14 +165,14 @@ class _CheckoutPageState extends State<CheckoutPage> {
         child: SafeArea(
           child: Row(
             children: [
-              const Expanded(
+              Expanded(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Total Payment', style: TextStyle(color: Colors.black54, fontSize: 13, fontWeight: FontWeight.w600)),
-                    SizedBox(height: 4),
-                    Text('RM 11.50', style: TextStyle(color: Color(0xFF1A1A2E), fontSize: 22, fontWeight: FontWeight.w900)),
+                    const Text('Total Payment', style: TextStyle(color: Colors.black54, fontSize: 13, fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 4),
+                    Text('RM ${_total.toStringAsFixed(2)}', style: const TextStyle(color: Color(0xFF1A1A2E), fontSize: 22, fontWeight: FontWeight.w900)),
                   ],
                 ),
               ),
@@ -172,7 +180,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
                 child: SizedBox(
                   height: 54,
                   child: ElevatedButton(
-                    onPressed: _showSuccessPopup, // TRIGGER THE BOUNCING POPUP
+                    onPressed: _items.isEmpty ? null : _showSuccessPopup, // Hanya boleh tekan kalau ada barang
                     style: ElevatedButton.styleFrom(
                       backgroundColor: kPrimary,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -342,22 +350,31 @@ class _CheckoutPageState extends State<CheckoutPage> {
       ),
       child: Column(
         children: [
-          _buildOrderItem('1x Nasi Lemak Ayam Goreng', 'RM 8.50'),
-          const SizedBox(height: 12),
-          _buildOrderItem('1x Teh Tarik', 'RM 3.00'),
+          // LIVE ITEMS LOOPING
+          if (_items.isEmpty)
+            const Text("No items in cart", style: TextStyle(color: Colors.grey))
+          else
+            ..._items.map((item) => Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: _buildOrderItem('${item.quantity}x ${item.name}', 'RM ${(item.price * item.quantity).toStringAsFixed(2)}'),
+            )),
+            
           const Padding(
-            padding: EdgeInsets.symmetric(vertical: 12),
+            padding: EdgeInsets.symmetric(vertical: 8),
             child: Divider(color: Color(0xFFEEEEEE), height: 1),
           ),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text('Delivery Fee', style: TextStyle(color: Colors.grey.shade600, fontSize: 14)),
-              const Text('Free', style: TextStyle(color: kGreen, fontWeight: FontWeight.bold)),
+              Text(
+                _deliveryFee == 0 ? 'Free' : 'RM ${_deliveryFee.toStringAsFixed(2)}', 
+                style: TextStyle(color: _deliveryFee == 0 ? kGreen : const Color(0xFF1A1A2E), fontWeight: FontWeight.bold)
+              ),
             ],
           ),
-          const SizedBox(height: 8),
-          _buildOrderItem('Subtotal', 'RM 11.50', isBold: true),
+          const SizedBox(height: 12),
+          _buildOrderItem('Total', 'RM ${_total.toStringAsFixed(2)}', isBold: true),
         ],
       ),
     );
@@ -367,7 +384,15 @@ class _CheckoutPageState extends State<CheckoutPage> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(name, style: TextStyle(color: isBold ? const Color(0xFF1A1A2E) : Colors.black87, fontSize: 14, fontWeight: isBold ? FontWeight.bold : FontWeight.w500)),
+        Expanded(
+          child: Text(
+            name, 
+            style: TextStyle(color: isBold ? const Color(0xFF1A1A2E) : Colors.black87, fontSize: 14, fontWeight: isBold ? FontWeight.bold : FontWeight.w500),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        const SizedBox(width: 10),
         Text(price, style: TextStyle(color: const Color(0xFF1A1A2E), fontSize: 14, fontWeight: isBold ? FontWeight.w900 : FontWeight.w600)),
       ],
     );

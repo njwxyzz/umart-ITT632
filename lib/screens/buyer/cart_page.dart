@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
 import 'checkout_page.dart';
+import 'cart_manager.dart'; // <-- THE BRAIN IS IMPORTED HERE
 
 // ─── Color Constants (TEMA HIJAU BARU) ───────────────────────────────────────
-const kPrimary      = Color(0xFF4C6B3F); // Olive Green
-const kPrimaryLight = Color(0xFF799B61); // Lighter Olive
-const kAccent       = Color(0xFFF27B35); // Oren Lembut
-const kBg           = Color(0xFFF5F7F2); // Off-white hijau
+const kPrimary      = Color(0xFF4C6B3F); 
+const kPrimaryLight = Color(0xFF799B61); 
+const kAccent       = Color(0xFFF27B35); 
+const kBg           = Color(0xFFF5F7F2); 
 const kWhite        = Colors.white;
-const kGreen        = Color(0xFF00C48C); // Kekalkan untuk 'Free Delivery'
+const kGreen        = Color(0xFF00C48C); 
 
 // ─── Cart Page ───────────────────────────────────────────────────────────────
 
@@ -18,42 +19,22 @@ class CartPage extends StatefulWidget {
   State<CartPage> createState() => _CartPageState();
 }
 
-class _CartItemData {
-  final String id;
-  final String name;
-  final double price;
-  int quantity;
-
-  _CartItemData({
-    required this.id,
-    required this.name,
-    required this.price,
-    required this.quantity,
-  });
-}
-
 class _CartPageState extends State<CartPage> {
   static const double _freeDeliveryThreshold = 15.0;
-  static const double _deliveryFee = 0.0;
+  static const double _deliveryFee = 3.00; // Example delivery fee, changes to 0 if threshold met
 
-  late List<_CartItemData> _items;
+  // Get live items from CartManager
+  List<CartItem> get _items => CartManager.instance.items;
 
-  @override
-  void initState() {
-    super.initState();
-    _items = [
-      _CartItemData(id: 'nasi_lemak', name: 'Nasi Lemak Ayam', price: 8.50, quantity: 1),
-      _CartItemData(id: 'iced_milo', name: 'Iced Milo', price: 3.00, quantity: 1),
-    ];
-  }
-
-  double get _subtotal =>
-      _items.fold(0.0, (sum, item) => sum + item.price * item.quantity);
-  double get _total => _subtotal + _deliveryFee;
-  double get _amountNeededForFreeDelivery =>
-      (_freeDeliveryThreshold - _subtotal).clamp(0.0, double.infinity);
-  double get _freeDeliveryProgress =>
-      (_subtotal / _freeDeliveryThreshold).clamp(0.0, 1.0);
+  double get _subtotal => CartManager.instance.totalPrice;
+  
+  double get _currentDeliveryFee => _subtotal >= _freeDeliveryThreshold ? 0.0 : _deliveryFee;
+  
+  double get _total => _subtotal + _currentDeliveryFee;
+  
+  double get _amountNeededForFreeDelivery => (_freeDeliveryThreshold - _subtotal).clamp(0.0, double.infinity);
+  
+  double get _freeDeliveryProgress => (_subtotal / _freeDeliveryThreshold).clamp(0.0, 1.0);
 
   @override
   Widget build(BuildContext context) {
@@ -78,7 +59,6 @@ class _CartPageState extends State<CartPage> {
         ),
         centerTitle: false,
       ),
-      // MAGIK BACKGROUND PATTERN .JPG KAT SINI!
       body: Container(
         decoration: const BoxDecoration(
           image: DecorationImage(
@@ -87,98 +67,121 @@ class _CartPageState extends State<CartPage> {
             opacity: 0.05,
           ),
         ),
-        child: Stack(
-          children: [
-            SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+        child: _items.isEmpty
+            // --- EMPTY STATE UI ---
+            ? Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.shopping_cart_outlined, size: 80, color: Colors.grey.shade400),
+                    const SizedBox(height: 16),
+                    Text('Your cart is empty', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: Colors.grey.shade600)),
+                    const SizedBox(height: 8),
+                    Text('Looks like you haven\'t added\nanything to your cart yet.', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey.shade500)),
+                  ],
+                ),
+              )
+            // --- CART WITH ITEMS UI ---
+            : Stack(
                 children: [
-                  _SellerHeaderCard(
-                    shopName: 'Mak Cik Nasi Lemak',
-                    location: 'Kolej Dahlia',
-                  ),
-                  const SizedBox(height: 16),
-                  _FreeDeliveryProgress(
-                    amountNeeded: _amountNeededForFreeDelivery,
-                    progress: _freeDeliveryProgress,
-                  ),
-                  const SizedBox(height: 20),
-                  ..._items.map((item) => Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: Dismissible(
-                          key: ValueKey(item.id),
-                          direction: DismissDirection.endToStart,
-                          background: Container(
-                            alignment: Alignment.centerRight,
-                            padding: const EdgeInsets.only(right: 20),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFE53935), // Warna merah standard untuk delete
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                            child: const Icon(
-                              Icons.delete_rounded,
-                              color: kWhite,
-                              size: 28,
-                            ),
-                          ),
-                          onDismissed: (_) {
-                            setState(() => _items.removeWhere((e) => e.id == item.id));
+                  SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _SellerHeaderCard(
+                          shopName: _items.isNotEmpty ? _items.first.sellerName : 'UMART Store', // Dynamic seller name
+                          location: 'UiTM Campus',
+                        ),
+                        const SizedBox(height: 16),
+                        _FreeDeliveryProgress(
+                          amountNeeded: _amountNeededForFreeDelivery,
+                          progress: _freeDeliveryProgress,
+                        ),
+                        const SizedBox(height: 20),
+                        
+                        // Mapping Live Items
+                        ..._items.map((item) => Padding(
+                              padding: const EdgeInsets.only(bottom: 12),
+                              child: Dismissible(
+                                key: UniqueKey(), // Safely handle dismiss
+                                direction: DismissDirection.endToStart,
+                                background: Container(
+                                  alignment: Alignment.centerRight,
+                                  padding: const EdgeInsets.only(right: 20),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFE53935), 
+                                    borderRadius: BorderRadius.circular(14),
+                                  ),
+                                  child: const Icon(
+                                    Icons.delete_rounded,
+                                    color: kWhite,
+                                    size: 28,
+                                  ),
+                                ),
+                                onDismissed: (_) {
+                                  setState(() {
+                                    CartManager.instance.removeFromCart(item);
+                                  });
+                                },
+                                child: _CartItem(
+                                  name: item.name,
+                                  price: item.price,
+                                  quantity: item.quantity,
+                                  imageUrl: item.imageUrl, // Live image
+                                  addons: item.addons,     // Live addons
+                                  onDecrement: () {
+                                    if (item.quantity > 1) {
+                                      setState(() => item.quantity--);
+                                    }
+                                  },
+                                  onIncrement: () => setState(() => item.quantity++),
+                                ),
+                              ),
+                            )),
+                        const SizedBox(height: 4),
+                        TextButton.icon(
+                          onPressed: () {
+                            Navigator.pop(context); // Goes back to add more
                           },
-                          child: _CartItem(
-                            name: item.name,
-                            price: item.price,
-                            quantity: item.quantity,
-                            onDecrement: () {
-                              if (item.quantity > 1) {
-                                setState(() => item.quantity--);
-                              }
-                            },
-                            onIncrement: () => setState(() => item.quantity++),
+                          icon: const Icon(Icons.add_circle_outline, size: 18, color: kPrimary),
+                          label: const Text(
+                            'Add more items',
+                            style: TextStyle(
+                              color: kPrimary,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                         ),
-                      )),
-                  const SizedBox(height: 4),
-                  TextButton.icon(
-                    onPressed: () {},
-                    icon: const Icon(Icons.add_circle_outline, size: 18, color: kPrimary),
-                    label: const Text(
-                      'Add more items from this shop',
-                      style: TextStyle(
-                        color: kPrimary,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                      ),
+                        const SizedBox(height: 20),
+                        _StudentRemarksBox(),
+                        const SizedBox(height: 20),
+                        _OrderSummary(
+                          subtotal: _subtotal,
+                          deliveryFee: _currentDeliveryFee,
+                          total: _total,
+                        ),
+                        const SizedBox(height: 100),
+                      ],
                     ),
                   ),
-                  const SizedBox(height: 20),
-                  _StudentRemarksBox(),
-                  const SizedBox(height: 20),
-                  _OrderSummary(
-                    subtotal: _subtotal,
-                    deliveryFee: _deliveryFee,
-                    total: _total,
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    child: _BottomCheckoutBar(
+                      total: _total,
+                      onProceed: () {
+                        // Terus buka jalan ke Checkout Page!
+                        Navigator.of(context).push(
+                          MaterialPageRoute(builder: (_) => const CheckoutPage()),
+                        );
+                      },
+                    ),
                   ),
-                  const SizedBox(height: 100),
                 ],
               ),
-            ),
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              child: _BottomCheckoutBar(
-                onProceed: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const CheckoutPage(),
-                    ),
-                  );
-                },
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }
@@ -211,10 +214,10 @@ class _FreeDeliveryProgress extends StatelessWidget {
             ),
           ],
         ),
-        child: Row(
+        child: const Row(
           children: [
-            const Text('🚚 ', style: TextStyle(fontSize: 16, color: kGreen)),
-            const Text(
+            Text('🚚 ', style: TextStyle(fontSize: 16, color: kGreen)),
+            Text(
               "You've unlocked FREE delivery!",
               style: TextStyle(
                 fontWeight: FontWeight.w600,
@@ -258,7 +261,7 @@ class _FreeDeliveryProgress extends StatelessWidget {
               value: progress,
               minHeight: 6,
               backgroundColor: Colors.grey[200],
-              valueColor: const AlwaysStoppedAnimation<Color>(kAccent), // Guna warna Oren
+              valueColor: const AlwaysStoppedAnimation<Color>(kAccent), 
             ),
           ),
         ],
@@ -275,14 +278,14 @@ class _StudentRemarksBox extends StatelessWidget {
     return TextField(
       maxLines: 3,
       decoration: InputDecoration(
-        hintText: '✍️ Add a note for seller (e.g., Sambal lebih, taknak taugeh pls 🙅‍♀️)',
+        hintText: '✍️ Add a note for seller (e.g., Extra spicy, no bean sprouts please 🙅‍♀️)',
         hintStyle: TextStyle(
           fontSize: 13,
           color: Colors.grey[500],
           fontWeight: FontWeight.w400,
         ),
         filled: true,
-        fillColor: kWhite.withOpacity(0.8), // Guna warna putih dengan opacity
+        fillColor: kWhite.withOpacity(0.8), 
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
           borderSide: BorderSide.none,
@@ -293,7 +296,7 @@ class _StudentRemarksBox extends StatelessWidget {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: kPrimary, width: 1.5), // Guna hijau bila klik
+          borderSide: const BorderSide(color: kPrimary, width: 1.5), 
         ),
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       ),
@@ -333,10 +336,10 @@ class _SellerHeaderCard extends StatelessWidget {
             width: 44,
             height: 44,
             decoration: BoxDecoration(
-              color: kPrimary.withOpacity(0.1), // Hijau Pudar
+              color: kPrimary.withOpacity(0.1), 
               borderRadius: BorderRadius.circular(12),
             ),
-            child: const Icon(Icons.storefront_rounded, color: kPrimary, size: 22), // Ikon Hijau
+            child: const Icon(Icons.storefront_rounded, color: kPrimary, size: 22), 
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -380,6 +383,8 @@ class _CartItem extends StatelessWidget {
   final String name;
   final double price;
   final int quantity;
+  final String imageUrl;
+  final String addons;
   final VoidCallback onDecrement;
   final VoidCallback onIncrement;
 
@@ -387,6 +392,8 @@ class _CartItem extends StatelessWidget {
     required this.name,
     required this.price,
     required this.quantity,
+    required this.imageUrl,
+    required this.addons,
     required this.onDecrement,
     required this.onIncrement,
   });
@@ -409,14 +416,21 @@ class _CartItem extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 72,
-            height: 72,
-            decoration: BoxDecoration(
-              color: kPrimary.withOpacity(0.1), // Hijau pudar
-              borderRadius: BorderRadius.circular(12),
+          // Live Image Implementation
+          ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: Image.network(
+              imageUrl, 
+              width: 72, 
+              height: 72, 
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => Container(
+                width: 72, 
+                height: 72, 
+                color: kPrimary.withOpacity(0.1), 
+                child: const Icon(Icons.restaurant_rounded, color: kPrimary, size: 28)
+              )
             ),
-            child: const Icon(Icons.restaurant_rounded, color: kPrimary, size: 28),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -431,11 +445,17 @@ class _CartItem extends StatelessWidget {
                     color: Color(0xFF1A1A2E),
                   ),
                 ),
+                const SizedBox(height: 2),
+                if (addons.isNotEmpty)
+                  Text(
+                    addons,
+                    style: TextStyle(color: Colors.grey[500], fontSize: 11),
+                  ),
                 const SizedBox(height: 4),
                 Text(
-                  'RM${price.toStringAsFixed(2)}',
+                  'RM${(price * quantity).toStringAsFixed(2)}', // Total per item
                   style: const TextStyle(
-                    color: kAccent, // Warna oren untuk harga
+                    color: kAccent, 
                     fontWeight: FontWeight.w700,
                     fontSize: 15,
                   ),
@@ -585,7 +605,7 @@ class _OrderSummary extends StatelessWidget {
                 style: const TextStyle(
                   fontWeight: FontWeight.w800,
                   fontSize: 18,
-                  color: kPrimary, // Guna Hijau Utama supaya nampak legit
+                  color: kPrimary, 
                 ),
               ),
             ],
@@ -632,9 +652,13 @@ class _SummaryRow extends StatelessWidget {
 // ─── Bottom Checkout Bar ──────────────────────────────────────────────────────
 
 class _BottomCheckoutBar extends StatelessWidget {
+  final double total;
   final VoidCallback onProceed;
 
-  const _BottomCheckoutBar({required this.onProceed});
+  const _BottomCheckoutBar({
+    required this.total,
+    required this.onProceed
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -659,7 +683,7 @@ class _BottomCheckoutBar extends StatelessWidget {
           child: ElevatedButton(
             onPressed: onProceed,
             style: ElevatedButton.styleFrom(
-              backgroundColor: kPrimary, // Butang Checkout Hijau Premium
+              backgroundColor: kPrimary, 
               foregroundColor: kWhite,
               padding: const EdgeInsets.symmetric(vertical: 16),
               elevation: 0,
@@ -671,7 +695,7 @@ class _BottomCheckoutBar extends StatelessWidget {
                 fontSize: 16,
               ),
             ),
-            child: const Text('Proceed to Checkout'),
+            child: Text('Checkout - RM${total.toStringAsFixed(2)}'),
           ),
         ),
       ),

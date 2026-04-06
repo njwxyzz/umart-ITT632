@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'cart_page.dart';
+import 'cart_manager.dart';
 
 // ─── Color Constants ───────────────────────────────────────
 const kPrimary      = Color(0xFF4C6B3F); 
@@ -46,7 +47,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
 
   @override
   Widget build(BuildContext context) {
-    // MAGIK: Check kalau nama barang ada perkataan "nasi lemak"
+    // MAGIC: Check if item name contains "nasi lemak"
     bool isNasiLemak = widget.name.toLowerCase().contains('nasi lemak');
 
     return Scaffold(
@@ -83,6 +84,26 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
               Expanded(
                 child: ElevatedButton(
                   onPressed: () {
+                    // 1. Gather selected add-ons
+                    List<String> selectedAddons = [];
+                    if (_extraSambal) selectedAddons.add('Extra Sambal');
+                    if (_addTelurMata) selectedAddons.add('Fried Egg');
+                    if (_extraRice) selectedAddons.add('Extra Rice');
+                    String addonsText = selectedAddons.join(', ');
+
+                    // 2. Save item to CartManager
+                    CartManager.instance.addToCart(
+                      CartItem(
+                        name: widget.name,
+                        price: _totalPrice / _quantity, // Price per unit including addons
+                        imageUrl: widget.imageUrl,
+                        sellerName: widget.sellerName,
+                        addons: addonsText,
+                        quantity: _quantity,
+                      )
+                    );
+
+                    // 3. Show Success Notification
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
                         content: const Text('Added to cart! 🛒'),
@@ -91,6 +112,9 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                       ),
                     );
+                    
+                    // 4. Close the page and return to previous screen
+                    Navigator.pop(context);
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: kPrimary, 
@@ -188,7 +212,6 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                             const SizedBox(width: 4),
                             Text(widget.rating.toStringAsFixed(1), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)), 
                             const SizedBox(width: 8),
-                            // --- NAMA SELLER KAT SINI ---
                             Icon(Icons.storefront_rounded, size: 16, color: Colors.grey[500]),
                             const SizedBox(width: 4),
                             Expanded(
@@ -201,7 +224,6 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                           ],
                         ),
                         const SizedBox(height: 16),
-                        // --- DESCRIPTION DARI FIREBASE KAT SINI ---
                         Text(
                           widget.description, 
                           style: TextStyle(color: Colors.grey[700], fontSize: 14, height: 1.5),
@@ -212,7 +234,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
 
                   const SizedBox(height: 16),
 
-                  // KOTAK ADD-ONS (Hanya keluar kalau makanan tu Nasi Lemak)
+                  // KOTAK ADD-ONS
                   if (isNasiLemak)
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -223,7 +245,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                           const SizedBox(height: 12),
                           
                           _buildAddonTile('Extra Sambal', '+RM1.50', _extraSambal, (val) => setState(() => _extraSambal = val!)),
-                          _buildAddonTile('Add Telur Mata (Fried Egg)', '+RM2.00', _addTelurMata, (val) => setState(() => _addTelurMata = val!)),
+                          _buildAddonTile('Add Fried Egg', '+RM2.00', _addTelurMata, (val) => setState(() => _addTelurMata = val!)),
                           _buildAddonTile('Extra Rice', '+RM2.00', _extraRice, (val) => setState(() => _extraRice = val!)),
                         ],
                       ),
