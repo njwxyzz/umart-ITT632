@@ -23,6 +23,9 @@ class _CartPageState extends State<CartPage> {
   static const double _freeDeliveryThreshold = 15.0;
   static const double _deliveryFee = 3.00; // Example delivery fee, changes to 0 if threshold met
 
+  // to hold student remarks (if any)
+  final TextEditingController _noteController = TextEditingController();
+
   // Get live items from CartManager
   List<CartItem> get _items => CartManager.instance.items;
 
@@ -155,7 +158,7 @@ class _CartPageState extends State<CartPage> {
                           ),
                         ),
                         const SizedBox(height: 20),
-                        _StudentRemarksBox(),
+                        _StudentRemarksBox(controller: _noteController),
                         const SizedBox(height: 20),
                         _OrderSummary(
                           subtotal: _subtotal,
@@ -173,9 +176,9 @@ class _CartPageState extends State<CartPage> {
                     child: _BottomCheckoutBar(
                       total: _total,
                       onProceed: () {
-                        // Terus buka jalan ke Checkout Page!
+                        // Bawa nota tu pergi ke Checkout Page!
                         Navigator.of(context).push(
-                          MaterialPageRoute(builder: (_) => const CheckoutPage()),
+                          MaterialPageRoute(builder: (_) => CheckoutPage(note: _noteController.text)),
                         );
                       },
                     ),
@@ -273,31 +276,24 @@ class _FreeDeliveryProgress extends StatelessWidget {
 // ─── Student Remarks Box ─────────────────────────────────────────────────────
 
 class _StudentRemarksBox extends StatelessWidget {
+  final TextEditingController controller;
+
+  const _StudentRemarksBox({super.key, required this.controller});
+
   @override
   Widget build(BuildContext context) {
     return TextField(
+      controller: controller, // WAYAR DISAMBUNG!
       maxLines: 3,
+      // ... (biarkan styling kau yang lain tak berubah) ...
       decoration: InputDecoration(
         hintText: '✍️ Add a note for seller (e.g., Extra spicy, no bean sprouts please 🙅‍♀️)',
-        hintStyle: TextStyle(
-          fontSize: 13,
-          color: Colors.grey[500],
-          fontWeight: FontWeight.w400,
-        ),
+        hintStyle: TextStyle(fontSize: 13, color: Colors.grey[500], fontWeight: FontWeight.w400),
         filled: true,
         fillColor: kWhite.withOpacity(0.8), 
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide.none,
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide.none,
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: kPrimary, width: 1.5), 
-        ),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: kPrimary, width: 1.5)),
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       ),
     );

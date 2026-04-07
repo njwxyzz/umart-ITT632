@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 // --- Color Constants ---
 const kPrimary = Color(0xFF4C6B3F); 
@@ -14,63 +16,34 @@ class SellerOrdersPage extends StatefulWidget {
 }
 
 class _SellerOrdersPageState extends State<SellerOrdersPage> {
-  // --- Dummy Data for Orders ---
-  // In a real app, this will come from Firebase Firestore
-  final List<Map<String, dynamic>> _orders = [
-    {
-      'id': '#UM-9021',
-      'buyerName': 'Ahmad Zaki',
-      'location': 'Kolej Dahlia 3, Room 102',
-      'time': 'Just now',
-      'items': '2x Nasi Lemak, 1x Teh Tarik',
-      'total': 15.00,
-      'status': 'Pending', // Pending, Processing, Delivered, Rejected
-    },
-    {
-      'id': '#UM-9018',
-      'buyerName': 'Sarah Liyana',
-      'location': 'Kolej Mawar 2, Room 410',
-      'time': '10 mins ago',
-      'items': '1x White Chocojar',
-      'total': 12.50,
-      'status': 'Processing',
-    },
-    {
-      'id': '#UM-8990',
-      'buyerName': 'Irfan Hakim',
-      'location': 'Kolej Delima, Room 211',
-      'time': 'Yesterday',
-      'items': '3x Printing (A4 B&W)',
-      'total': 3.00,
-      'status': 'Delivered',
-    },
-  ];
 
-  // --- Functions to update order status (Simulating Backend) ---
-  void _updateOrderStatus(String orderId, String newStatus) {
-    setState(() {
-      final index = _orders.indexWhere((order) => order['id'] == orderId);
-      if (index != -1) {
-        _orders[index]['status'] = newStatus;
+  // --- Functions to update order status (Now talking to Firebase!) ---
+  Future<void> _updateOrderStatus(String orderId, String newStatus) async {
+    try {
+      await FirebaseFirestore.instance.collection('orders').doc(orderId).update({
+        'status': newStatus,
+      });
+
+      if (mounted) {
+        // Show a quick success pop-up
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Order marked as $newStatus!', style: const TextStyle(fontWeight: FontWeight.bold)),
+            backgroundColor: newStatus == 'Rejected' ? Colors.red.shade400 : kPrimary,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
       }
-    });
-
-    // Show a quick success pop-up
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Order $orderId marked as $newStatus!', style: const TextStyle(fontWeight: FontWeight.bold)),
-        backgroundColor: newStatus == 'Rejected' ? Colors.red.shade400 : kPrimary,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      ),
-    );
+    } catch (e) {
+      print("Error updating status: $e");
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    // Filter orders based on their status
-    final pendingOrders = _orders.where((o) => o['status'] == 'Pending').toList();
-    final activeAndPastOrders = _orders.where((o) => o['status'] != 'Pending').toList();
+    // Get the current seller's UID
+    String currentUserId = FirebaseAuth.instance.currentUser?.uid ?? '';
 
     return DefaultTabController(
       length: 2,
@@ -93,16 +66,16 @@ class _SellerOrdersPageState extends State<SellerOrdersPage> {
               child: Container(
                 height: 45,
                 decoration: BoxDecoration(color: Colors.grey.shade200, borderRadius: BorderRadius.circular(25)),
-                child: TabBar(
+                child: const TabBar(
                   indicatorSize: TabBarIndicatorSize.tab,
                   dividerColor: Colors.transparent,
-                  indicator: BoxDecoration(color: kPrimary, borderRadius: BorderRadius.circular(25)),
+                  indicator: BoxDecoration(color: kPrimary, borderRadius: BorderRadius.all(Radius.circular(25))),
                   labelColor: kWhite,
-                  unselectedLabelColor: Colors.grey.shade600,
-                  labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                  unselectedLabelColor: Colors.grey,
+                  labelStyle: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                   tabs: [
-                    Tab(text: 'New Requests (${pendingOrders.length})'),
-                    const Tab(text: 'Active & Past'),
+                    Tab(text: 'New Requests'),
+                    Tab(text: 'Active & Past'),
                   ],
                 ),
               ),
@@ -117,35 +90,69 @@ class _SellerOrdersPageState extends State<SellerOrdersPage> {
               opacity: 0.05, 
             ),
           ),
-          child: TabBarView(
-            children: [
-              // --- TAB 1: PENDING ORDERS ---
-              pendingOrders.isEmpty 
-                ? _buildEmptyState('No new orders right now.')
-                : ListView.builder(
-                    padding: const EdgeInsets.all(20),
-                    itemCount: pendingOrders.length,
-                    itemBuilder: (context, index) => _buildOrderCard(pendingOrders[index]),
-                  ),
+          // --- KITA LETAK STREAMBUILDER KAT SINI ---
+          child: StreamBuilder<QuerySnapshot>(
+            stream: FirebaseFirestore.instance
+                .collection('orders')
+                .where('sellerId', isEqualTo: currentUserId) // Filter orders for this seller
+                .snapshots(),
+            builder: (context, snapshot) {
+              
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator(color: kPrimary));
+              }
 
-              // --- TAB 2: ACTIVE & PAST ORDERS ---
-              activeAndPastOrders.isEmpty
-                ? _buildEmptyState('No active or past orders.')
-                : ListView.builder(
-                    padding: const EdgeInsets.all(20),
-                    itemCount: activeAndPastOrders.length,
-                    itemBuilder: (context, index) => _buildOrderCard(activeAndPastOrders[index]),
-                  ),
-            ],
+              List<QueryDocumentSnapshot> allOrders = snapshot.hasData ? snapshot.data!.docs : [];
+
+              // Filter the data based on status for the two tabs
+              final pendingOrders = allOrders.where((doc) {
+                var data = doc.data() as Map<String, dynamic>;
+                return data['status'] == 'Pending';
+              }).toList();
+              
+              final activeAndPastOrders = allOrders.where((doc) {
+                var data = doc.data() as Map<String, dynamic>;
+                return data['status'] != 'Pending';
+              }).toList();
+
+              return TabBarView(
+                children: [
+                  // --- TAB 1: PENDING ORDERS ---
+                  pendingOrders.isEmpty 
+                    ? _buildEmptyState('No new orders right now.')
+                    : ListView.builder(
+                        padding: const EdgeInsets.all(20),
+                        itemCount: pendingOrders.length,
+                        itemBuilder: (context, index) => _buildOrderCard(pendingOrders[index]),
+                      ),
+
+                  // --- TAB 2: ACTIVE & PAST ORDERS ---
+                  activeAndPastOrders.isEmpty
+                    ? _buildEmptyState('No active or past orders.')
+                    : ListView.builder(
+                        padding: const EdgeInsets.all(20),
+                        itemCount: activeAndPastOrders.length,
+                        itemBuilder: (context, index) => _buildOrderCard(activeAndPastOrders[index]),
+                      ),
+                ],
+              );
+            },
           ),
         ),
       ),
     );
   }
 
-  // HELPER WIDGET: Order Card
-  Widget _buildOrderCard(Map<String, dynamic> order) {
-    final status = order['status'];
+  // HELPER WIDGET: Order Card (Now takes DocumentSnapshot to get ID and Data)
+  Widget _buildOrderCard(QueryDocumentSnapshot doc) {
+    var order = doc.data() as Map<String, dynamic>;
+    String orderId = doc.id; // Get the Firestore Document ID
+    
+    final status = order['status'] ?? 'Pending';
+    double totalPrice = order['totalPrice'] is num ? (order['totalPrice'] as num).toDouble() : 0.0;
+
+    // Format a simple order number from the first 5 chars of the document ID
+    String displayId = '#UM-${orderId.substring(0, 5).toUpperCase()}';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -162,8 +169,8 @@ class _SellerOrdersPageState extends State<SellerOrdersPage> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(order['id'], style: const TextStyle(fontWeight: FontWeight.w800, color: kPrimary, fontSize: 14)),
-              Text(order['time'], style: TextStyle(color: Colors.grey.shade500, fontSize: 12, fontWeight: FontWeight.w500)),
+              Text(displayId, style: const TextStyle(fontWeight: FontWeight.w800, color: kPrimary, fontSize: 14)),
+              Text('Just now', style: TextStyle(color: Colors.grey.shade500, fontSize: 12, fontWeight: FontWeight.w500)), // You can add timestamp formatting later
             ],
           ),
           const Padding(
@@ -185,22 +192,25 @@ class _SellerOrdersPageState extends State<SellerOrdersPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(order['buyerName'], style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF1A1A2E))),
+                    Text(order['buyerName'] ?? 'Student', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF1A1A2E))),
                     const SizedBox(height: 4),
                     Row(
                       children: [
                         const Icon(Icons.location_on_rounded, size: 12, color: kAccent),
                         const SizedBox(width: 4),
-                        Expanded(child: Text(order['location'], style: TextStyle(color: Colors.grey.shade600, fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis)),
+                        Expanded(child: Text(order['buyerLocation'] ?? 'UiTM Campus', style: TextStyle(color: Colors.grey.shade600, fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis)),
                       ],
                     ),
                     const SizedBox(height: 8),
-                    Text(order['items'], style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Color(0xFF1A1A2E))),
+                    // Item list
+                    Text('1x ${order['productName'] ?? 'Item'}', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Color(0xFF1A1A2E))),
+                    if (order['note'] != null && order['note'].toString().isNotEmpty)
+                      Text('📝 ${order['note']}', style: TextStyle(fontSize: 12, color: Colors.grey.shade600, fontStyle: FontStyle.italic)),
                   ],
                 ),
               ),
               // Price
-              Text('RM ${order['total'].toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: Color(0xFF1A1A2E))),
+              Text('RM ${totalPrice.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: Color(0xFF1A1A2E))),
             ],
           ),
 
@@ -212,7 +222,7 @@ class _SellerOrdersPageState extends State<SellerOrdersPage> {
               children: [
                 Expanded(
                   child: OutlinedButton(
-                    onPressed: () => _updateOrderStatus(order['id'], 'Rejected'),
+                    onPressed: () => _updateOrderStatus(orderId, 'Rejected'),
                     style: OutlinedButton.styleFrom(
                       side: BorderSide(color: Colors.red.shade300),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -224,7 +234,7 @@ class _SellerOrdersPageState extends State<SellerOrdersPage> {
                 const SizedBox(width: 12),
                 Expanded(
                   child: ElevatedButton(
-                    onPressed: () => _updateOrderStatus(order['id'], 'Processing'),
+                    onPressed: () => _updateOrderStatus(orderId, 'Processing'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: kPrimary,
                       elevation: 0,
@@ -240,7 +250,7 @@ class _SellerOrdersPageState extends State<SellerOrdersPage> {
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
-                onPressed: () => _updateOrderStatus(order['id'], 'Delivered'),
+                onPressed: () => _updateOrderStatus(orderId, 'Delivered'),
                 icon: const Icon(Icons.check_circle_outline_rounded, color: kWhite, size: 18),
                 label: const Text('Mark as Delivered', style: TextStyle(color: kWhite, fontWeight: FontWeight.bold)),
                 style: ElevatedButton.styleFrom(

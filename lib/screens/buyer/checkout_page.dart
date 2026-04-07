@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart'; // MESTI ADA!
+import 'package:firebase_auth/firebase_auth.dart'; // MESTI ADA!
 import 'tracking_page.dart'; 
-import 'cart_manager.dart'; // <-- PENTING: Panggil otak troli kita
+import 'cart_manager.dart'; 
 
 // --- Color Constants ---
 const kPrimary      = Color(0xFF4C6B3F); 
@@ -11,7 +13,9 @@ const kWhite        = Colors.white;
 const kGreen        = Color(0xFF00C48C); 
 
 class CheckoutPage extends StatefulWidget {
-  const CheckoutPage({super.key});
+  final String note; // KITA TANGKAP NOTA DARI CART PAGE
+  
+  const CheckoutPage({super.key, required this.note});
 
   @override
   State<CheckoutPage> createState() => _CheckoutPageState();
@@ -24,14 +28,82 @@ class _CheckoutPageState extends State<CheckoutPage> {
   // --- AMBIL DATA DARI CART MANAGER ---
   List<CartItem> get _items => CartManager.instance.items;
   double get _subtotal => CartManager.instance.totalPrice;
-  double get _deliveryFee => _subtotal >= 15.0 ? 0.0 : 3.00; // Kalau beli lebih RM15, free delivery
+  double get _deliveryFee => _subtotal >= 15.0 ? 0.0 : 3.00; 
   double get _total => _subtotal + _deliveryFee;
+
+  // --- THE MATCHMAKER: FUNGSI HANTAR ORDER KE FIREBASE ---
+  Future<void> _processOrder() async {
+    if (_items.isEmpty) return;
+
+    // 1. Tunjuk loading spinner
+    showDialog(context: context, barrierDismissible: false, builder: (_) => const Center(child: CircularProgressIndicator(color: kAccent)));
+
+    try {
+      User? currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser == null) throw Exception("Please login first!");
+
+      // 🚨 TARIK PROFIL SEBENAR PEMBELI 🚨
+      String realBuyerName = 'UMART Student'; // Fallback kalau takde nama
+      try {
+        var userDoc = await FirebaseFirestore.instance.collection('users').doc(currentUser.uid).get();
+        if (userDoc.exists) {
+          // Ambil fullName, kalau takde, kita potong e-mel dia ambil nama depan je
+          realBuyerName = userDoc.data()?['fullName'] ?? currentUser.email?.split('@')[0] ?? 'UMART Student';
+        } else {
+          // Kalau dia tak pernah setup profile, pakai nama depan emel (contoh: najwa dari najwa@student...)
+          realBuyerName = currentUser.email?.split('@')[0].toUpperCase() ?? 'UMART Student';
+        }
+      } catch (e) {
+        print("Gagal tarik nama profil: $e");
+      }
+
+      // 2. Kita kena cari IC (UID) Seller berdasarkan nama kedai
+      String sellerName = _items.first.sellerName;
+      String targetSellerId = "";
+      
+      var storeQuery = await FirebaseFirestore.instance.collection('stores').where('storeName', isEqualTo: sellerName).get();
+      if (storeQuery.docs.isNotEmpty) {
+        targetSellerId = storeQuery.docs.first.id; // Ini IC sebenar seller tu!
+      } else {
+        targetSellerId = "UNKNOWN_SELLER"; // Kalau kedai hantu
+      }
+
+      // Susun nama barang cantik-cantik untuk order
+      String allItemsString = _items.map((e) => '${e.quantity}x ${e.name}').join(', ');
+
+      // 3. Tembak masuk laci 'orders' kat Firebase!
+      await FirebaseFirestore.instance.collection('orders').add({
+        'buyerId': currentUser.uid,
+        'buyerName': realBuyerName, // <--- NAMA SEBENAR DAH MASUK SINI! 💅
+        'buyerLocation': 'Kolej Dahlia 3, Block A', // Nota: Nanti boleh ambil dari form alamat sebenar
+        'sellerId': targetSellerId,
+        'sellerName': sellerName,
+        'productName': allItemsString,
+        'totalPrice': _total,
+        'status': 'Pending',
+        'note': widget.note, // Nota tak nak taugeh
+        'paymentMethod': _selectedPayment,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+
+      // 4. Tutup loading spinner
+      if (context.mounted) Navigator.pop(context);
+
+      // 5. Tunjuk Bouncing Success Popup kau yang lawa tu!
+      _showSuccessPopup();
+
+    } catch (e) {
+      if (context.mounted) Navigator.pop(context); // Tutup loading kalau error
+      print("Error buat order: $e");
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Order failed: $e')));
+    }
+  }
 
   // --- THE CUTE BOUNCING SUCCESS POPUP ---
   void _showSuccessPopup() {
     showDialog(
       context: context,
-      barrierDismissible: false, // Prevent closing by tapping outside
+      barrierDismissible: false, 
       builder: (BuildContext context) {
         return Dialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
@@ -78,7 +150,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
     // Wait 2.5 seconds, clear cart, pop dialog, and push to Tracking Page
     Future.delayed(const Duration(milliseconds: 2500), () {
-      CartManager.instance.clearCart(); // KOSONGKAN TROLI LEPAS BAYAR
+      CartManager.instance.clearCart(); // KOSONGKAN TROLI
       Navigator.pop(context); // Close Dialog
       Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const TrackingPage()));
     });
@@ -180,7 +252,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
                 child: SizedBox(
                   height: 54,
                   child: ElevatedButton(
-                    onPressed: _items.isEmpty ? null : _showSuccessPopup, // Hanya boleh tekan kalau ada barang
+                    // 🚨 PANGGIL FUNGSI FIREBASE KITA BILA DITEKAN 🚨
+                    onPressed: _items.isEmpty ? null : _processOrder, 
                     style: ElevatedButton.styleFrom(
                       backgroundColor: kPrimary,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
