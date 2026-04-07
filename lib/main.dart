@@ -21,6 +21,7 @@ import 'screens/auth/onboarding_screen.dart';
 import 'screens/seller/seller_registration_page.dart';
 import 'screens/buyer/store_profile_page.dart';
 import 'screens/buyer/cart_manager.dart';
+import 'screens/seller/seller_dashboard.dart'; // <--- TAMBAH YANG NI
 
 void main() async {
   // Required when using Firebase
@@ -230,7 +231,7 @@ class _HomeScreenState extends State<HomeScreen> {
 // GRADIENT HEADER 
 // ============================================================================
 class _GradientHeader extends StatefulWidget {
-  const _GradientHeader({super.key});
+  const _GradientHeader();
 
   @override
   State<_GradientHeader> createState() => _GradientHeaderState();
@@ -753,12 +754,65 @@ class _BottomNav extends StatelessWidget {
           ),
           
           // ─── FLOATING ORANGE BUTTON (FAB) ───
+          // ─── FLOATING ORANGE BUTTON (FAB) ───
           Positioned(
             top: -20, // Push it up slightly
             left: 0,
             right: 0,
             child: GestureDetector(
-              onTap: () => _showSellActionModal(context),
+              onTap: () async {
+                // 1. Tunjuk loading jap kat skrin
+                showDialog(
+                  context: context,
+                  barrierDismissible: false,
+                  builder: (context) => const Center(child: CircularProgressIndicator(color: kAccent)),
+                );
+
+                try {
+                  // ID akaun yang kau pakai masa daftar (mesti sama dengan kat registration page)
+                  // Cari User yang tengah login sekarang
+                User? currentUser = FirebaseAuth.instance.currentUser;
+                
+                // Kalau takde orang login (mustahil tapi kita buat safety net)
+                if (currentUser == null) {
+                  if (context.mounted) Navigator.pop(context); // tutup loading
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Sila login dahulu!')));
+                  return;
+                }
+
+                // Guna UID (IC sebenar user) dari Firebase
+                String accountID = currentUser.uid;
+
+                  // 2. Bouncer cari nama kedai kat Firebase
+                  var storeDoc = await FirebaseFirestore.instance.collection('stores').doc(accountID).get();
+
+                  // Tutup loading
+                  if (context.mounted) Navigator.pop(context);
+
+                  if (storeDoc.exists) {
+                    // 3A. NAMA ADA DALAM VIP LIST! Terus masuk Dashboard.
+                    if (context.mounted) {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => SellerDashboard(
+                            storeName: storeDoc['storeName'],
+                            storeLocation: storeDoc['storeLocation'],
+                          ),
+                        ),
+                      );
+                    }
+                  } else {
+                    // 3B. NAMA TAKDE! Bouncer keluarkan Pop-Up "Start Selling"
+                    if (context.mounted) {
+                      _showSellActionModal(context);
+                    }
+                  }
+                } catch (e) {
+                  if (context.mounted) Navigator.pop(context); // Tutup loading kalau error
+                  print("Bouncer pening: $e");
+                }
+              },
               child: Center(
                 child: Container(
                   width: 58,

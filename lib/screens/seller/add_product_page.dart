@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'dart:io';
+import 'package:image_picker/image_picker.dart'; 
+import 'package:cloud_firestore/cloud_firestore.dart'; 
 
 // --- Color Constants ---
 const kPrimary = Color(0xFF4C6B3F); 
@@ -7,27 +10,60 @@ const kBg      = Color(0xFFF5F7F2);
 const kWhite   = Colors.white;
 
 class AddProductPage extends StatefulWidget {
-  const AddProductPage({super.key});
+  final String storeName;
+  final String storeLocation;
+
+  // We receive these from the Dashboard
+  const AddProductPage({super.key, this.storeName = '', this.storeLocation = ''}); 
 
   @override
   State<AddProductPage> createState() => _AddProductPageState();
 }
 
 class _AddProductPageState extends State<AddProductPage> {
+  // --- CONTROLLERS (Pockets to catch the text user types) ---
+  final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _priceController = TextEditingController();
+  final TextEditingController _stockController = TextEditingController();
+  final TextEditingController _descController = TextEditingController();
+  final TextEditingController _variantController = TextEditingController();
+
+  File? _selectedImage;
+  final ImagePicker _picker = ImagePicker();
+  
+  bool _isLoading = false; // To show loading spinner during upload
+
+  // Function to open phone gallery
+  Future<void> _pickImage() async {
+    try {
+      final XFile? pickedFile = await _picker.pickImage(
+        source: ImageSource.gallery, 
+        imageQuality: 70, // Compress image to 70% quality
+      );
+
+      if (pickedFile != null) {
+        setState(() {
+          _selectedImage = File(pickedFile.path);
+        });
+      }
+    } catch (e) {
+      print("Error picking image: $e");
+    }
+  }
+
   String? _selectedCategory;
   final List<String> _categories = [
     'Food & Beverages', 
-    'Preloved Clothes', 
+    'Preloved Items', 
     'Books & Notes', 
     'Gadgets & Accessories',
     'Others'
   ];
 
-  // 🚨 Controller & List untuk Variations (Perisa/Saiz)
-  final TextEditingController _variantController = TextEditingController();
+  // List to store Variations (Flavors/Sizes)
   final List<String> _variations = [];
 
-  // Fungsi tambah perisa
+  // Function to add a variation tag
   void _addVariation() {
     if (_variantController.text.trim().isNotEmpty) {
       setState(() {
@@ -37,8 +73,78 @@ class _AddProductPageState extends State<AddProductPage> {
     }
   }
 
+  // --- FIREBASE UPLOAD LOGIC ---
+  Future<void> _uploadProduct() async {
+    // Basic validation to ensure required fields aren't empty
+    if (_nameController.text.trim().isEmpty || _priceController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter Product Name and Price! 🛑')),
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      // Determine the image URL to save.
+      // If we haven't implemented Firebase Storage yet, and the user hasn't
+      // picked a local file, we save an empty string. The UI will handle displaying
+      // a "No Image" placeholder when it sees an empty string.
+      String finalImageUrl = ""; 
+      
+      // If you implement Firebase Storage later, you would upload _selectedImage here
+      // and assign the resulting download URL to finalImageUrl.
+
+      // Pushing data to Firestore
+      await FirebaseFirestore.instance.collection('products').add({
+        'name': _nameController.text.trim(),
+        'price': double.tryParse(_priceController.text.trim()) ?? 0.0,
+        'stock': int.tryParse(_stockController.text.trim()) ?? 0,
+        'description': _descController.text.trim().isEmpty ? 'No description' : _descController.text.trim(),
+        'category': _selectedCategory ?? 'Others',
+        'variations': _variations, 
+        
+        // 🚨 CRUCIAL: Tagging the product to the store so the Dashboard can see it!
+        'sellerName': widget.storeName, 
+        
+        // Save the image URL (empty string if no image uploaded yet)
+        'imageUrl': finalImageUrl, 
+        
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+
+      if (mounted) {
+        setState(() => _isLoading = false);
+        Navigator.pop(context); // Go back to Dashboard
+        
+        // Show Success SnackBar
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Row(
+              children: [
+                Icon(Icons.check_circle_rounded, color: kWhite),
+                SizedBox(width: 10),
+                Text('Product published successfully! 🚀', style: TextStyle(fontWeight: FontWeight.bold)),
+              ],
+            ),
+            backgroundColor: kPrimary,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      print("Upload error: $e");
+      setState(() => _isLoading = false);
+    }
+  }
+
   @override
   void dispose() {
+    // Clean up controllers to free up RAM
+    _nameController.dispose();
+    _priceController.dispose();
+    _stockController.dispose();
+    _descController.dispose();
     _variantController.dispose();
     super.dispose();
   }
@@ -63,38 +169,47 @@ class _AddProductPageState extends State<AddProductPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // --- IMAGE UPLOAD SECTION ---
+            // --- PRODUCT PHOTO SECTION ---
             _buildInputLabel('PRODUCT PHOTO'),
             GestureDetector(
-              onTap: () {
-                // TODO: Implement image_picker package here later
-              },
+              onTap: _pickImage, // Call gallery function on tap
               child: Container(
-                width: double.infinity,
                 height: 160,
+                width: double.infinity,
                 decoration: BoxDecoration(
                   color: kWhite,
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: kPrimary.withOpacity(0.3), width: 2, style: BorderStyle.solid),
-                  boxShadow: [
-                    BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10, offset: const Offset(0, 5))
-                  ],
+                  border: Border.all(color: kPrimary.withOpacity(0.3), width: 1.5, style: BorderStyle.solid),
                 ),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.add_a_photo_outlined, size: 40, color: kPrimary.withOpacity(0.6)),
-                    const SizedBox(height: 12),
-                    Text('Tap to upload image', style: TextStyle(color: Colors.grey.shade500, fontSize: 14, fontWeight: FontWeight.w500)),
-                  ],
-                ),
+                clipBehavior: Clip.hardEdge, // Prevent image from spilling out of borders
+                child: _selectedImage != null 
+                    // 1. IF IMAGE IS PICKED -> Show actual image
+                    ? Image.file(
+                        _selectedImage!,
+                        fit: BoxFit.cover,
+                        width: double.infinity,
+                      )
+                    // 2. IF EMPTY -> Show camera icon
+                    : Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.add_a_photo_outlined, size: 40, color: kPrimary.withOpacity(0.6)),
+                          const SizedBox(height: 12),
+                          Text('Tap to upload image', style: TextStyle(color: Colors.grey.shade500, fontSize: 14)),
+                        ],
+                      ),
               ),
             ),
+            
             const SizedBox(height: 16),
 
             // --- FORM FIELDS ---
             _buildInputLabel('PRODUCT NAME'),
-            _buildCleanTextField(hint: 'e.g. Chocojar Viral', icon: Icons.fastfood_rounded),
+            _buildCleanTextField(
+              hint: 'e.g. Chocojar Viral', 
+              icon: Icons.fastfood_rounded,
+              controller: _nameController, 
+            ),
 
             // --- PRICE & STOCK (Side by side) ---
             Row(
@@ -107,7 +222,8 @@ class _AddProductPageState extends State<AddProductPage> {
                       _buildCleanTextField(
                         hint: '0.00', 
                         icon: Icons.attach_money_rounded, 
-                        keyboardType: const TextInputType.numberWithOptions(decimal: true)
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        controller: _priceController, 
                       ),
                     ],
                   ),
@@ -121,7 +237,8 @@ class _AddProductPageState extends State<AddProductPage> {
                       _buildCleanTextField(
                         hint: 'e.g. 10', 
                         icon: Icons.inventory_2_outlined, 
-                        keyboardType: TextInputType.number
+                        keyboardType: TextInputType.number,
+                        controller: _stockController, 
                       ),
                     ],
                   ),
@@ -137,15 +254,15 @@ class _AddProductPageState extends State<AddProductPage> {
                   child: _buildCleanTextField(
                     hint: 'e.g. White Choc, Matcha...', 
                     icon: Icons.style_rounded,
-                    controller: _variantController, // Pakai controller ni
+                    controller: _variantController, 
                   ),
                 ),
                 const SizedBox(width: 12),
-                // Butang tambah (+)
+                // Add Button (+)
                 GestureDetector(
                   onTap: _addVariation,
                   child: Container(
-                    height: 54, width: 54, // Kasi sama tinggi dengan TextField
+                    height: 54, width: 54, // Match TextField height
                     decoration: BoxDecoration(
                       color: kPrimary.withOpacity(0.1),
                       borderRadius: BorderRadius.circular(16),
@@ -155,12 +272,12 @@ class _AddProductPageState extends State<AddProductPage> {
                 ),
               ],
             ),
-            // Tempat tag (Chips) akan keluar lepas tambah
+            // Tags (Chips) will appear here after adding
             if (_variations.isNotEmpty) ...[
               const SizedBox(height: 12),
               Wrap(
-                spacing: 8.0, // Jarak kiri kanan antara chip
-                runSpacing: 8.0, // Jarak atas bawah kalau turun baris
+                spacing: 8.0, // Horizontal spacing
+                runSpacing: 8.0, // Vertical spacing
                 children: _variations.map((variant) {
                   return Chip(
                     label: Text(variant, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: kPrimary)),
@@ -172,7 +289,7 @@ class _AddProductPageState extends State<AddProductPage> {
                         _variations.remove(variant);
                       });
                     },
-                    side: BorderSide.none, // Buang border hitam
+                    side: BorderSide.none, // Remove black border
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                   );
                 }).toList(),
@@ -186,7 +303,8 @@ class _AddProductPageState extends State<AddProductPage> {
             _buildCleanTextField(
               hint: 'Describe your product... (ingredients, condition, size, etc.)', 
               icon: Icons.edit_note_rounded, 
-              maxLines: 4
+              maxLines: 4,
+              controller: _descController, 
             ),
 
             const SizedBox(height: 40),
@@ -196,32 +314,16 @@ class _AddProductPageState extends State<AddProductPage> {
               width: double.infinity,
               height: 56,
               child: ElevatedButton(
-                onPressed: () {
-                  // TODO: Save to Firebase Firestore here
-                  
-                  // Temporary Success Action
-                  Navigator.pop(context); // Go back to Dashboard
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Row(
-                        children: [
-                          Icon(Icons.check_circle_rounded, color: kWhite),
-                          SizedBox(width: 10),
-                          Text('Product published successfully!', style: TextStyle(fontWeight: FontWeight.bold)),
-                        ],
-                      ),
-                      backgroundColor: kPrimary,
-                      behavior: SnackBarBehavior.floating,
-                    ),
-                  );
-                },
+                onPressed: _isLoading ? null : _uploadProduct, 
                 style: ElevatedButton.styleFrom(
                   backgroundColor: kPrimary,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                   elevation: 5,
                   shadowColor: kPrimary.withOpacity(0.4),
                 ),
-                child: const Text('Publish Product', style: TextStyle(color: kWhite, fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+                child: _isLoading 
+                  ? const SizedBox(height: 24, width: 24, child: CircularProgressIndicator(color: kWhite, strokeWidth: 3))
+                  : const Text('Publish Product', style: TextStyle(color: kWhite, fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
               ),
             ),
             const SizedBox(height: 40),
@@ -248,7 +350,7 @@ class _AddProductPageState extends State<AddProductPage> {
     required IconData icon, 
     int maxLines = 1, 
     TextInputType keyboardType = TextInputType.text,
-    TextEditingController? controller, // Boleh terima controller sekarang
+    TextEditingController? controller, 
   }) {
     return Container(
       decoration: BoxDecoration(
@@ -259,7 +361,7 @@ class _AddProductPageState extends State<AddProductPage> {
         ],
       ),
       child: TextField(
-        controller: controller,
+        controller: controller, 
         maxLines: maxLines,
         keyboardType: keyboardType,
         style: const TextStyle(fontSize: 15, color: Colors.black87, fontWeight: FontWeight.w600),

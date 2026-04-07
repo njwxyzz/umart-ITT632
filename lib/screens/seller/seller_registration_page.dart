@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart'; // 🚨 THE MISSING INGREDIENT! We need this for database.
 import 'seller_dashboard.dart';
+import 'package:firebase_auth/firebase_auth.dart'; // Wajib letak ni!
 
 // --- Color Constants ---
 const kPrimary = Color(0xFF4C6B3F); 
@@ -15,6 +17,11 @@ class SellerRegistrationPage extends StatefulWidget {
 }
 
 class _SellerRegistrationPageState extends State<SellerRegistrationPage> {
+  // --- TEXT CONTROLLERS (Pockets to catch user input) ---
+  final TextEditingController _storeNameController = TextEditingController();
+  final TextEditingController _locationController = TextEditingController();
+  final TextEditingController _descController = TextEditingController(); 
+
   String? _selectedCategory;
   final List<String> _categories = [
     'Food & Beverages', 
@@ -22,6 +29,15 @@ class _SellerRegistrationPageState extends State<SellerRegistrationPage> {
     'Printing Services', 
     'Others'
   ];
+
+  @override
+  void dispose() {
+    // Clean up controllers from memory when the page is closed
+    _storeNameController.dispose();
+    _locationController.dispose();
+    _descController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -36,9 +52,8 @@ class _SellerRegistrationPageState extends State<SellerRegistrationPage> {
           onPressed: () => Navigator.pop(context),
         ),
       ),
-      extendBodyBehindAppBar: true, // Extend background to the top of the screen
+      extendBodyBehindAppBar: true, 
       body: Container(
-        // BACKGROUND PATTERN (For a premium look)
         decoration: const BoxDecoration(
           image: DecorationImage(
             image: AssetImage('assets/bg_pattern.jpg'),
@@ -78,16 +93,29 @@ class _SellerRegistrationPageState extends State<SellerRegistrationPage> {
 
                 // --- FORM FIELDS ---
                 _buildInputLabel('STORE NAME'),
-                _buildCleanTextField(hint: 'e.g. Mak Cik Siti Nasi Lemak', icon: Icons.store_rounded),
+                _buildCleanTextField(
+                  hint: 'e.g. Mak Cik Siti Nasi Lemak', 
+                  icon: Icons.store_rounded,
+                  controller: _storeNameController, // Wired!
+                ),
 
                 _buildInputLabel('WHAT ARE YOU SELLING?'),
                 _buildDropdownField(),
 
                 _buildInputLabel('LOCATION / COLLEGE BLOCK'),
-                _buildCleanTextField(hint: 'e.g. Kolej Dahlia 3, Bilik 204', icon: Icons.location_on_rounded),
+                _buildCleanTextField(
+                  hint: 'e.g. Kolej Dahlia 3, Bilik 204', 
+                  icon: Icons.location_on_rounded,
+                  controller: _locationController, // Wired!
+                ),
 
                 _buildInputLabel('SHORT DESCRIPTION'),
-                _buildCleanTextField(hint: 'e.g. Selling hot nasi lemak every morning!', icon: Icons.edit_note_rounded, maxLines: 3),
+                _buildCleanTextField(
+                  hint: 'e.g. Selling hot nasi lemak every morning!', 
+                  icon: Icons.edit_note_rounded, 
+                  maxLines: 3,
+                  controller: _descController, // Wired!
+                ),
 
                 const SizedBox(height: 50),
 
@@ -96,37 +124,75 @@ class _SellerRegistrationPageState extends State<SellerRegistrationPage> {
                   width: double.infinity,
                   height: 58,
                   child: ElevatedButton(
-                    onPressed: () {
-                      // Navigate to Seller Dashboard and replace the current page
-                      Navigator.pushReplacement(
-                        context,
-                        MaterialPageRoute(builder: (_) => const SellerDashboard()),
-                      );
-                      
-                      // TODO: Add Firebase Firestore saving logic here later
-                      
-                      // Show Success SnackBar
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Row(
-                            children: [
-                              Icon(Icons.check_circle_rounded, color: kWhite),
-                              SizedBox(width: 10),
-                              Expanded(child: Text('Store created successfully! Welcome to UMART Sellers.', style: TextStyle(fontWeight: FontWeight.bold))),
-                            ],
-                          ),
-                          backgroundColor: kPrimary,
-                          behavior: SnackBarBehavior.floating, // Floating pop-up style
-                          margin: EdgeInsets.all(20),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(10))),
-                        ),
-                      );
+                    onPressed: () async {
+                      // 1. Capture store name and location
+                      String finalStoreName = _storeNameController.text.trim().isEmpty 
+                          ? "My UMART Store" 
+                          : _storeNameController.text.trim();
+                      String finalLocation = _locationController.text.trim().isEmpty 
+                          ? "UiTM Campus" 
+                          : _locationController.text.trim();
+
+                      // 2. Save store details in Firebase using a collection named 'stores'
+                      try {
+                        // Show a loading indicator
+                        showDialog(
+                          context: context, 
+                          barrierDismissible: false, 
+                          builder: (_) => const Center(child: CircularProgressIndicator()),
+                        );
+
+                        // IMPORTANT: Using a placeholder account ID for now.
+                        // Make sure this matches the accountID used in main.dart (the Bouncer)
+                        // Dapatkan user yang tengah login
+                        User? currentUser = FirebaseAuth.instance.currentUser;
+                        if (currentUser == null) throw Exception("Tiada user login!");
+
+                        // Guna UID (IC sebenar user) sebagai nama laci kedai
+                        String accountID = currentUser.uid;
+
+                        await FirebaseFirestore.instance.collection('stores').doc(accountID).set({
+                          'storeName': finalStoreName,
+                          'storeLocation': finalLocation,
+                          'createdAt': FieldValue.serverTimestamp(),
+                        });
+
+                        // Close the loading indicator
+                        if (context.mounted) Navigator.pop(context);
+
+                        // 3. Navigate to the Seller Dashboard
+                        if (context.mounted) {
+                          Navigator.pushReplacement(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => SellerDashboard(
+                                storeName: finalStoreName, 
+                                storeLocation: finalLocation,
+                              ),
+                            ),
+                          );
+                          
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Store created in Database! 🎉')),
+                          );
+                        }
+                      } catch (e) {
+                        // Close the loading indicator if an error occurs
+                        if (context.mounted) Navigator.pop(context); 
+                        print("Error saving store: $e");
+                        
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Failed to create store: $e')),
+                          );
+                        }
+                      }
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: kPrimary,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                       elevation: 5,
-                      shadowColor: kPrimary.withOpacity(0.4), // Button shadow
+                      shadowColor: kPrimary.withOpacity(0.4), 
                     ),
                     child: const Text('Create My Store', style: TextStyle(color: kWhite, fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
                   ),
@@ -151,8 +217,8 @@ class _SellerRegistrationPageState extends State<SellerRegistrationPage> {
     );
   }
 
-  // HELPER WIDGET: Clean Text Field (iOS Style)
-  Widget _buildCleanTextField({required String hint, required IconData icon, int maxLines = 1}) {
+  // HELPER WIDGET: Clean Text Field
+  Widget _buildCleanTextField({required String hint, required IconData icon, int maxLines = 1, TextEditingController? controller}) {
     return Container(
       decoration: BoxDecoration(
         color: kWhite,
@@ -163,6 +229,7 @@ class _SellerRegistrationPageState extends State<SellerRegistrationPage> {
         ],
       ),
       child: TextField(
+        controller: controller, // Pocket attached!
         maxLines: maxLines,
         style: const TextStyle(fontSize: 15, color: Colors.black87, fontWeight: FontWeight.w600),
         decoration: InputDecoration(
