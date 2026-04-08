@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'order_detail_page.dart'; // Pastikan ni wujud!
 
 // ─── Color Constants ─────────────────────────────────────────────────────────
@@ -52,69 +54,16 @@ class OrderLineItem {
   const OrderLineItem({required this.name, required this.qty, required this.price});
 }
 
-// ─── Sample Data ──────────────────────────────────────────────────────────────
-final List<OrderHistory> _sampleOrders = [
-  OrderHistory(
-    orderId: 'UM-20241201-0042',
-    itemName: 'Nasi Lemak Special + Teh Tarik',
-    sellerName: 'Mak Cik Siti',
-    sellerPhoto: 'https://images.unsplash.com/photo-1607631568010-a87245c0daf7?w=200',
-    sellerAddress: 'Kolej Delima, UiTM Shah Alam',
-    sellerRating: 4.8,
-    sellerReviews: 234,
-    sellerLocation: 'Kolej Delima',
-    buyerLocation: 'Kolej Dahlia 3',
-    dateTime: DateTime(2024, 12, 1, 12, 35),
-    subtotal: 8.50,
-    deliveryFee: 1.50,
-    status: 'Delivered',
-    items: [
-      OrderLineItem(name: 'Nasi Lemak Special', qty: 1, price: 6.50),
-      OrderLineItem(name: 'Teh Tarik', qty: 1, price: 2.00),
-    ],
-  ),
-  OrderHistory(
-    orderId: 'UM-20241128-0031',
-    itemName: 'Ramen Tonkotsu',
-    sellerName: 'Ramen House',
-    sellerPhoto: 'https://images.unsplash.com/photo-1569718212165-3a8278d5f624?w=200',
-    sellerAddress: 'Dataran Cendekia, UiTM Shah Alam',
-    sellerRating: 4.6,
-    sellerReviews: 187,
-    sellerLocation: 'Dataran Cendekia',
-    buyerLocation: 'Kolej Dahlia 3',
-    dateTime: DateTime(2024, 11, 28, 19, 10),
-    subtotal: 12.00,
-    deliveryFee: 2.00,
-    status: 'Delivered',
-    items: [
-      OrderLineItem(name: 'Ramen Tonkotsu', qty: 1, price: 12.00),
-    ],
-  ),
-  OrderHistory(
-    orderId: 'UM-20241125-0018',
-    itemName: 'Croissant × 2 + Americano',
-    sellerName: 'Bake & Brew',
-    sellerPhoto: 'https://images.unsplash.com/photo-1555507036-ab1f4038808a?w=200',
-    sellerAddress: 'Pusat Perdagangan, UiTM Shah Alam',
-    sellerRating: 4.9,
-    sellerReviews: 312,
-    sellerLocation: 'Pusat Perdagangan',
-    buyerLocation: 'Kolej Dahlia 3',
-    dateTime: DateTime(2024, 11, 25, 9, 5),
-    subtotal: 14.00,
-    deliveryFee: 1.50,
-    status: 'Delivered',
-    items: [
-      OrderLineItem(name: 'Butter Croissant', qty: 2, price: 5.00),
-      OrderLineItem(name: 'Americano', qty: 1, price: 4.00),
-    ],
-  ),
-];
 
 // ─── Orders Page ─────────────────────────────────────────────────────────────
-class OrdersPage extends StatelessWidget {
+class OrdersPage extends StatefulWidget {
   const OrdersPage({super.key});
+
+  @override
+  State<OrdersPage> createState() => _OrdersPageState();
+}
+
+class _OrdersPageState extends State<OrdersPage> {
 
   String _formatDate(DateTime dt) {
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -127,8 +76,38 @@ class OrdersPage extends StatelessWidget {
     return '$h:$m';
   }
 
+  // --- MAGIK KITA: TUKAR FIREBASE DATA JADI MODEL KAU ---
+  OrderHistory _fromFirestore(QueryDocumentSnapshot doc) {
+    var data = doc.data() as Map<String, dynamic>;
+    
+    // Guna fallback supaya takde null error
+    double totalPrice = data['totalPrice'] is num ? (data['totalPrice'] as num).toDouble() : 0.0;
+    String rawItemName = data['productName'] ?? 'Items';
+
+    return OrderHistory(
+      orderId: doc.id,
+      itemName: rawItemName,
+      sellerName: data['sellerName'] ?? 'UMART Store',
+      sellerPhoto: 'https://images.unsplash.com/photo-1607631568010-a87245c0daf7?w=200', // Dummy sementara
+      sellerAddress: 'UiTM Campus',
+      sellerRating: 5.0,
+      sellerReviews: 12,
+      sellerLocation: 'UiTM Perlis',
+      buyerLocation: data['buyerLocation'] ?? 'Kolej Dahlia 3',
+      dateTime: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      subtotal: totalPrice,
+      deliveryFee: 0.0, // Letak 0 sebab totalPrice dah cover semua
+      status: data['status'] ?? 'Pending',
+      items: [
+        OrderLineItem(name: rawItemName, qty: 1, price: totalPrice),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    String currentUserId = FirebaseAuth.instance.currentUser?.uid ?? '';
+
     return DefaultTabController(
       length: 2,
       child: Scaffold(
@@ -137,6 +116,7 @@ class OrdersPage extends StatelessWidget {
           backgroundColor: kBg,
           elevation: 0,
           scrolledUnderElevation: 0,
+          automaticallyImplyLeading: false, 
           title: const Text('My Orders', style: TextStyle(color: Color(0xFF1A1A2E), fontSize: 24, fontWeight: FontWeight.bold)),
           actions: [
             IconButton(icon: const Icon(Icons.search_rounded, color: Colors.black87), onPressed: () {}),
@@ -161,93 +141,164 @@ class OrdersPage extends StatelessWidget {
             ),
           ),
         ),
-        body: TabBarView(
-          children: [
-            // ─── TAB 1: ACTIVE ORDERS ───
-            _buildActiveTab(),
+        
+        // --- LETAK CCTV FIREBASE KAT SINI ---
+        body: StreamBuilder<QuerySnapshot>(
+          stream: FirebaseFirestore.instance
+              .collection('orders')
+              .where('buyerId', isEqualTo: currentUserId)
+              .snapshots(),
+          builder: (context, snapshot) {
+            
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator(color: kPrimary));
+            }
 
-            // ─── TAB 2: COMPLETED ORDERS (Guna Data Asal Kau!) ───
-            _buildCompletedTab(context),
-          ],
+            // Convert Firebase docs jadi List<OrderHistory> 
+            List<OrderHistory> allOrders = [];
+            if (snapshot.hasData) {
+              allOrders = snapshot.data!.docs.map((doc) => _fromFirestore(doc)).toList();
+            }
+
+            // Asingkan Active dan Completed
+            final activeOrders = allOrders.where((o) => o.status == 'Pending' || o.status == 'Processing').toList();
+            final completedOrders = allOrders.where((o) => o.status == 'Delivered' || o.status == 'Rejected' || o.status == 'Completed').toList();
+
+            // Susun dari yang paling baru
+            activeOrders.sort((a, b) => b.dateTime.compareTo(a.dateTime));
+            completedOrders.sort((a, b) => b.dateTime.compareTo(a.dateTime));
+
+            return TabBarView(
+              children: [
+                // ─── TAB 1: ACTIVE ORDERS ───
+                activeOrders.isEmpty
+                  ? _buildEmptyState('No active orders', 'Your ongoing orders will appear here.')
+                  : ListView.builder(
+                      padding: const EdgeInsets.fromLTRB(20, 20, 20, 100),
+                      itemCount: activeOrders.length,
+                      itemBuilder: (context, index) => _buildLiveActiveCard(activeOrders[index], context),
+                    ),
+
+                // ─── TAB 2: COMPLETED ORDERS ───
+                completedOrders.isEmpty
+                  ? _buildEmptyState('No past orders', 'Order your favourite meal now!')
+                  : ListView.builder(
+                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+                      itemCount: completedOrders.length,
+                      itemBuilder: (context, index) {
+                        final order = completedOrders[index];
+                        return _OrderHistoryCard(
+                          order: order,
+                          formatDate: _formatDate,
+                          formatTime: _formatTime,
+                          // LOMPAT KE ORDER DETAIL DENGAN DATA!
+                          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => OrderDetailPage(order: order))),
+                        );
+                      },
+                    ),
+              ],
+            );
+          },
         ),
       ),
     );
   }
 
-  // WIDGET: Tab Active (Order tengah jalan)
-  Widget _buildActiveTab() {
-    return ListView(
-      padding: const EdgeInsets.all(20),
-      children: [
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(color: kWhite, borderRadius: BorderRadius.circular(16), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 4))]),
-          child: Column(
+  // WIDGET BARU: Kad Active yang digabungkan dari design asal kau
+  Widget _buildLiveActiveCard(OrderHistory order, BuildContext context) {
+    bool isPending = order.status == 'Pending';
+    String displayId = '#UM-${order.orderId.substring(0, 5).toUpperCase()}';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: kWhite, 
+        borderRadius: BorderRadius.circular(16), 
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 4))]
+      ),
+      child: Column(
+        children: [
+          // --- BAHAGIAN ATAS (HEADER) YANG KAU TERPADAM TADI 😂 ---
+          Row(
+            children: [
+              Container(width: 50, height: 50, decoration: BoxDecoration(color: Colors.orange.shade100, borderRadius: BorderRadius.circular(10)), child: const Icon(Icons.fastfood_rounded, color: Colors.orange)),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(order.sellerName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                    const SizedBox(height: 4),
+                    Text(order.itemName, style: TextStyle(color: Colors.grey.shade500, fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis),
+                    const SizedBox(height: 4),
+                    Text(
+                      isPending ? '● Awaiting Seller...' : '● Preparing your order...', 
+                      style: TextStyle(color: isPending ? Colors.orange : Colors.blue, fontSize: 12, fontWeight: FontWeight.bold)
+                    ),
+                  ],
+                ),
+              ),
+              Text(displayId, style: TextStyle(color: Colors.grey.shade400, fontSize: 12)),
+            ],
+          ),
+          
+          const Padding(padding: EdgeInsets.symmetric(vertical: 12), child: Divider(height: 1)),
+          
+          // --- BAHAGIAN BAWAH (FOOTER) TEMPAT LETAK NAMA RUNNER ---
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Row(
                 children: [
-                  Container(width: 50, height: 50, decoration: BoxDecoration(color: Colors.orange.shade100, borderRadius: BorderRadius.circular(10)), child: const Icon(Icons.fastfood_rounded, color: Colors.orange)),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('Burgers & Wings Co.', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                        const SizedBox(height: 4),
-                        Text('Crispy Chicken Burger...', style: TextStyle(color: Colors.grey.shade500, fontSize: 12)),
-                        const SizedBox(height: 4),
-                        const Text('● Preparing your food...', style: TextStyle(color: Colors.deepOrange, fontSize: 12, fontWeight: FontWeight.bold)),
-                      ],
-                    ),
+                  CircleAvatar(
+                    radius: 14, 
+                    backgroundColor: isPending ? Colors.grey.shade400 : kPrimary, 
+                    child: Icon(isPending ? Icons.hourglass_empty_rounded : Icons.moped_rounded, size: 16, color: kWhite)
                   ),
-                  Text('#UM-8291', style: TextStyle(color: Colors.grey.shade400, fontSize: 12)),
+                  const SizedBox(width: 8),
+                  Text(
+                    isPending ? 'Waiting for seller...' : 'Runner: ${order.sellerName}', 
+                    style: TextStyle(
+                      color: isPending ? Colors.grey.shade500 : const Color(0xFF1A1A2E), 
+                      fontSize: 13, 
+                      fontWeight: FontWeight.w700
+                    )
+                  ),
                 ],
               ),
-              const Padding(padding: EdgeInsets.symmetric(vertical: 12), child: Divider(height: 1)),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Row(
-                    children: [
-                      const CircleAvatar(radius: 14, backgroundColor: Colors.grey, child: Icon(Icons.person, size: 16, color: kWhite)),
-                      const SizedBox(width: 8),
-                      Text('Ahmad', style: TextStyle(color: Colors.grey.shade700, fontSize: 13, fontWeight: FontWeight.w600)),
-                    ],
-                  ),
-                  OutlinedButton(
-                    onPressed: () {},
-                    style: OutlinedButton.styleFrom(side: const BorderSide(color: kPrimary), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20))),
-                    child: const Text('Track Order', style: TextStyle(color: kPrimary, fontWeight: FontWeight.bold)),
-                  )
-                ],
+              OutlinedButton(
+                onPressed: () {
+                  Navigator.push(context, MaterialPageRoute(builder: (_) => OrderDetailPage(order: order)));
+                },
+                style: OutlinedButton.styleFrom(side: const BorderSide(color: kPrimary), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20))),
+                child: const Text('View Details', style: TextStyle(color: kPrimary, fontWeight: FontWeight.bold)),
               )
             ],
-          ),
-        ),
-      ],
+          )
+        ],
+      ),
     );
   }
 
-  // WIDGET: Tab Completed (Order History List Asal Kau)
-  Widget _buildCompletedTab(BuildContext context) {
-    return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-      itemCount: _sampleOrders.length,
-      itemBuilder: (context, index) {
-        final order = _sampleOrders[index];
-        return _OrderHistoryCard(
-          order: order,
-          formatDate: _formatDate,
-          formatTime: _formatTime,
-          // BILA TEKAN, LOMPAT KE ORDER DETAIL DENGAN DATA!
-          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => OrderDetailPage(order: order))),
-        );
-      },
+  // HELPER: Empty state kalau takde data
+  Widget _buildEmptyState(String title, String subtitle) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.receipt_long_rounded, size: 80, color: Colors.grey.shade300),
+          const SizedBox(height: 16),
+          Text(title, style: const TextStyle(color: Color(0xFF1A1A2E), fontSize: 18, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 8),
+          Text(subtitle, style: TextStyle(color: Colors.grey.shade500, fontSize: 14)),
+        ],
+      ),
     );
   }
 }
 
-// ─── Order History Card (Guna design asal kau) ───────────────────────────────
+// ─── Order History Card (Design asal kau) ────────────────────────────────────
 class _OrderHistoryCard extends StatelessWidget {
   final OrderHistory order;
   final String Function(DateTime) formatDate;
@@ -258,6 +309,8 @@ class _OrderHistoryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    Color statusColor = order.status == 'Rejected' ? Colors.red : kPrimary;
+
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -307,7 +360,7 @@ class _OrderHistoryCard extends StatelessWidget {
               ),
             ),
 
-            // ── Price + chevron ────────────────────────────────────
+            // ── Price + Status ────────────────────────────────────
             Column(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
@@ -315,8 +368,8 @@ class _OrderHistoryCard extends StatelessWidget {
                 const SizedBox(height: 6),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(color: kPrimary.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
-                  child: const Text('Delivered', style: TextStyle(color: kPrimary, fontSize: 10, fontWeight: FontWeight.w700)),
+                  decoration: BoxDecoration(color: statusColor.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+                  child: Text(order.status, style: TextStyle(color: statusColor, fontSize: 10, fontWeight: FontWeight.w700)),
                 ),
                 const SizedBox(height: 6),
                 const Icon(Icons.chevron_right_rounded, color: Color(0xFFB0BBCB), size: 18),
