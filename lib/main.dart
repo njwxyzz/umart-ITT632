@@ -17,6 +17,7 @@ import 'screens/buyer/product_detail_page.dart';
 import 'screens/buyer/tracking_page.dart';
 import 'screens/buyer/orders_page.dart';
 import 'screens/buyer/inbox_page.dart'; 
+import 'screens/buyer/chat_page.dart';
 import 'screens/auth/onboarding_screen.dart'; 
 import 'screens/seller/seller_registration_page.dart';
 import 'screens/buyer/store_profile_page.dart';
@@ -125,6 +126,12 @@ class _HomeScreenState extends State<HomeScreen> {
             price: harga,
             rating: rating,
             sellerName: data['sellerName'] ?? 'Unknown Seller',
+            sellerId: (data['sellerId'] ??
+                    data['sellerUid'] ??
+                    data['ownerId'] ??
+                    data['userId'] ??
+                    '')
+                .toString(),
             category: data['category'] ?? 'Others', 
             description: data['description'] ?? 'No description available.', // English fallback
           )
@@ -555,6 +562,7 @@ class _FoodItem {
   final double price;
   final double rating;
   final String sellerName;
+  final String sellerId;
   final String category;
   final String description;
 
@@ -566,6 +574,7 @@ class _FoodItem {
     required this.price, 
     required this.rating, 
     required this.sellerName,
+    required this.sellerId,
     required this.category, 
     required this.description,
   });
@@ -610,17 +619,189 @@ class _FoodCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    void openProductDetail() {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ProductDetailPage(
+            name: item.label,
+            price: item.price,
+            imageUrl: item.imageUrl,
+            rating: item.rating,
+            sellerName: item.sellerName,
+            description: item.description,
+          ),
+        ),
+      );
+    }
+
+    Future<void> openChatSeller() async {
+      final currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please login first to start chat.')),
+        );
+        return;
+      }
+      String targetSellerId = item.sellerId;
+
+      // Fallback for old products that were saved without sellerId.
+      if (targetSellerId.isEmpty) {
+        final storeQuery = await FirebaseFirestore.instance
+            .collection('stores')
+            .where('storeName', isEqualTo: item.sellerName)
+            .limit(1)
+            .get();
+        if (storeQuery.docs.isNotEmpty) {
+          targetSellerId = storeQuery.docs.first.id; // store doc id == seller uid
+        }
+      }
+
+      if (targetSellerId.isEmpty) {
+        if (!context.mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Seller account not found. Please try another product.'),
+          ),
+        );
+        return;
+      }
+
+      if (targetSellerId == currentUser.uid) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('This is your own product.')),
+        );
+        return;
+      }
+
+      final chatsRef = FirebaseFirestore.instance.collection('chats');
+      final existing = await chatsRef
+          .where('participants', arrayContains: currentUser.uid)
+          .get();
+
+      String? chatId;
+      for (final doc in existing.docs) {
+        final data = doc.data();
+        final participantsRaw = (data['participants'] as List?) ?? [];
+        final participants = participantsRaw.whereType<String>().toList();
+        if (participants.contains(targetSellerId)) {
+          chatId = doc.id;
+          break;
+        }
+      }
+
+      if (chatId == null) {
+        final newDoc = await chatsRef.add({
+          'participants': [currentUser.uid, targetSellerId],
+          'participantNames': {
+            currentUser.uid: currentUser.displayName ?? 'Buyer',
+            targetSellerId: item.sellerName,
+          },
+          'participantRoles': {
+            currentUser.uid: 'Buyer',
+            targetSellerId: 'Seller',
+          },
+          'lastMessage': '',
+          'lastMessageTime': FieldValue.serverTimestamp(),
+          'unreadCount': {
+            currentUser.uid: 0,
+            targetSellerId: 0,
+          },
+        });
+        chatId = newDoc.id;
+      }
+
+      if (!context.mounted) return;
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ChatPage(
+            runnerName: item.sellerName,
+            chatId: chatId,
+            otherUserId: targetSellerId,
+          ),
+        ),
+      );
+    }
+
     return GestureDetector( 
       onTap: () {
-        // --- MAIN TAP: Opens Product Detail ---
-        Navigator.push(context, MaterialPageRoute(builder: (_) => ProductDetailPage(
-          name: item.label,
-          price: item.price,
-          imageUrl: item.imageUrl,
-          rating: item.rating,
-          sellerName: item.sellerName,
-          description: item.description,
-        )));
+        showModalBottomSheet(
+          context: context,
+          shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+          ),
+          builder: (sheetContext) {
+            return Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    item.label,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 16,
+                      color: Color(0xFF1A1A2E),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Sold by ${item.sellerName}',
+                    style: TextStyle(
+                      color: Colors.grey[600],
+                      fontSize: 13,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () {
+                            Navigator.pop(sheetContext);
+                            openProductDetail();
+                          },
+                          icon: const Icon(Icons.info_outline_rounded, size: 18),
+                          label: const Text('View Product'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: kPrimary,
+                            side: const BorderSide(color: kPrimary),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: () {
+                            Navigator.pop(sheetContext);
+                            openChatSeller();
+                          },
+                          icon: const Icon(Icons.chat_bubble_outline_rounded, size: 18),
+                          label: const Text('Chat Seller'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: kAccent,
+                            foregroundColor: kWhite,
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          },
+        );
       },
       child: Container( 
         width: 170,
@@ -748,7 +929,7 @@ class _BottomNav extends StatelessWidget {
               _buildNavItem(icon: Icons.home_rounded, label: 'Home', index: 0),
               _buildNavItem(icon: Icons.receipt_long_rounded, label: 'Orders', index: 1),
               const SizedBox(width: 60), // Leave center space empty for the FAB
-              _buildNavItem(icon: Icons.chat_bubble_rounded, label: 'Inbox', index: 2),
+              _buildInboxNavItem(index: 2),
               _buildNavItem(icon: Icons.person_rounded, label: 'Profile', index: 3),
             ],
           ),
@@ -854,6 +1035,87 @@ class _BottomNav extends StatelessWidget {
             const SizedBox(height: 4),
             Text(
               label,
+              style: TextStyle(
+                color: isSelected ? kPrimary : Colors.grey.shade400,
+                fontSize: 10,
+                fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Inbox item with live unread badge from Firestore
+  Widget _buildInboxNavItem({required int index}) {
+    final isSelected = selectedIndex == index;
+    final currentUserId = FirebaseAuth.instance.currentUser?.uid;
+
+    return GestureDetector(
+      onTap: () => onTap(index),
+      behavior: HitTestBehavior.opaque,
+      child: SizedBox(
+        width: 50,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Icon(
+                  Icons.chat_bubble_rounded,
+                  color: isSelected ? kPrimary : Colors.grey.shade400,
+                  size: isSelected ? 26 : 24,
+                ),
+                if (currentUserId != null)
+                  Positioned(
+                    top: -6,
+                    right: -8,
+                    child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                      stream: FirebaseFirestore.instance
+                          .collection('chats')
+                          .where('participants', arrayContains: currentUserId)
+                          .snapshots(),
+                      builder: (context, snapshot) {
+                        if (!snapshot.hasData) return const SizedBox.shrink();
+                        int totalUnread = 0;
+                        for (final doc in snapshot.data!.docs) {
+                          final data = doc.data();
+                          final unreadRaw = (data['unreadCount'] as Map?) ?? {};
+                          final rawValue = unreadRaw[currentUserId];
+                          final count = rawValue is int
+                              ? rawValue
+                              : int.tryParse(rawValue?.toString() ?? '0') ?? 0;
+                          totalUnread += count;
+                        }
+                        if (totalUnread <= 0) return const SizedBox.shrink();
+                        return Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                          constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                          decoration: const BoxDecoration(
+                            color: kAccent,
+                            shape: BoxShape.circle,
+                          ),
+                          child: Text(
+                            totalUnread > 99 ? '99+' : totalUnread.toString(),
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              color: kWhite,
+                              fontSize: 9,
+                              fontWeight: FontWeight.bold,
+                              height: 1.0,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Inbox',
               style: TextStyle(
                 color: isSelected ? kPrimary : Colors.grey.shade400,
                 fontSize: 10,

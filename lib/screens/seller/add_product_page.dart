@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart'; 
 import 'package:cloud_firestore/cloud_firestore.dart'; 
+import 'package:firebase_auth/firebase_auth.dart';
 
 // --- Color Constants ---
 const kPrimary = Color(0xFF4C6B3F); 
@@ -96,6 +97,7 @@ class _AddProductPageState extends State<AddProductPage> {
       // and assign the resulting download URL to finalImageUrl.
 
       // Pushing data to Firestore
+      final sellerId = FirebaseAuth.instance.currentUser?.uid ?? '';
       await FirebaseFirestore.instance.collection('products').add({
         'name': _nameController.text.trim(),
         'price': double.tryParse(_priceController.text.trim()) ?? 0.0,
@@ -106,6 +108,7 @@ class _AddProductPageState extends State<AddProductPage> {
         
         // 🚨 CRUCIAL: Tagging the product to the store so the Dashboard can see it!
         'sellerName': widget.storeName, 
+        'sellerId': sellerId,
         
         // Save the image URL (empty string if no image uploaded yet)
         'imageUrl': finalImageUrl, 

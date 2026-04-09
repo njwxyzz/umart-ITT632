@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart'; // 🚨 THE MISSING INGREDIENT! We need this for database.
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'seller_dashboard.dart';
-import 'package:firebase_auth/firebase_auth.dart'; // Wajib letak ni!
+import 'package:firebase_auth/firebase_auth.dart';
 
 // --- Color Constants ---
 const kPrimary = Color(0xFF4C6B3F); 
@@ -32,7 +32,6 @@ class _SellerRegistrationPageState extends State<SellerRegistrationPage> {
 
   @override
   void dispose() {
-    // Clean up controllers from memory when the page is closed
     _storeNameController.dispose();
     _locationController.dispose();
     _descController.dispose();
@@ -92,11 +91,12 @@ class _SellerRegistrationPageState extends State<SellerRegistrationPage> {
                 const SizedBox(height: 40),
 
                 // --- FORM FIELDS ---
-                _buildInputLabel('STORE NAME'),
+                // 🚨 TUKAR LABEL JADI OPTIONAL 🚨
+                _buildInputLabel('STORE NAME (OPTIONAL)'),
                 _buildCleanTextField(
-                  hint: 'e.g. Mak Cik Siti Nasi Lemak', 
+                  hint: 'Leave blank to use your real name', 
                   icon: Icons.store_rounded,
-                  controller: _storeNameController, // Wired!
+                  controller: _storeNameController,
                 ),
 
                 _buildInputLabel('WHAT ARE YOU SELLING?'),
@@ -106,7 +106,7 @@ class _SellerRegistrationPageState extends State<SellerRegistrationPage> {
                 _buildCleanTextField(
                   hint: 'e.g. Kolej Dahlia 3, Bilik 204', 
                   icon: Icons.location_on_rounded,
-                  controller: _locationController, // Wired!
+                  controller: _locationController,
                 ),
 
                 _buildInputLabel('SHORT DESCRIPTION'),
@@ -114,7 +114,7 @@ class _SellerRegistrationPageState extends State<SellerRegistrationPage> {
                   hint: 'e.g. Selling hot nasi lemak every morning!', 
                   icon: Icons.edit_note_rounded, 
                   maxLines: 3,
-                  controller: _descController, // Wired!
+                  controller: _descController,
                 ),
 
                 const SizedBox(height: 50),
@@ -125,43 +125,49 @@ class _SellerRegistrationPageState extends State<SellerRegistrationPage> {
                   height: 58,
                   child: ElevatedButton(
                     onPressed: () async {
-                      // 1. Capture store name and location
-                      String finalStoreName = _storeNameController.text.trim().isEmpty 
-                          ? "My UMART Store" 
-                          : _storeNameController.text.trim();
-                      String finalLocation = _locationController.text.trim().isEmpty 
-                          ? "UiTM Campus" 
-                          : _locationController.text.trim();
-
-                      // 2. Save store details in Firebase using a collection named 'stores'
                       try {
-                        // Show a loading indicator
+                        // Tunjuk loading pusing-pusing
                         showDialog(
                           context: context, 
                           barrierDismissible: false, 
-                          builder: (_) => const Center(child: CircularProgressIndicator()),
+                          builder: (_) => const Center(child: CircularProgressIndicator(color: kPrimary)),
                         );
 
-                        // IMPORTANT: Using a placeholder account ID for now.
-                        // Make sure this matches the accountID used in main.dart (the Bouncer)
-                        // Dapatkan user yang tengah login
                         User? currentUser = FirebaseAuth.instance.currentUser;
                         if (currentUser == null) throw Exception("Tiada user login!");
+                        
+                        String uid = currentUser.uid;
+                        String inputName = _storeNameController.text.trim();
+                        String finalStoreName = inputName;
 
-                        // Guna UID (IC sebenar user) sebagai nama laci kedai
-                        String accountID = currentUser.uid;
+                        // 🚨 LOGIK MAGIK OPTIONAL 🚨
+                        if (inputName.isEmpty) {
+                          var userDoc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+                          if (userDoc.exists && userDoc.data()?['fullName'] != null && userDoc.data()!['fullName'].toString().isNotEmpty) {
+                            finalStoreName = userDoc.data()!['fullName'];
+                          } else {
+                            finalStoreName = currentUser.email?.split('@')[0].toUpperCase() ?? "Student Store";
+                          }
+                        }
 
-                        await FirebaseFirestore.instance.collection('stores').doc(accountID).set({
+                        String finalLocation = _locationController.text.trim().isEmpty 
+                            ? "UiTM Campus" 
+                            : _locationController.text.trim();
+
+                        // Simpan data kedai dalam Firebase
+                        await FirebaseFirestore.instance.collection('stores').doc(uid).set({
                           'storeName': finalStoreName,
                           'storeLocation': finalLocation,
+                          'category': _selectedCategory ?? 'Others',
+                          'description': _descController.text.trim(),
+                          'ownerId': uid,
                           'createdAt': FieldValue.serverTimestamp(),
                         });
 
-                        // Close the loading indicator
-                        if (context.mounted) Navigator.pop(context);
+                        if (context.mounted) Navigator.pop(context); // Tutup loading indicator
 
-                        // 3. Navigate to the Seller Dashboard
                         if (context.mounted) {
+                          // Bawa ke Dashboard!
                           Navigator.pushReplacement(
                             context,
                             MaterialPageRoute(
@@ -171,20 +177,14 @@ class _SellerRegistrationPageState extends State<SellerRegistrationPage> {
                               ),
                             ),
                           );
-                          
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Store created in Database! 🎉')),
-                          );
+                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Store created successfully! 🎉'), backgroundColor: kPrimary));
                         }
+
                       } catch (e) {
-                        // Close the loading indicator if an error occurs
-                        if (context.mounted) Navigator.pop(context); 
+                        if (context.mounted) Navigator.pop(context); // Tutup loading kalau error
                         print("Error saving store: $e");
-                        
                         if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('Failed to create store: $e')),
-                          );
+                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to create store: $e'), backgroundColor: Colors.red));
                         }
                       }
                     },
@@ -229,7 +229,7 @@ class _SellerRegistrationPageState extends State<SellerRegistrationPage> {
         ],
       ),
       child: TextField(
-        controller: controller, // Pocket attached!
+        controller: controller,
         maxLines: maxLines,
         style: const TextStyle(fontSize: 15, color: Colors.black87, fontWeight: FontWeight.w600),
         decoration: InputDecoration(
