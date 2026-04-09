@@ -22,17 +22,13 @@ import 'screens/auth/onboarding_screen.dart';
 import 'screens/seller/seller_registration_page.dart';
 import 'screens/buyer/store_profile_page.dart';
 import 'screens/buyer/cart_manager.dart';
-import 'screens/seller/seller_dashboard.dart'; // <--- TAMBAH YANG NI
+import 'screens/seller/seller_dashboard.dart'; 
 
 void main() async {
-  // Required when using Firebase
   WidgetsFlutterBinding.ensureInitialized(); 
-  
-  // Initialize Firebase officially
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
-  
   runApp(const UMartApp()); 
 }
 
@@ -48,7 +44,22 @@ class UMartApp extends StatelessWidget {
         fontFamily: 'SF Pro Display',
         scaffoldBackgroundColor: const Color(0xFFF5F7F2), 
       ),
-      home: const OnboardingScreen(), 
+      // CCTV PINTU PAGAR (Auth Gate)
+      home: StreamBuilder<User?>(
+        stream: FirebaseAuth.instance.authStateChanges(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Scaffold(
+              backgroundColor: kBg,
+              body: Center(child: CircularProgressIndicator(color: kPrimary)),
+            );
+          }
+          if (snapshot.hasData) {
+            return const HomeScreen(); 
+          }
+          return const OnboardingScreen(); 
+        },
+      ),
     );
   }
 }
@@ -81,69 +92,76 @@ class _HomeScreenState extends State<HomeScreen> {
   int currentIndex = 0;
   bool hasActiveOrder = true;
 
-  List<_FoodItem> _foodItems = []; // To hold fetched products from database
-  bool _isLoadingProducts = true; // Loading state for products
+  // 🚨 KOTAK MEMORI UNTUK CARIAN 🚨
+  String _searchQuery = ''; 
+
+  List<_FoodItem> _allProducts = []; 
+  List<_FoodItem> _foodItems = []; 
+  List<_FoodItem> _prelovedItems = []; 
+  List<_FoodItem> _printingItems = []; 
+  List<_FoodItem> _otherItems = []; 
+
+  bool _isLoadingProducts = true; 
 
   @override
   void initState() {
     super.initState();
-    _fetchProductsData(); // Auto-fetch products when screen opens
+    _fetchProductsData(); 
   }
 
-  // --- Function to Fetch Products from Firestore ---
   Future<void> _fetchProductsData() async {
     try {
-      print("🚨 RADAR: Fetching from Firebase...");
-
-      // Get collection 'products'
       QuerySnapshot snapshot = await FirebaseFirestore.instance.collection('products').get();
       
-      print("🚨 RADAR: Success! Found ${snapshot.docs.length} items.");
-
-      List<_FoodItem> productList = [];
+      List<_FoodItem> tempAll = [];
+      List<_FoodItem> tempFood = [];
+      List<_FoodItem> tempPreloved = [];
+      List<_FoodItem> tempPrinting = [];
+      List<_FoodItem> tempOther = [];
       
       for (var doc in snapshot.docs) {
         var data = doc.data() as Map<String, dynamic>;
-        print("🚨 RADAR: Reading data -> ${data['name']}");
 
-        // --- SAFELY PARSE NUMBERS ---
-        double harga = 0.0;
-        if (data['price'] != null) {
-          harga = data['price'] is num ? (data['price'] as num).toDouble() : double.tryParse(data['price'].toString()) ?? 0.0;
-        }
+        double harga = data['price'] is num ? (data['price'] as num).toDouble() : double.tryParse(data['price'].toString()) ?? 0.0;
+        double rating = data['rating'] is num ? (data['rating'] as num).toDouble() : double.tryParse(data['rating'].toString()) ?? 0.0;
 
-        double rating = 0.0;
-        if (data['rating'] != null) {
-          rating = data['rating'] is num ? (data['rating'] as num).toDouble() : double.tryParse(data['rating'].toString()) ?? 0.0;
-        }
+        String productCategory = data['category'] ?? 'Others';
 
-        productList.add(
-          _FoodItem(
-            label: data['name'] ?? 'Unknown Item', // English fallback
-            badge: data['badge'], 
-            badgeColor: data['badge'] != null ? kAccent : null, 
-            imageUrl: data['imageUrl'] ?? 'https://via.placeholder.com/150',
-            price: harga,
-            rating: rating,
-            sellerName: data['sellerName'] ?? 'Unknown Seller',
-            sellerId: (data['sellerId'] ??
-                    data['sellerUid'] ??
-                    data['ownerId'] ??
-                    data['userId'] ??
-                    '')
-                .toString(),
-            category: data['category'] ?? 'Others', 
-            description: data['description'] ?? 'No description available.', // English fallback
-          )
+        _FoodItem item = _FoodItem(
+          label: data['name'] ?? 'Unknown Item', 
+          badge: data['badge'], 
+          badgeColor: data['badge'] != null ? kAccent : null, 
+          imageUrl: data['imageUrl'] ?? 'https://via.placeholder.com/150',
+          price: harga,
+          rating: rating,
+          sellerName: data['sellerName'] ?? 'Unknown Seller',
+          sellerId: (data['sellerId'] ?? data['ownerId'] ?? '').toString(),
+          category: productCategory, 
+          description: data['description'] ?? 'No description available.', 
         );
+
+        tempAll.add(item);
+
+        if (productCategory == 'Food & Beverages') {
+          tempFood.add(item);
+        } else if (productCategory == 'Preloved Items') {
+          tempPreloved.add(item);
+        } else if (productCategory == 'Printing Services') {
+          tempPrinting.add(item);
+        } else {
+          tempOther.add(item); 
+        }
       }
 
       if (mounted) {
         setState(() {
-          _foodItems = productList;
+          _allProducts = tempAll;
+          _foodItems = tempFood;
+          _prelovedItems = tempPreloved;
+          _printingItems = tempPrinting;
+          _otherItems = tempOther;
           _isLoadingProducts = false; 
         });
-        print("🚨 RADAR: Done! Displaying ${_foodItems.length} items on screen.");
       }
     } catch (e) {
       print("🚨 CRITICAL ERROR: Failed to fetch products -> $e");
@@ -151,7 +169,6 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  // Bottom Tab Router
   Widget _buildBody() {
     switch (currentIndex) {
       case 1: return const OrdersPage();
@@ -162,7 +179,58 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _openAllProductPage() {
-    Navigator.of(context).push(MaterialPageRoute(builder: (_) => AllProductPage(title: 'All Products', items: _foodItems)));
+    Navigator.of(context).push(MaterialPageRoute(builder: (_) => AllProductPage(title: 'All Campus Items', items: _allProducts)));
+  }
+
+  // 🚨 UI HASIL CARIAN LIVE 🚨
+  Widget _buildSearchResults() {
+    // Mesin penapis live
+    var results = _allProducts.where((item) {
+      final query = _searchQuery.toLowerCase();
+      return item.label.toLowerCase().contains(query) ||
+             item.sellerName.toLowerCase().contains(query) ||
+             item.category.toLowerCase().contains(query);
+    }).toList();
+
+    // Kalau cari tapi tak jumpa
+    if (results.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(40.0),
+          child: Column(
+            children: [
+              Icon(Icons.search_off_rounded, size: 60, color: Colors.grey.shade400),
+              const SizedBox(height: 16),
+              Text('No items found for "$_searchQuery"', style: TextStyle(color: Colors.grey.shade600, fontSize: 16)),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // Kalau jumpa, susun macam grid
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+          child: Text('Search Results (${results.length})', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1A1A2E))),
+        ),
+        GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(), // Scroll ikut page luar
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 2,
+            crossAxisSpacing: 16,
+            mainAxisSpacing: 16,
+            childAspectRatio: 0.75,
+          ),
+          itemCount: results.length,
+          itemBuilder: (context, index) => _FoodCard(item: results[index]),
+        ),
+      ],
+    );
   }
 
   Widget _buildHomeContent() {
@@ -172,20 +240,40 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const _GradientHeader(),
+          // 🚨 HEADER SEKARANG BOLEH DENGAR APA USER TAIP 🚨
+          _GradientHeader(
+            onSearch: (query) {
+              setState(() {
+                _searchQuery = query;
+              });
+            },
+          ),
           const SizedBox(height: 20),
           
-          _isLoadingProducts 
-              ? const Center(child: Padding(padding: EdgeInsets.all(40.0), child: CircularProgressIndicator(color: kPrimary)))
-              : Column(
-                  children: [
-                    Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: _BentoGrid(foodItems: _foodItems)),
-                    const SizedBox(height: 20),
-                    Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: _PromoBanner()),
-                    const SizedBox(height: 20),
-                    _FoodCarousel(items: _foodItems, onSeeAll: _openAllProductPage),
-                  ],
+          if (_isLoadingProducts) 
+            const Center(child: Padding(padding: EdgeInsets.all(40.0), child: CircularProgressIndicator(color: kPrimary)))
+          else if (_searchQuery.isNotEmpty) 
+            // KALAU ADA TAIP SESUATU, TUNJUK HASIL CARIAN
+            _buildSearchResults()
+          else 
+            // KALAU KOTAK SEARCH KOSONG, TUNJUK BENTO & PROMO MACAM BIASA
+            Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16), 
+                  child: _BentoGrid(
+                    foodItems: _foodItems,
+                    prelovedItems: _prelovedItems,
+                    printingItems: _printingItems,
+                    otherItems: _otherItems,
+                  )
                 ),
+                const SizedBox(height: 20),
+                Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: _PromoBanner()),
+                const SizedBox(height: 20),
+                _FoodCarousel(items: _foodItems, onSeeAll: _openAllProductPage),
+              ],
+            ),
         ],
       ),
     );
@@ -238,7 +326,9 @@ class _HomeScreenState extends State<HomeScreen> {
 // GRADIENT HEADER 
 // ============================================================================
 class _GradientHeader extends StatefulWidget {
-  const _GradientHeader();
+  final ValueChanged<String>? onSearch; // 🚨 WAYAR UNTUK SEARCH 🚨
+
+  const _GradientHeader({this.onSearch});
 
   @override
   State<_GradientHeader> createState() => _GradientHeaderState();
@@ -271,7 +361,6 @@ class _GradientHeaderState extends State<_GradientHeader> {
             _isLoading = false;
           });
         } else {
-          print("DEBUG SENIOR: Auth account exists, but no Firestore file for UID: ${currentUser.uid}");
           if (mounted) {
             setState(() {
               _userName = "User"; 
@@ -332,7 +421,6 @@ class _GradientHeaderState extends State<_GradientHeader> {
                     ),
                   ),
                   const SizedBox(width: 12),
-                  // Cart Button dengan LIVE BADGE
                   GestureDetector(
                     onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const CartPage())),
                     child: Stack(
@@ -343,11 +431,9 @@ class _GradientHeaderState extends State<_GradientHeader> {
                           decoration: BoxDecoration(color: kWhite.withOpacity(0.2), shape: BoxShape.circle),
                           child: const Icon(Icons.shopping_cart_outlined, color: kWhite, size: 20),
                         ),
-                        // INI MAGIK BADGE KITA!
                         ValueListenableBuilder<int>(
-                          valueListenable: CartManager.instance.cartItemCount, // Dia dengar walkie-talkie
+                          valueListenable: CartManager.instance.cartItemCount, 
                           builder: (context, count, child) {
-                            // Kalau troli kosong, jangan tunjuk badge
                             if (count == 0) return const SizedBox.shrink(); 
                             
                             return Positioned(
@@ -356,9 +442,9 @@ class _GradientHeaderState extends State<_GradientHeader> {
                               child: Container(
                                 padding: const EdgeInsets.all(6),
                                 decoration: BoxDecoration(
-                                  color: kAccent, // Warna Oren Lembut
+                                  color: kAccent, 
                                   shape: BoxShape.circle,
-                                  border: Border.all(color: kPrimary, width: 2), // Letak border hijau sikit biar pop
+                                  border: Border.all(color: kPrimary, width: 2), 
                                 ),
                                 child: Text(
                                   '$count',
@@ -379,7 +465,10 @@ class _GradientHeaderState extends State<_GradientHeader> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             decoration: BoxDecoration(color: kWhite, borderRadius: BorderRadius.circular(14), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 15, offset: const Offset(0, 5))]),
-            child: const TextField(decoration: InputDecoration(hintText: 'Search for food, parcel...', border: InputBorder.none, icon: Icon(Icons.search, color: Colors.grey))),
+            child: TextField(
+              onChanged: widget.onSearch, // 🚨 SENSOR DIPASANG 🚨
+              decoration: const InputDecoration(hintText: 'Search for food, parcel...', border: InputBorder.none, icon: Icon(Icons.search, color: Colors.grey))
+            ),
           ),
         ],
       ),
@@ -392,7 +481,70 @@ class _GradientHeaderState extends State<_GradientHeader> {
 // ============================================================================
 class _BentoGrid extends StatelessWidget {
   final List<_FoodItem> foodItems; 
-  const _BentoGrid({required this.foodItems});
+  final List<_FoodItem> prelovedItems; 
+  final List<_FoodItem> printingItems; 
+  final List<_FoodItem> otherItems; 
+
+  const _BentoGrid({
+    required this.foodItems,
+    required this.prelovedItems,
+    required this.printingItems,
+    required this.otherItems,
+  });
+
+  void _showMoreCategories(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return Container(
+          padding: const EdgeInsets.all(24),
+          decoration: const BoxDecoration(
+            color: kWhite,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2))),
+              const SizedBox(height: 24),
+              const Text('All Categories', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF1A1A2E))),
+              const SizedBox(height: 20),
+              
+              ListTile(
+                leading: CircleAvatar(backgroundColor: Colors.purple.shade100, child: const Icon(Icons.electrical_services_rounded, color: Colors.purple)),
+                title: const Text('Electronics & Gadgets', style: TextStyle(fontWeight: FontWeight.bold)),
+                trailing: const Icon(Icons.chevron_right_rounded),
+                onTap: () {
+                   Navigator.pop(context);
+                   Navigator.push(context, MaterialPageRoute(builder: (context) => const AllProductPage(title: 'Electronics', items: [])));
+                },
+              ),
+              ListTile(
+                leading: CircleAvatar(backgroundColor: Colors.blue.shade100, child: const Icon(Icons.design_services_rounded, color: Colors.blue)),
+                title: const Text('Design Services', style: TextStyle(fontWeight: FontWeight.bold)),
+                trailing: const Icon(Icons.chevron_right_rounded),
+                onTap: () {
+                   Navigator.pop(context);
+                   Navigator.push(context, MaterialPageRoute(builder: (context) => const AllProductPage(title: 'Services', items: [])));
+                },
+              ),
+              ListTile(
+                leading: CircleAvatar(backgroundColor: Colors.grey.shade200, child: const Icon(Icons.category_rounded, color: Colors.grey)),
+                title: const Text('Others / Miscellaneous', style: TextStyle(fontWeight: FontWeight.bold)),
+                trailing: const Icon(Icons.chevron_right_rounded),
+                onTap: () {
+                   Navigator.pop(context);
+                   Navigator.push(context, MaterialPageRoute(builder: (context) => AllProductPage(title: 'Others', items: otherItems))); 
+                },
+              ),
+              const SizedBox(height: 20),
+            ],
+          ),
+        );
+      }
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -406,7 +558,7 @@ class _BentoGrid extends StatelessWidget {
                 child: _BentoCard(
                   minHeight: 170,
                   bgColor: Colors.green.shade50,
-                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => AllProductPage(title: 'Food', items: foodItems))),
+                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => AllProductPage(title: 'Food & Beverages', items: foodItems))),
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
@@ -425,7 +577,7 @@ class _BentoGrid extends StatelessWidget {
                   children: [
                     _BentoCard(
                       bgColor: Colors.orange.shade50,
-                      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const AllProductPage(title: 'Parcel', items: []))),
+                      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => AllProductPage(title: 'Parcel', items: otherItems))), 
                       child: Row(
                         children: [
                           Container(width: 48, height: 48, decoration: BoxDecoration(color: kWhite, borderRadius: BorderRadius.circular(12)), child: _iconAsset('assets/icons/parcel_icons.png', radius: 12)),
@@ -437,7 +589,7 @@ class _BentoGrid extends StatelessWidget {
                     const SizedBox(height: 10),
                     _BentoCard(
                       bgColor: Colors.brown.shade50,
-                      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const AllProductPage(title: 'Printing', items: []))),
+                      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => AllProductPage(title: 'Printing', items: printingItems))),
                       child: Row(
                         children: [
                           Container(width: 48, height: 48, decoration: BoxDecoration(color: kWhite, borderRadius: BorderRadius.circular(12)), child: _iconAsset('assets/icons/printing_icons.png', radius: 12)),
@@ -459,7 +611,7 @@ class _BentoGrid extends StatelessWidget {
               flex: 2,
               child: _BentoCard(
                 bgColor: Colors.teal.shade50,
-                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const AllProductPage(title: 'Preloved', items: []))),
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => AllProductPage(title: 'Preloved', items: prelovedItems))),
                 child: Row(
                   children: [
                     Container(width: 52, height: 52, decoration: BoxDecoration(color: kWhite, borderRadius: BorderRadius.circular(12)), child: _iconAsset('assets/icons/preloved_icons.png', radius: 12)),
@@ -472,7 +624,7 @@ class _BentoGrid extends StatelessWidget {
             const SizedBox(width: 10),
             Expanded(
               child: _BentoCard(
-                onTap: () {},
+                onTap: () => _showMoreCategories(context), 
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [Icon(Icons.more_horiz_rounded, color: Colors.grey[600], size: 28), const SizedBox(height: 4), Text('More', style: TextStyle(color: Colors.grey[600], fontSize: 13))],
@@ -645,7 +797,6 @@ class _FoodCard extends StatelessWidget {
       }
       String targetSellerId = item.sellerId;
 
-      // Fallback for old products that were saved without sellerId.
       if (targetSellerId.isEmpty) {
         final storeQuery = await FirebaseFirestore.instance
             .collection('stores')
@@ -653,7 +804,7 @@ class _FoodCard extends StatelessWidget {
             .limit(1)
             .get();
         if (storeQuery.docs.isNotEmpty) {
-          targetSellerId = storeQuery.docs.first.id; // store doc id == seller uid
+          targetSellerId = storeQuery.docs.first.id; 
         }
       }
 
@@ -829,7 +980,6 @@ class _FoodCard extends StatelessWidget {
                       Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text('RM${item.price.toStringAsFixed(2)}', style: const TextStyle(color: kAccent, fontWeight: FontWeight.w700, fontSize: 12)), Row(mainAxisSize: MainAxisSize.min, children: [const Icon(Icons.star_rounded, color: kAccent, size: 12), const SizedBox(width: 2), Text(item.rating.toStringAsFixed(1), style: TextStyle(color: Colors.grey[700], fontSize: 10))])]),
                       const SizedBox(height: 4),
                       
-                      // --- SECONDARY TAP FOR STORE PROFILE ---
                       GestureDetector(
                         onTap: () {
                           Navigator.push(context, MaterialPageRoute(builder: (_) => const StoreProfilePage()));
@@ -846,7 +996,6 @@ class _FoodCard extends StatelessWidget {
                           ),
                         ),
                       ),
-                      // ---------------------------------------------
                       
                     ],
                   ),
@@ -922,27 +1071,23 @@ class _BottomNav extends StatelessWidget {
       child: Stack(
         clipBehavior: Clip.none,
         children: [
-          // ─── Left & Right Menu Icons ───
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
               _buildNavItem(icon: Icons.home_rounded, label: 'Home', index: 0),
               _buildNavItem(icon: Icons.receipt_long_rounded, label: 'Orders', index: 1),
-              const SizedBox(width: 60), // Leave center space empty for the FAB
+              const SizedBox(width: 60), 
               _buildInboxNavItem(index: 2),
               _buildNavItem(icon: Icons.person_rounded, label: 'Profile', index: 3),
             ],
           ),
           
-          // ─── FLOATING ORANGE BUTTON (FAB) ───
-          // ─── FLOATING ORANGE BUTTON (FAB) ───
           Positioned(
-            top: -20, // Push it up slightly
+            top: -20, 
             left: 0,
             right: 0,
             child: GestureDetector(
               onTap: () async {
-                // 1. Tunjuk loading jap kat skrin
                 showDialog(
                   context: context,
                   barrierDismissible: false,
@@ -950,28 +1095,21 @@ class _BottomNav extends StatelessWidget {
                 );
 
                 try {
-                  // ID akaun yang kau pakai masa daftar (mesti sama dengan kat registration page)
-                  // Cari User yang tengah login sekarang
                 User? currentUser = FirebaseAuth.instance.currentUser;
                 
-                // Kalau takde orang login (mustahil tapi kita buat safety net)
                 if (currentUser == null) {
-                  if (context.mounted) Navigator.pop(context); // tutup loading
+                  if (context.mounted) Navigator.pop(context); 
                   ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Sila login dahulu!')));
                   return;
                 }
 
-                // Guna UID (IC sebenar user) dari Firebase
                 String accountID = currentUser.uid;
 
-                  // 2. Bouncer cari nama kedai kat Firebase
                   var storeDoc = await FirebaseFirestore.instance.collection('stores').doc(accountID).get();
 
-                  // Tutup loading
                   if (context.mounted) Navigator.pop(context);
 
                   if (storeDoc.exists) {
-                    // 3A. NAMA ADA DALAM VIP LIST! Terus masuk Dashboard.
                     if (context.mounted) {
                       Navigator.push(
                         context,
@@ -984,13 +1122,12 @@ class _BottomNav extends StatelessWidget {
                       );
                     }
                   } else {
-                    // 3B. NAMA TAKDE! Bouncer keluarkan Pop-Up "Start Selling"
                     if (context.mounted) {
                       _showSellActionModal(context);
                     }
                   }
                 } catch (e) {
-                  if (context.mounted) Navigator.pop(context); // Tutup loading kalau error
+                  if (context.mounted) Navigator.pop(context); 
                   print("Bouncer pening: $e");
                 }
               },
@@ -1016,7 +1153,6 @@ class _BottomNav extends StatelessWidget {
     );
   }
 
-  // Standard Icon Helper
   Widget _buildNavItem({required IconData icon, required String label, required int index}) {
     final isSelected = selectedIndex == index;
     return GestureDetector(
@@ -1047,7 +1183,6 @@ class _BottomNav extends StatelessWidget {
     );
   }
 
-  // Inbox item with live unread badge from Firestore
   Widget _buildInboxNavItem({required int index}) {
     final isSelected = selectedIndex == index;
     final currentUserId = FirebaseAuth.instance.currentUser?.uid;
@@ -1128,7 +1263,6 @@ class _BottomNav extends StatelessWidget {
     );
   }
 
-  // Pop-Up Modal When [+] Button is Tapped
   void _showSellActionModal(BuildContext context) {
     showModalBottomSheet(
       context: context,
@@ -1156,7 +1290,6 @@ class _BottomNav extends StatelessWidget {
                 height: 54,
                 child: ElevatedButton(
                   onPressed: () {
-                    // JUMP TO SELLER REGISTRATION PAGE!
                     Navigator.push(context, MaterialPageRoute(builder: (_) => const SellerRegistrationPage()));
                   },
                   style: ElevatedButton.styleFrom(backgroundColor: kPrimary, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),

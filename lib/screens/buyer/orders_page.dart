@@ -76,11 +76,9 @@ class _OrdersPageState extends State<OrdersPage> {
     return '$h:$m';
   }
 
-  // --- MAGIK KITA: TUKAR FIREBASE DATA JADI MODEL KAU ---
   OrderHistory _fromFirestore(QueryDocumentSnapshot doc) {
     var data = doc.data() as Map<String, dynamic>;
     
-    // Guna fallback supaya takde null error
     double totalPrice = data['totalPrice'] is num ? (data['totalPrice'] as num).toDouble() : 0.0;
     String rawItemName = data['productName'] ?? 'Items';
 
@@ -88,7 +86,7 @@ class _OrdersPageState extends State<OrdersPage> {
       orderId: doc.id,
       itemName: rawItemName,
       sellerName: data['sellerName'] ?? 'UMART Store',
-      sellerPhoto: 'https://images.unsplash.com/photo-1607631568010-a87245c0daf7?w=200', // Dummy sementara
+      sellerPhoto: 'https://images.unsplash.com/photo-1607631568010-a87245c0daf7?w=200', 
       sellerAddress: 'UiTM Campus',
       sellerRating: 5.0,
       sellerReviews: 12,
@@ -96,7 +94,7 @@ class _OrdersPageState extends State<OrdersPage> {
       buyerLocation: data['buyerLocation'] ?? 'Kolej Dahlia 3',
       dateTime: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       subtotal: totalPrice,
-      deliveryFee: 0.0, // Letak 0 sebab totalPrice dah cover semua
+      deliveryFee: 0.0, 
       status: data['status'] ?? 'Pending',
       items: [
         OrderLineItem(name: rawItemName, qty: 1, price: totalPrice),
@@ -142,69 +140,73 @@ class _OrdersPageState extends State<OrdersPage> {
           ),
         ),
         
-        // --- LETAK CCTV FIREBASE KAT SINI ---
-        body: StreamBuilder<QuerySnapshot>(
-          stream: FirebaseFirestore.instance
-              .collection('orders')
-              .where('buyerId', isEqualTo: currentUserId)
-              .snapshots(),
-          builder: (context, snapshot) {
-            
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator(color: kPrimary));
-            }
+        // 🚨 MAGIK CORAK BACKGROUND BERMULA DI SINI 🚨
+        body: Container(
+          decoration: const BoxDecoration(
+            image: DecorationImage(
+              image: AssetImage('assets/bg_pattern.jpg'), // Corak UiTM 
+              repeat: ImageRepeat.repeat,
+              opacity: 0.05, 
+            ),
+          ),
+          child: StreamBuilder<QuerySnapshot>(
+            stream: FirebaseFirestore.instance
+                .collection('orders')
+                .where('buyerId', isEqualTo: currentUserId)
+                .snapshots(),
+            builder: (context, snapshot) {
+              
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator(color: kPrimary));
+              }
 
-            // Convert Firebase docs jadi List<OrderHistory> 
-            List<OrderHistory> allOrders = [];
-            if (snapshot.hasData) {
-              allOrders = snapshot.data!.docs.map((doc) => _fromFirestore(doc)).toList();
-            }
+              List<OrderHistory> allOrders = [];
+              if (snapshot.hasData) {
+                allOrders = snapshot.data!.docs.map((doc) => _fromFirestore(doc)).toList();
+              }
 
-            // Asingkan Active dan Completed
-            final activeOrders = allOrders.where((o) => o.status == 'Pending' || o.status == 'Processing').toList();
-            final completedOrders = allOrders.where((o) => o.status == 'Delivered' || o.status == 'Rejected' || o.status == 'Completed').toList();
+              final activeOrders = allOrders.where((o) => o.status == 'Pending' || o.status == 'Processing').toList();
+              final completedOrders = allOrders.where((o) => o.status == 'Delivered' || o.status == 'Rejected' || o.status == 'Completed').toList();
 
-            // Susun dari yang paling baru
-            activeOrders.sort((a, b) => b.dateTime.compareTo(a.dateTime));
-            completedOrders.sort((a, b) => b.dateTime.compareTo(a.dateTime));
+              activeOrders.sort((a, b) => b.dateTime.compareTo(a.dateTime));
+              completedOrders.sort((a, b) => b.dateTime.compareTo(a.dateTime));
 
-            return TabBarView(
-              children: [
-                // ─── TAB 1: ACTIVE ORDERS ───
-                activeOrders.isEmpty
-                  ? _buildEmptyState('No active orders', 'Your ongoing orders will appear here.')
-                  : ListView.builder(
-                      padding: const EdgeInsets.fromLTRB(20, 20, 20, 100),
-                      itemCount: activeOrders.length,
-                      itemBuilder: (context, index) => _buildLiveActiveCard(activeOrders[index], context),
-                    ),
+              return TabBarView(
+                children: [
+                  // ─── TAB 1: ACTIVE ORDERS ───
+                  activeOrders.isEmpty
+                    ? _buildEmptyState('No active orders', 'Your ongoing orders will appear here.')
+                    : ListView.builder(
+                        padding: const EdgeInsets.fromLTRB(20, 20, 20, 100),
+                        itemCount: activeOrders.length,
+                        itemBuilder: (context, index) => _buildLiveActiveCard(activeOrders[index], context),
+                      ),
 
-                // ─── TAB 2: COMPLETED ORDERS ───
-                completedOrders.isEmpty
-                  ? _buildEmptyState('No past orders', 'Order your favourite meal now!')
-                  : ListView.builder(
-                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
-                      itemCount: completedOrders.length,
-                      itemBuilder: (context, index) {
-                        final order = completedOrders[index];
-                        return _OrderHistoryCard(
-                          order: order,
-                          formatDate: _formatDate,
-                          formatTime: _formatTime,
-                          // LOMPAT KE ORDER DETAIL DENGAN DATA!
-                          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => OrderDetailPage(order: order))),
-                        );
-                      },
-                    ),
-              ],
-            );
-          },
+                  // ─── TAB 2: COMPLETED ORDERS ───
+                  completedOrders.isEmpty
+                    ? _buildEmptyState('No past orders', 'Order your favourite meal now!')
+                    : ListView.builder(
+                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+                        itemCount: completedOrders.length,
+                        itemBuilder: (context, index) {
+                          final order = completedOrders[index];
+                          return _OrderHistoryCard(
+                            order: order,
+                            formatDate: _formatDate,
+                            formatTime: _formatTime,
+                            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => OrderDetailPage(order: order))),
+                          );
+                        },
+                      ),
+                ],
+              );
+            },
+          ),
         ),
       ),
     );
   }
 
-  // WIDGET BARU: Kad Active yang digabungkan dari design asal kau
   Widget _buildLiveActiveCard(OrderHistory order, BuildContext context) {
     bool isPending = order.status == 'Pending';
     String displayId = '#UM-${order.orderId.substring(0, 5).toUpperCase()}';
@@ -219,7 +221,6 @@ class _OrdersPageState extends State<OrdersPage> {
       ),
       child: Column(
         children: [
-          // --- BAHAGIAN ATAS (HEADER) YANG KAU TERPADAM TADI 😂 ---
           Row(
             children: [
               Container(width: 50, height: 50, decoration: BoxDecoration(color: Colors.orange.shade100, borderRadius: BorderRadius.circular(10)), child: const Icon(Icons.fastfood_rounded, color: Colors.orange)),
@@ -245,7 +246,6 @@ class _OrdersPageState extends State<OrdersPage> {
           
           const Padding(padding: EdgeInsets.symmetric(vertical: 12), child: Divider(height: 1)),
           
-          // --- BAHAGIAN BAWAH (FOOTER) TEMPAT LETAK NAMA RUNNER ---
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -281,7 +281,6 @@ class _OrdersPageState extends State<OrdersPage> {
     );
   }
 
-  // HELPER: Empty state kalau takde data
   Widget _buildEmptyState(String title, String subtitle) {
     return Center(
       child: Column(
@@ -298,7 +297,6 @@ class _OrdersPageState extends State<OrdersPage> {
   }
 }
 
-// ─── Order History Card (Design asal kau) ────────────────────────────────────
 class _OrderHistoryCard extends StatelessWidget {
   final OrderHistory order;
   final String Function(DateTime) formatDate;
@@ -323,7 +321,6 @@ class _OrderHistoryCard extends StatelessWidget {
         ),
         child: Row(
           children: [
-            // ── Seller photo ────────────────────────────────────────
             Container(
               width: 56, height: 56,
               decoration: BoxDecoration(borderRadius: BorderRadius.circular(14), color: kBg),
@@ -336,7 +333,6 @@ class _OrderHistoryCard extends StatelessWidget {
             ),
             const SizedBox(width: 14),
 
-            // ── Order info ──────────────────────────────────────────
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -360,7 +356,6 @@ class _OrderHistoryCard extends StatelessWidget {
               ),
             ),
 
-            // ── Price + Status ────────────────────────────────────
             Column(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [

@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
-import 'orders_page.dart'; // 🚨 WAJIB ADA: Untuk panggil data OrderHistory dari orders_page.dart
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'orders_page.dart'; 
+import 'chat_page.dart'; // 🚨 PANGGIL PAGE CHAT KITA
 
 // ─── Color Constants ─────────────────────────────────────────────────────────
 const kPrimary      = Color(0xFF4C6B3F); 
@@ -10,7 +13,7 @@ const kWhite        = Colors.white;
 
 // ─── Order Detail Page ────────────────────────────────────────────────────────
 class OrderDetailPage extends StatelessWidget {
-  final OrderHistory order; // <--- INI TEMPAT DIA TANGKAP DATA!
+  final OrderHistory order; 
 
   const OrderDetailPage({super.key, required this.order});
 
@@ -25,6 +28,114 @@ class OrderDetailPage extends StatelessWidget {
     return '$h:$m';
   }
 
+  // 🚨 MAGIK BUKA BILIK CHAT SEBELUM JUMPA SELLER 🚨
+  Future<void> _openChatSeller(BuildContext context) async {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please login first to start chat.')),
+      );
+      return;
+    }
+
+    // Tunjuk bulatan loading kejap
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator(color: kPrimary)),
+    );
+
+    try {
+      String targetSellerId = "";
+
+      // 1. Cari IC Seller pakai nama kedai dia
+      final storeQuery = await FirebaseFirestore.instance
+          .collection('stores')
+          .where('storeName', isEqualTo: order.sellerName)
+          .limit(1)
+          .get();
+          
+      if (storeQuery.docs.isNotEmpty) {
+        targetSellerId = storeQuery.docs.first.id; 
+      }
+
+      if (targetSellerId.isEmpty) {
+        if (!context.mounted) return;
+        Navigator.pop(context); // Tutup loading
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Seller account not found. Cannot start chat.')),
+        );
+        return;
+      }
+
+      if (targetSellerId == currentUser.uid) {
+        if (!context.mounted) return;
+        Navigator.pop(context); // Tutup loading
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('This is your own store order!')),
+        );
+        return;
+      }
+
+      // 2. Selongkar laci 'chats' tengok dah pernah sembang ke belum
+      final chatsRef = FirebaseFirestore.instance.collection('chats');
+      final existing = await chatsRef
+          .where('participants', arrayContains: currentUser.uid)
+          .get();
+
+      String? chatId;
+      for (final doc in existing.docs) {
+        final data = doc.data();
+        final participantsRaw = (data['participants'] as List?) ?? [];
+        final participants = participantsRaw.whereType<String>().toList();
+        if (participants.contains(targetSellerId)) {
+          chatId = doc.id; // Dah pernah chat, guna ID lama
+          break;
+        }
+      }
+
+      // 3. Kalau tak jumpa, kita buat bilik chat baru kat laci
+      if (chatId == null) {
+        final newDoc = await chatsRef.add({
+          'participants': [currentUser.uid, targetSellerId],
+          'participantNames': {
+            currentUser.uid: currentUser.displayName ?? 'Buyer',
+            targetSellerId: order.sellerName,
+          },
+          'participantRoles': {
+            currentUser.uid: 'Buyer',
+            targetSellerId: 'Seller',
+          },
+          'lastMessage': '',
+          'lastMessageTime': FieldValue.serverTimestamp(),
+          'unreadCount': {
+            currentUser.uid: 0,
+            targetSellerId: 0,
+          },
+        });
+        chatId = newDoc.id;
+      }
+
+      // 4. Terus meroket ke ChatPage!
+      if (!context.mounted) return;
+      Navigator.pop(context); // Tutup loading
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ChatPage(
+            runnerName: order.sellerName,
+            chatId: chatId,
+            otherUserId: targetSellerId,
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      Navigator.pop(context); 
+      print("Error chat: $e");
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final topPad = MediaQuery.of(context).padding.top;
@@ -33,7 +144,6 @@ class OrderDetailPage extends StatelessWidget {
     return Scaffold(
       backgroundColor: kBg,
       body: Container(
-        // Background doodle yang kau suka tu
         decoration: const BoxDecoration(
           image: DecorationImage(
             image: AssetImage('assets/bg_pattern.jpg'),
@@ -97,7 +207,7 @@ class OrderDetailPage extends StatelessWidget {
           Row(
             children: [
               GestureDetector(
-                onTap: () => Navigator.pop(context), // Butang Back
+                onTap: () => Navigator.pop(context), 
                 child: Container(width: 40, height: 40, decoration: BoxDecoration(color: kBg, borderRadius: BorderRadius.circular(12)), child: const Icon(Icons.arrow_back_ios_new_rounded, size: 16, color: Color(0xFF1A1A2E))),
               ),
               const SizedBox(width: 12),
@@ -106,12 +216,11 @@ class OrderDetailPage extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(color: kPrimary.withOpacity(0.1), borderRadius: BorderRadius.circular(20)),
-                child: Row(children: const [Icon(Icons.check_circle_rounded, color: kPrimary, size: 13), SizedBox(width: 4), Text('Delivered', style: TextStyle(color: kPrimary, fontSize: 11, fontWeight: FontWeight.w700))]),
+                child: Row(children: [const Icon(Icons.check_circle_rounded, color: kPrimary, size: 13), const SizedBox(width: 4), Text(order.status, style: const TextStyle(color: kPrimary, fontSize: 11, fontWeight: FontWeight.w700))]),
               ),
             ],
           ),
           const SizedBox(height: 16),
-          // Nama Makanan (Dinamik)
           Text(order.itemName, style: const TextStyle(color: Color(0xFF1A1A2E), fontSize: 20, fontWeight: FontWeight.w800, letterSpacing: -0.3, height: 1.2)),
           const SizedBox(height: 4),
           Text('from ${order.sellerName}', style: TextStyle(color: Colors.grey[500], fontSize: 13)),
@@ -127,7 +236,7 @@ class OrderDetailPage extends StatelessWidget {
       decoration: BoxDecoration(color: kWhite, borderRadius: BorderRadius.circular(20), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 3))]),
       child: Row(
         children: [
-          _MetaChip(icon: Icons.tag_rounded, label: 'Order ID', value: order.orderId, color: kPrimary),
+          _MetaChip(icon: Icons.tag_rounded, label: 'Order ID', value: order.orderId.substring(0, 5).toUpperCase(), color: kPrimary),
           const SizedBox(width: 10),
           _MetaChip(icon: Icons.calendar_today_rounded, label: 'Date', value: _formatDate(order.dateTime), color: kAccent),
           const SizedBox(width: 10),
@@ -314,7 +423,7 @@ class OrderDetailPage extends StatelessWidget {
         color: Colors.transparent,
         child: InkWell(
           borderRadius: BorderRadius.circular(28),
-          onTap: () {},
+          onTap: () => _openChatSeller(context), // PANGGIL MAGIK KAT SINI!
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: const [
