@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'chat_page.dart'; // 🚨 Wajib ada untuk link ke bilik sembang!
+import 'chat_page.dart'; 
 
 const kPrimary = Color(0xFF4C6B3F); 
 const kAccent  = Color(0xFFF27B35); 
@@ -12,7 +12,7 @@ class InboxPage extends StatefulWidget {
   const InboxPage({super.key});
 
   @override
-  State<InboxPage> createState() => _InboxPageState();
+  State<InboxPage> createState() => _InboxPageState(); 
 }
 
 class _InboxPageState extends State<InboxPage> {
@@ -107,282 +107,298 @@ class _InboxPageState extends State<InboxPage> {
                 ),
               )
             : StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-              // Avoid hard failure on missing composite index:
-              // fetch participant chats first, then sort in-app.
-              stream: FirebaseFirestore.instance
-                  .collection('chats')
-                  .where('participants', arrayContains: currentUserId)
-                  .snapshots(),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(
-                    child: CircularProgressIndicator(color: kPrimary),
-                  );
-                }
+                stream: FirebaseFirestore.instance
+                    .collection('chats')
+                    .where('participants', arrayContains: currentUserId)
+                    .snapshots(),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(
+                      child: CircularProgressIndicator(color: kPrimary),
+                    );
+                  }
 
-                if (snapshot.hasError) {
-                  return Center(
-                    child: Text(
-                      'Failed to load messages\n${snapshot.error}',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: Colors.grey.shade600),
-                    ),
-                  );
-                }
-
-                final docs = [...(snapshot.data?.docs ?? [])]
-                  ..sort((a, b) {
-                    final ta = a.data()['lastMessageTime'] as Timestamp?;
-                    final tb = b.data()['lastMessageTime'] as Timestamp?;
-                    final da =
-                        ta?.toDate() ?? DateTime.fromMillisecondsSinceEpoch(0);
-                    final db =
-                        tb?.toDate() ?? DateTime.fromMillisecondsSinceEpoch(0);
-                    return db.compareTo(da); // descending
-                  });
-
-                final chatTiles = docs.map((doc) {
-                  final data = doc.data();
-                  final participantsRaw = (data['participants'] as List?) ?? [];
-                  final participants = participantsRaw
-                      .whereType<String>()
-                      .toList(growable: false);
-                  final otherUid = participants.firstWhere(
-                    (uid) => uid != currentUserId,
-                    orElse: () => currentUserId,
-                  );
-
-                  final namesRaw = (data['participantNames'] as Map?) ?? {};
-                  final unreadRaw = (data['unreadCount'] as Map?) ?? {};
-
-                  final names = namesRaw.map(
-                    (key, value) =>
-                        MapEntry(key.toString(), value.toString()),
-                  );
-                  final unreadMap = unreadRaw.map((key, value) {
-                    final parsed = value is int
-                        ? value
-                        : int.tryParse(value?.toString() ?? '0') ?? 0;
-                    return MapEntry(key.toString(), parsed);
-                  });
-
-                  final displayName = names[otherUid] ?? 'Unknown User';
-                  final lastMessage =
-                      (data['lastMessage']?.toString() ?? '').trim().isEmpty
-                          ? 'No messages yet'
-                          : data['lastMessage'].toString();
-                  final lastMessageTime =
-                      _formatMessageTime(data['lastMessageTime'] as Timestamp?);
-                  final unread = unreadMap[currentUserId] ?? 0;
-
-                  return {
-                    'chatId': doc.id,
-                    'otherUid': otherUid,
-                    'displayName': displayName,
-                    'lastMessage': lastMessage,
-                    'lastMessageTime': lastMessageTime,
-                    'unread': unread,
-                  };
-                }).toList();
-
-                final query = _searchQuery.toLowerCase();
-                final filteredTiles = query.isEmpty
-                    ? chatTiles
-                    : chatTiles.where((chat) {
-                        final name =
-                            (chat['displayName']?.toString() ?? '').toLowerCase();
-                        final message =
-                            (chat['lastMessage']?.toString() ?? '').toLowerCase();
-                        return name.contains(query) || message.contains(query);
-                      }).toList();
-
-                if (filteredTiles.isEmpty) {
-                  return Center(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 32),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.chat_bubble_outline_rounded,
-                            size: 64,
-                            color: Colors.grey.shade400,
-                          ),
-                          const SizedBox(height: 12),
-                          Text(
-                            _searchQuery.isEmpty
-                                ? 'No messages yet'
-                                : 'No results found',
-                            style: const TextStyle(
-                              fontSize: 17,
-                              fontWeight: FontWeight.w700,
-                              color: Color(0xFF1A1A2E),
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            _searchQuery.isEmpty
-                                ? 'Start chatting with sellers to see your inbox here.'
-                                : 'Try searching with another keyword.',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: Colors.grey.shade500,
-                              fontSize: 13,
-                            ),
-                          ),
-                        ],
+                  if (snapshot.hasError) {
+                    return Center(
+                      child: Text(
+                        'Failed to load messages\n${snapshot.error}',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: Colors.grey.shade600),
                       ),
-                    ),
-                  );
-                }
+                    );
+                  }
 
-                return ListView.builder(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                  itemCount: filteredTiles.length,
-                  itemBuilder: (context, index) {
-                    final chat = filteredTiles[index];
-                    final displayName = chat['displayName'] as String;
-                    final lastMessage = chat['lastMessage'] as String;
-                    final lastMessageTime = chat['lastMessageTime'] as String;
-                    final unread = chat['unread'] as int;
-                    final hasUnread = unread > 0;
+                  final docs = [...(snapshot.data?.docs ?? [])]
+                    ..sort((a, b) {
+                      final ta = a.data()['lastMessageTime'] as Timestamp?;
+                      final tb = b.data()['lastMessageTime'] as Timestamp?;
+                      final da =
+                          ta?.toDate() ?? DateTime.fromMillisecondsSinceEpoch(0);
+                      final db =
+                          tb?.toDate() ?? DateTime.fromMillisecondsSinceEpoch(0);
+                      return db.compareTo(da); 
+                    });
 
-                    return GestureDetector(
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) =>
-                                ChatPage(
-                                  runnerName: displayName,
-                                  chatId: chat['chatId'] as String,
-                                  otherUserId: chat['otherUid'] as String,
-                                ),
-                          ),
-                        );
-                      },
-                      child: Container(
-                        margin: const EdgeInsets.only(bottom: 16),
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          color: kWhite,
-                          borderRadius: BorderRadius.circular(18),
-                          border: Border.all(
-                            color: Colors.white.withOpacity(0.9),
-                            width: 1.4,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.045),
-                              blurRadius: 12,
-                              offset: const Offset(0, 5),
-                            )
-                          ],
-                        ),
-                        child: Row(
+                  final chatTiles = docs.map((doc) {
+                    final data = doc.data();
+                    final participantsRaw = (data['participants'] as List?) ?? [];
+                    final participants = participantsRaw
+                        .whereType<String>()
+                        .toList(growable: false);
+                    final otherUid = participants.firstWhere(
+                      (uid) => uid != currentUserId,
+                      orElse: () => currentUserId,
+                    );
+
+                    final namesRaw = (data['participantNames'] as Map?) ?? {};
+                    final unreadRaw = (data['unreadCount'] as Map?) ?? {};
+
+                    final names = namesRaw.map(
+                      (key, value) =>
+                          MapEntry(key.toString(), value.toString()),
+                    );
+                    final unreadMap = unreadRaw.map((key, value) {
+                      final parsed = value is int
+                          ? value
+                          : int.tryParse(value?.toString() ?? '0') ?? 0;
+                      return MapEntry(key.toString(), parsed);
+                    });
+
+                    final fallbackName = names[otherUid] ?? 'Unknown User';
+                    final lastMessage =
+                        (data['lastMessage']?.toString() ?? '').trim().isEmpty
+                            ? 'No messages yet'
+                            : data['lastMessage'].toString();
+                    final lastMessageTime =
+                        _formatMessageTime(data['lastMessageTime'] as Timestamp?);
+                    final unread = unreadMap[currentUserId] ?? 0;
+
+                    return {
+                      'chatId': doc.id,
+                      'otherUid': otherUid,
+                      'fallbackName': fallbackName,
+                      'lastMessage': lastMessage,
+                      'lastMessageTime': lastMessageTime,
+                      'unread': unread,
+                    };
+                  }).toList();
+
+                  final query = _searchQuery.toLowerCase();
+                  final filteredTiles = query.isEmpty
+                      ? chatTiles
+                      : chatTiles.where((chat) {
+                          final name =
+                              (chat['fallbackName']?.toString() ?? '').toLowerCase();
+                          final message =
+                              (chat['lastMessage']?.toString() ?? '').toLowerCase();
+                          return name.contains(query) || message.contains(query);
+                        }).toList();
+
+                  if (filteredTiles.isEmpty) {
+                    return Center(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 32),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Container(
-                              width: 50,
-                              height: 50,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: const Color(0xFFE6ECD9),
-                              ),
-                              child: Center(
-                                child: Text(
-                                  displayName.isNotEmpty
-                                      ? displayName[0].toUpperCase()
-                                      : '?',
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    color: Color(0xFF1A1A2E),
-                                  ),
-                                ),
+                            Icon(
+                              Icons.chat_bubble_outline_rounded,
+                              size: 64,
+                              color: Colors.grey.shade400,
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              _searchQuery.isEmpty
+                                  ? 'No messages yet'
+                                  : 'No results found',
+                              style: const TextStyle(
+                                fontSize: 17,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFF1A1A2E),
                               ),
                             ),
-                            const SizedBox(width: 14),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    displayName,
-                                    style: TextStyle(
-                                      fontWeight: hasUnread
-                                          ? FontWeight.w800
-                                          : FontWeight.w600,
-                                      fontSize: 15,
-                                      color: const Color(0xFF1A1A2E),
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    lastMessage,
-                                    style: TextStyle(
-                                      color: hasUnread
-                                          ? const Color(0xFF1A1A2E)
-                                          : Colors.grey.shade500,
-                                      fontSize: 13,
-                                      fontWeight: hasUnread
-                                          ? FontWeight.w600
-                                          : FontWeight.w400,
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ],
+                            const SizedBox(height: 6),
+                            Text(
+                              _searchQuery.isEmpty
+                                  ? 'Start chatting with sellers to see your inbox here.'
+                                  : 'Try searching with another keyword.',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: Colors.grey.shade500,
+                                fontSize: 13,
                               ),
-                            ),
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.end,
-                              children: [
-                                Text(
-                                  lastMessageTime,
-                                  style: TextStyle(
-                                    color: hasUnread
-                                        ? kAccent
-                                        : Colors.grey.shade400,
-                                    fontSize: 11,
-                                    fontWeight: hasUnread
-                                        ? FontWeight.bold
-                                        : FontWeight.w500,
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                if (hasUnread)
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 6,
-                                      vertical: 4,
-                                    ),
-                                    decoration: const BoxDecoration(
-                                      color: kAccent,
-                                      shape: BoxShape.circle,
-                                    ),
-                                    child: Text(
-                                      unread.toString(),
-                                      style: const TextStyle(
-                                        color: kWhite,
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  )
-                                else
-                                  const SizedBox(height: 20),
-                              ],
                             ),
                           ],
                         ),
                       ),
                     );
-                  },
-                );
-              },
-            ),
+                  }
+
+                  return ListView.builder(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                    itemCount: filteredTiles.length,
+                    itemBuilder: (context, index) {
+                      final chat = filteredTiles[index];
+                      final otherUid = chat['otherUid'] as String;
+                      final lastMessage = chat['lastMessage'] as String;
+                      final lastMessageTime = chat['lastMessageTime'] as String;
+                      final unread = chat['unread'] as int;
+                      final hasUnread = unread > 0;
+
+                      // 🚨 KITA GUNA FUTURE BUILDER UNTUK TARIK NAMA SEBENAR DARI FIRESTORE USERS!
+                      return FutureBuilder<DocumentSnapshot>(
+                        future: FirebaseFirestore.instance.collection('users').doc(otherUid).get(),
+                        builder: (context, userSnap) {
+                          
+                          // Default guna nama dari chat laci (yg tulis 'Buyer' tu)
+                          String finalDisplayName = chat['fallbackName'] as String;
+                          
+                          // Kalau dia jumpa data user dalam laci 'users', kita guna nama tu!
+                          if (userSnap.hasData && userSnap.data!.exists) {
+                            final userData = userSnap.data!.data() as Map<String, dynamic>?;
+                            if (userData != null && userData['fullName'] != null && userData['fullName'].toString().isNotEmpty) {
+                              finalDisplayName = userData['fullName'];
+                            }
+                          }
+
+                          return GestureDetector(
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) =>
+                                      ChatPage(
+                                        runnerName: finalDisplayName,
+                                        chatId: chat['chatId'] as String,
+                                        otherUserId: otherUid,
+                                      ),
+                                ),
+                              );
+                            },
+                            child: Container(
+                              margin: const EdgeInsets.only(bottom: 16),
+                              padding: const EdgeInsets.all(14),
+                              decoration: BoxDecoration(
+                                color: kWhite,
+                                borderRadius: BorderRadius.circular(18),
+                                border: Border.all(
+                                  color: Colors.white.withOpacity(0.9),
+                                  width: 1.4,
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.045),
+                                    blurRadius: 12,
+                                    offset: const Offset(0, 5),
+                                  )
+                                ],
+                              ),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    width: 50,
+                                    height: 50,
+                                    decoration: const BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      color: Color(0xFFE6ECD9),
+                                    ),
+                                    child: Center(
+                                      child: Text(
+                                        finalDisplayName.isNotEmpty
+                                            ? finalDisplayName[0].toUpperCase()
+                                            : '?',
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          color: Color(0xFF1A1A2E),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 14),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          finalDisplayName,
+                                          style: TextStyle(
+                                            fontWeight: hasUnread
+                                                ? FontWeight.w800
+                                                : FontWeight.w600,
+                                            fontSize: 15,
+                                            color: const Color(0xFF1A1A2E),
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          lastMessage,
+                                          style: TextStyle(
+                                            color: hasUnread
+                                                ? const Color(0xFF1A1A2E)
+                                                : Colors.grey.shade500,
+                                            fontSize: 13,
+                                            fontWeight: hasUnread
+                                                ? FontWeight.w600
+                                                : FontWeight.w400,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  Column(
+                                    crossAxisAlignment: CrossAxisAlignment.end,
+                                    children: [
+                                      Text(
+                                        lastMessageTime,
+                                        style: TextStyle(
+                                          color: hasUnread
+                                              ? kAccent
+                                              : Colors.grey.shade400,
+                                          fontSize: 11,
+                                          fontWeight: hasUnread
+                                              ? FontWeight.bold
+                                              : FontWeight.w500,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      if (hasUnread)
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 6,
+                                            vertical: 4,
+                                          ),
+                                          decoration: const BoxDecoration(
+                                            color: kAccent,
+                                            shape: BoxShape.circle,
+                                          ),
+                                          child: Text(
+                                            unread.toString(),
+                                            style: const TextStyle(
+                                              color: kWhite,
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        )
+                                      else
+                                        const SizedBox(height: 20),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        }
+                      );
+                    },
+                  );
+                },
+              ),
       ),
     );
   }

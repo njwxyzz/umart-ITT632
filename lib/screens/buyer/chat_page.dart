@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
-// ─── Color Constants (TEMA HIJAU BARU) ───────────────────────────────────────
 const kPrimary      = Color(0xFF4C6B3F); 
 const kAccent       = Color(0xFFF27B35); 
 const kBg           = Color(0xFFF5F7F2); 
@@ -390,7 +389,6 @@ class _ChatPageState extends State<ChatPage> {
     );
   }
 
-  // WIDGET BANTUAN UNTUK BUBBLE CHAT
   Widget _buildChatBubble({
     required String text,
     required bool isMe,
