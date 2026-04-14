@@ -670,35 +670,146 @@ class _BentoCard extends StatelessWidget {
 }
 
 // ============================================================================
-// PROMOTIONAL BANNER 
+// PREMIUM PROMOTIONAL BANNER (CAROUSEL)
 // ============================================================================
-class _PromoBanner extends StatelessWidget {
+class _PromoBanner extends StatefulWidget {
+  @override
+  State<_PromoBanner> createState() => _PromoBannerState();
+}
+
+class _PromoBannerState extends State<_PromoBanner> {
+  final PageController _pageController = PageController();
+  int _currentPage = 0;
+
+  // Senarai URL gambar banner (Boleh tukar nanti)
+  final List<String> _bannerImages = [
+    'https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=800', // Gambar makanan sedap
+    'https://images.unsplash.com/photo-1490481651871-ab68de25d43d?w=800', // Baju preloved
+    'https://images.unsplash.com/photo-1621804105073-455b5d8ef732?w=800', // Bungkusan parcel
+  ];
+
+  // Senarai tajuk untuk banner
+  final List<Map<String, String>> _bannerTexts = [
+    {
+      'badge': 'MIDNIGHT CRAVINGS',
+      'title': 'Free Delivery to\nKolej Dahlia!',
+    },
+    {
+      'badge': 'PRELOVED FASHION',
+      'title': 'Find hidden gems\nfrom your peers!',
+    },
+    {
+      'badge': 'PARCEL SERVICES',
+      'title': 'Too lazy to walk?\nLet us pick it up.',
+    },
+  ];
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: const Color(0xFF2E3B22), 
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 20, offset: const Offset(0, 10))],
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6), decoration: BoxDecoration(color: kAccent.withOpacity(0.2), borderRadius: BorderRadius.circular(20)), child: const Text('EARN EXTRA INCOME', style: TextStyle(color: kAccent, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1))),
-                const SizedBox(height: 12),
-                const Text('Turn Your Dorm\nInto a Store!', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: kWhite, height: 1.3)),
-                const SizedBox(height: 16),
-                ElevatedButton(onPressed: () {}, style: ElevatedButton.styleFrom(backgroundColor: kAccent, foregroundColor: kWhite, elevation: 0, padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30))), child: const Text('Start Earning', style: TextStyle(fontWeight: FontWeight.bold))),
-              ],
+    return Column(
+      children: [
+        // ─── CAROUSEL SLIDER ───
+        SizedBox(
+          height: 170, // Tinggi banner
+          child: PageView.builder(
+            controller: _pageController,
+            onPageChanged: (index) {
+              setState(() {
+                _currentPage = index;
+              });
+            },
+            itemCount: _bannerImages.length,
+            itemBuilder: (context, index) {
+              return AnimatedBuilder(
+                animation: _pageController,
+                builder: (context, child) {
+                  // Magik sikit untuk buat effect zoom in/out masa slide
+                  double value = 1.0;
+                  if (_pageController.position.haveDimensions) {
+                    value = _pageController.page! - index;
+                    value = (1 - (value.abs() * 0.2)).clamp(0.0, 1.0);
+                  }
+                  return Transform.scale(
+                    scale: value,
+                    child: child,
+                  );
+                },
+                child: Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 4), // Jarak sikit antara banner
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(24),
+                    boxShadow: [
+                      BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 20, offset: const Offset(0, 10))
+                    ],
+                    image: DecorationImage(
+                      image: NetworkImage(_bannerImages[index]),
+                      fit: BoxFit.cover,
+                      colorFilter: ColorFilter.mode(Colors.black.withOpacity(0.4), BlendMode.darken), // Gelapkan sikit supaya teks nampak jelas
+                    ),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: kAccent.withOpacity(0.9), 
+                                  borderRadius: BorderRadius.circular(20)
+                                ),
+                                child: Text(
+                                  _bannerTexts[index]['badge']!, 
+                                  style: const TextStyle(color: kWhite, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1)
+                                )
+                              ),
+                              const SizedBox(height: 12),
+                              Text(
+                                _bannerTexts[index]['title']!, 
+                                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: kWhite, height: 1.3)
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: 12),
+
+        // ─── DOT INDICATOR ───
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: List.generate(
+            _bannerImages.length,
+            (index) => AnimatedContainer(
+              duration: const Duration(milliseconds: 300),
+              margin: const EdgeInsets.symmetric(horizontal: 4),
+              height: 6,
+              // Lebarkan dot kalau tengah selected
+              width: _currentPage == index ? 24 : 6, 
+              decoration: BoxDecoration(
+                color: _currentPage == index ? kPrimary : Colors.grey.shade400,
+                borderRadius: BorderRadius.circular(4),
+              ),
             ),
           ),
-          const Icon(Icons.storefront_rounded, size: 80, color: Colors.white24),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
