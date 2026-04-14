@@ -278,7 +278,7 @@ class _FreeDeliveryProgress extends StatelessWidget {
 class _StudentRemarksBox extends StatelessWidget {
   final TextEditingController controller;
 
-  const _StudentRemarksBox({super.key, required this.controller});
+  const _StudentRemarksBox({required this.controller});
 
   @override
   Widget build(BuildContext context) {

@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
-import 'cart_page.dart';
-import 'cart_manager.dart';
+import 'cart_page.dart'; 
+import 'cart_manager.dart'; // 🚨 IMPORT OTAK TROLI KAT SINI
 
-// ─── Color Constants ───────────────────────────────────────
-const kPrimary      = Color(0xFF4C6B3F); 
-const kAccent       = Color(0xFFF27B35); 
-const kBg           = Color(0xFFF5F7F2); 
+const kPrimary      = Color(0xFF4C6B3F);
+const kAccent       = Color(0xFFF27B35);
+const kBg           = Color(0xFFF5F7F2);
 const kWhite        = Colors.white;
 
 class ProductDetailPage extends StatefulWidget {
@@ -13,8 +12,9 @@ class ProductDetailPage extends StatefulWidget {
   final double price;
   final String imageUrl;
   final double rating;
-  final String sellerName; 
-  final String description; 
+  final String sellerName;
+  final String description;
+  final List<String>? variations; 
 
   const ProductDetailPage({
     super.key,
@@ -22,8 +22,9 @@ class ProductDetailPage extends StatefulWidget {
     required this.price,
     required this.imageUrl,
     required this.rating,
-    required this.sellerName, 
-    required this.description, 
+    required this.sellerName,
+    required this.description,
+    this.variations, 
   });
 
   @override
@@ -31,227 +32,291 @@ class ProductDetailPage extends StatefulWidget {
 }
 
 class _ProductDetailPageState extends State<ProductDetailPage> {
-  int _quantity = 1;
-  
-  bool _extraSambal = false;
-  bool _addTelurMata = false;
-  bool _extraRice = false;
+  int quantity = 1;
+  String selectedVariation = '';
+  late List<String> displayVariations;
 
-  double get _totalPrice {
-    double total = widget.price; 
-    if (_extraSambal) total += 1.50;
-    if (_addTelurMata) total += 2.00;
-    if (_extraRice) total += 2.00;
-    return total * _quantity;
+  @override
+  void initState() {
+    super.initState();
+    displayVariations = (widget.variations != null && widget.variations!.isNotEmpty) 
+        ? widget.variations! 
+        : ['Standard', 'Matcha', 'Chocolate']; 
+
+    if (displayVariations.isNotEmpty) {
+      selectedVariation = displayVariations[0]; 
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    // MAGIC: Check if item name contains "nasi lemak"
-    bool isNasiLemak = widget.name.toLowerCase().contains('nasi lemak');
+    double totalPrice = widget.price * quantity;
 
     return Scaffold(
       backgroundColor: kBg,
-      bottomNavigationBar: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-        decoration: BoxDecoration(
-          color: kWhite,
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 20, offset: const Offset(0, -5))],
-          borderRadius: const BorderRadius.only(topLeft: Radius.circular(24), topRight: Radius.circular(24)),
-        ),
-        child: SafeArea(
-          child: Row(
-            children: [
-              Container(
-                decoration: BoxDecoration(color: kBg, borderRadius: BorderRadius.circular(30), border: Border.all(color: Colors.grey.shade200)),
-                child: Row(
+      body: Stack(
+        children: [
+          SingleChildScrollView(
+            padding: const EdgeInsets.only(bottom: 120), 
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Stack(
                   children: [
-                    IconButton(
-                      icon: Icon(Icons.remove, color: _quantity > 1 ? const Color(0xFF1A1A2E) : Colors.grey),
-                      onPressed: () {
-                        if (_quantity > 1) setState(() => _quantity--);
-                      },
+                    SizedBox(
+                      height: 320,
+                      width: double.infinity,
+                      child: Image.network(
+                        widget.imageUrl,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => Container(
+                          color: kPrimary.withOpacity(0.1),
+                          child: const Icon(Icons.fastfood_rounded, size: 80, color: kPrimary),
+                        ),
+                      ),
                     ),
-                    Text('$_quantity', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                    IconButton(
-                      icon: const Icon(Icons.add, color: Color(0xFF1A1A2E)),
-                      onPressed: () => setState(() => _quantity++),
+                    SafeArea(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            _buildCircleButton(
+                              icon: Icons.arrow_back_ios_new_rounded,
+                              onTap: () => Navigator.pop(context),
+                            ),
+                            _buildCircleButton(
+                              icon: Icons.shopping_cart_outlined,
+                              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CartPage())),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
                   ],
                 ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: ElevatedButton(
-                  onPressed: () {
-                    // 1. Gather selected add-ons
-                    List<String> selectedAddons = [];
-                    if (_extraSambal) selectedAddons.add('Extra Sambal');
-                    if (_addTelurMata) selectedAddons.add('Fried Egg');
-                    if (_extraRice) selectedAddons.add('Extra Rice');
-                    String addonsText = selectedAddons.join(', ');
 
-                    // 2. Save item to CartManager
-                    CartManager.instance.addToCart(
-                      CartItem(
-                        name: widget.name,
-                        price: _totalPrice / _quantity, // Price per unit including addons
-                        imageUrl: widget.imageUrl,
-                        sellerName: widget.sellerName,
-                        addons: addonsText,
-                        quantity: _quantity,
-                      )
-                    );
-
-                    // 3. Show Success Notification
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: const Text('Added to cart! 🛒'),
-                        backgroundColor: kPrimary,
-                        behavior: SnackBarBehavior.floating,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                Container(
+                  transform: Matrix4.translationValues(0, -25, 0), 
+                  padding: const EdgeInsets.all(24),
+                  decoration: const BoxDecoration(
+                    color: kWhite,
+                    borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              widget.name,
+                              style: const TextStyle(
+                                fontSize: 22,
+                                fontWeight: FontWeight.w900,
+                                color: Color(0xFF1A1A2E),
+                                height: 1.2,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          Text(
+                            'RM${widget.price.toStringAsFixed(2)}',
+                            style: const TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.w900,
+                              color: kAccent,
+                            ),
+                          ),
+                        ],
                       ),
-                    );
-                    
-                    // 4. Close the page and return to previous screen
-                    Navigator.pop(context);
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: kPrimary, 
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                    elevation: 0,
-                  ),
-                  child: Text(
-                    'Add to Cart - RM${_totalPrice.toStringAsFixed(2)}', 
-                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: kWhite),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          const Icon(Icons.star_rounded, color: kAccent, size: 18),
+                          const SizedBox(width: 4),
+                          Text(
+                            widget.rating.toStringAsFixed(1),
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                          ),
+                          const SizedBox(width: 16),
+                          Icon(Icons.storefront_rounded, color: Colors.grey.shade400, size: 18),
+                          const SizedBox(width: 4),
+                          Text(
+                            'Sold by ${widget.sellerName}',
+                            style: TextStyle(color: Colors.grey.shade600, fontSize: 14, fontWeight: FontWeight.w500),
+                          ),
+                        ],
+                      ),
+                      
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 20),
+                        child: Divider(height: 1, color: Color(0xFFEEEEEE)),
+                      ),
+
+                      const Text(
+                        'Select Variation',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1A1A2E)),
+                      ),
+                      const SizedBox(height: 12),
+                      Wrap(
+                        spacing: 10,
+                        runSpacing: 10,
+                        children: displayVariations.map((variation) {
+                          bool isSelected = selectedVariation == variation;
+                          return GestureDetector(
+                            onTap: () => setState(() => selectedVariation = variation),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                              decoration: BoxDecoration(
+                                color: isSelected ? kPrimary : kBg,
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(
+                                  color: isSelected ? kPrimary : Colors.grey.shade300,
+                                ),
+                              ),
+                              child: Text(
+                                variation,
+                                style: TextStyle(
+                                  color: isSelected ? kWhite : Colors.grey.shade700,
+                                  fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                      
+                      const SizedBox(height: 24),
+
+                      const Text(
+                        'Description',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1A1A2E)),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        widget.description,
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.grey.shade600,
+                          height: 1.6,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ),
-            ],
-          ),
-        ),
-      ),
-      body: CustomScrollView(
-        slivers: [
-          SliverAppBar(
-            expandedHeight: 300, 
-            pinned: true,
-            backgroundColor: kPrimary,
-            iconTheme: const IconThemeData(color: kWhite),
-            leading: Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: CircleAvatar(
-                backgroundColor: Colors.black.withOpacity(0.3),
-                child: IconButton(
-                  icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 18, color: kWhite),
-                  onPressed: () => Navigator.pop(context),
-                ),
-              ),
+              ],
             ),
-            actions: [
-              Padding(
-                padding: const EdgeInsets.all(8.0),
-                child: CircleAvatar(
-                  backgroundColor: Colors.black.withOpacity(0.3),
-                  child: IconButton(
-                    icon: const Icon(Icons.shopping_cart_outlined, size: 20, color: kWhite),
-                    onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CartPage())),
-                  ),
-                ),
-              ),
-            ],
-            flexibleSpace: FlexibleSpaceBar(
-              background: Image.network(
-                widget.imageUrl, 
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => Container(color: Colors.grey[300], child: const Icon(Icons.broken_image, size: 50, color: Colors.grey)),
-              ),
-            ),
           ),
-          
-          SliverToBoxAdapter(
+
+          // ─── BOTTOM BAR (ADD TO CART) ───
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
             child: Container(
-              decoration: const BoxDecoration(
-                color: kBg, 
+              padding: EdgeInsets.fromLTRB(20, 16, 20, MediaQuery.of(context).padding.bottom + 16),
+              decoration: BoxDecoration(
+                color: kWhite,
+                boxShadow: [
+                  BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 20, offset: const Offset(0, -5)),
+                ],
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              child: Row(
                 children: [
                   Container(
-                    width: double.infinity,
-                    decoration: const BoxDecoration(
-                      color: kWhite,
-                      borderRadius: BorderRadius.only(bottomLeft: Radius.circular(24), bottomRight: Radius.circular(24)),
-                      boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 10, offset: Offset(0, 4))],
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: kBg,
+                      borderRadius: BorderRadius.circular(25),
+                      border: Border.all(color: Colors.grey.shade200),
                     ),
-                    padding: const EdgeInsets.all(20),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    child: Row(
                       children: [
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Expanded(
-                              child: Text(
-                                widget.name, 
-                                style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: Color(0xFF1A1A2E), height: 1.2),
-                              ),
-                            ),
-                            Text(
-                              'RM${widget.price.toStringAsFixed(2)}', 
-                              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: kAccent), 
-                            ),
-                          ],
+                        GestureDetector(
+                          onTap: () {
+                            if (quantity > 1) setState(() => quantity--);
+                          },
+                          child: Icon(Icons.remove_rounded, color: quantity > 1 ? kPrimary : Colors.grey.shade400, size: 22),
                         ),
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            const Icon(Icons.star_rounded, color: kAccent, size: 18),
-                            const SizedBox(width: 4),
-                            Text(widget.rating.toStringAsFixed(1), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)), 
-                            const SizedBox(width: 8),
-                            Icon(Icons.storefront_rounded, size: 16, color: Colors.grey[500]),
-                            const SizedBox(width: 4),
-                            Expanded(
-                              child: Text(
-                                'Sold by ${widget.sellerName}', 
-                                style: TextStyle(color: Colors.grey[600], fontSize: 13, fontWeight: FontWeight.bold),
-                                maxLines: 1, overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 16),
+                        const SizedBox(width: 16),
                         Text(
-                          widget.description, 
-                          style: TextStyle(color: Colors.grey[700], fontSize: 14, height: 1.5),
+                          '$quantity',
+                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1A1A2E)),
+                        ),
+                        const SizedBox(width: 16),
+                        GestureDetector(
+                          onTap: () => setState(() => quantity++),
+                          child: const Icon(Icons.add_rounded, color: kPrimary, size: 22),
                         ),
                       ],
                     ),
                   ),
+                  const SizedBox(width: 16),
+                  
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () {
+                        // 🚨 MAGIK TROLI BERMULA DI SINI 🚨
+                        
+                        bool itemExists = false;
+                        
+                        // 1. Kita check dulu dalam troli, ada tak barang yg SAMA & PERISA yg SAMA
+                        for (var item in CartManager.instance.items) {
+                          if (item.name == widget.name && item.addons == selectedVariation) {
+                            // Kalau ada, kita tambah kuantiti je! Tak payah buat kotak baru.
+                            item.quantity += quantity;
+                            itemExists = true;
+                            break;
+                          }
+                        }
 
-                  const SizedBox(height: 16),
+                        // 2. Kalau takde, baru kita cipta item baru dan masukkan dalam memori
+                        if (!itemExists) {
+                          CartManager.instance.addToCart(
+                            CartItem(
+                              name: widget.name,
+                              price: widget.price,
+                              imageUrl: widget.imageUrl,
+                              sellerName: widget.sellerName,
+                              addons: selectedVariation,
+                              quantity: quantity,
+                            )
+                          );
+                        } else {
+                          // Update walkie-talkie (badge) kalau kita just update kuantiti
+                          CartManager.instance.cartItemCount.value = CartManager.instance.items.length;
+                        }
 
-                  // KOTAK ADD-ONS
-                  if (isNasiLemak)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text('Customize Add-ons', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF1A1A2E))),
-                          const SizedBox(height: 12),
-                          
-                          _buildAddonTile('Extra Sambal', '+RM1.50', _extraSambal, (val) => setState(() => _extraSambal = val!)),
-                          _buildAddonTile('Add Fried Egg', '+RM2.00', _addTelurMata, (val) => setState(() => _addTelurMata = val!)),
-                          _buildAddonTile('Extra Rice', '+RM2.00', _extraRice, (val) => setState(() => _extraRice = val!)),
-                        ],
+                        // 3. Tunjuk mesej berjaya kat bawah!
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Added $quantity ${widget.name} ($selectedVariation) to cart!'),
+                            backgroundColor: kPrimary,
+                            behavior: SnackBarBehavior.floating,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          ),
+                        );
+                        
+                        // Tutup page ni dan balik ke senarai produk 
+                        // (Boleh buang baris bawah ni kalau nak buyer stay kat page ni lepas add)
+                        Navigator.pop(context);
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: kPrimary,
+                        foregroundColor: kWhite,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
+                        elevation: 0,
+                      ),
+                      child: Text(
+                        'Add to Cart - RM${totalPrice.toStringAsFixed(2)}',
+                        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
                       ),
                     ),
-                  
-                  const SizedBox(height: 40), 
+                  ),
                 ],
               ),
             ),
@@ -261,22 +326,17 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     );
   }
 
-  Widget _buildAddonTile(String title, String price, bool value, ValueChanged<bool?> onChanged) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      decoration: BoxDecoration(
-        color: kWhite,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: value ? kPrimary : Colors.grey.shade200, width: 1.5),
-      ),
-      child: CheckboxListTile(
-        value: value,
-        onChanged: onChanged,
-        activeColor: kPrimary,
-        title: Text(title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-        secondary: Text(price, style: TextStyle(fontSize: 14, color: Colors.grey[600], fontWeight: FontWeight.w500)),
-        controlAffinity: ListTileControlAffinity.leading,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 10),
+  Widget _buildCircleButton({required IconData icon, required VoidCallback onTap}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 42,
+        height: 42,
+        decoration: BoxDecoration(
+          color: Colors.black.withOpacity(0.3),
+          shape: BoxShape.circle,
+        ),
+        child: Icon(icon, color: kWhite, size: 20),
       ),
     );
   }
