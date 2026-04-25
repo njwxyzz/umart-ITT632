@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 // ─── Color Constants (TEMA HIJAU BARU) ───────────────────────────────────────
 const kPrimary      = Color(0xFF4C6B3F); 
@@ -32,38 +33,20 @@ class TrackingPage extends StatelessWidget {
           children: [
             // ─── 1. LIVE TRACKING MAP (PLACEHOLDER UNTUK GOOGLE MAPS) ───
             Container(
-              height: 220,
+              height: 250, // Boleh adjust tinggi ni ikut kesesuaian design asal kau
               width: double.infinity,
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(20),
-                color: Colors.grey.shade300,
-                image: const DecorationImage(
-                  // Gambar peta jalan raya dummy (Nanti ganti dengan widget GoogleMap)
-                  image: NetworkImage('https://images.unsplash.com/photo-1524661135-423995f22d0b?w=800'), 
-                  fit: BoxFit.cover,
-                ),
-                boxShadow: [
-                  BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 5))
-                ],
+                borderRadius: BorderRadius.circular(16),
               ),
-              child: Stack(
-                children: [
-                  // Butang Locate Me
-                  Positioned(
-                    bottom: 12,
-                    right: 12,
-                    child: Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: const BoxDecoration(color: kWhite, shape: BoxShape.circle),
-                      child: const Icon(Icons.my_location_rounded, color: kPrimary, size: 20),
-                    ),
-                  ),
-                  // Dummy Rider Pin
-                  const Positioned(
-                    top: 80, left: 150,
-                    child: Icon(Icons.location_on, color: kPrimary, size: 40),
-                  )
-                ],
+              clipBehavior: Clip.antiAlias, // Ni trik nak bagi bucu map tu bulat cantik
+              child: GoogleMap(
+                initialCameraPosition: const CameraPosition(
+                  target: LatLng(6.4497, 100.2704), // Koordinat ngam-ngam kat UiTM Arau, Perlis!
+                  zoom: 15.0,
+                ),
+                myLocationEnabled: true, // Untuk tunjuk dot biru lokasi user nanti
+                myLocationButtonEnabled: false, 
+                zoomControlsEnabled: false, // Sorok butang +/- supaya design nampak clean
               ),
             ),
             const SizedBox(height: 24),

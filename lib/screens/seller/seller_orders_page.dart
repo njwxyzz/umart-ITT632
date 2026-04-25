@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'seller_order_details_page.dart';
 
 // --- Color Constants ---
 const kPrimary = Color(0xFF4C6B3F); 
@@ -143,25 +144,35 @@ class _SellerOrdersPageState extends State<SellerOrdersPage> {
     );
   }
 
-  // HELPER WIDGET: Order Card (Now takes DocumentSnapshot to get ID and Data)
+  // HELPER WIDGET: Order Card
   Widget _buildOrderCard(QueryDocumentSnapshot doc) {
     var order = doc.data() as Map<String, dynamic>;
-    String orderId = doc.id; // Get the Firestore Document ID
+    String orderId = doc.id; 
     
     final status = order['status'] ?? 'Pending';
     double totalPrice = order['totalPrice'] is num ? (order['totalPrice'] as num).toDouble() : 0.0;
 
-    // Format a simple order number from the first 5 chars of the document ID
     String displayId = '#UM-${orderId.substring(0, 5).toUpperCase()}';
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: kWhite,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4))],
-      ),
+    // ─── TAMBAH GESTURE DETECTOR KAT SINI ───
+    return GestureDetector(
+      onTap: () {
+        // Bila klik kad, dia akan buka SellerOrderDetailsPage
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => const SellerOrderDetailsPage(),
+          ),
+        );
+      },
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 16),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: kWhite,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4))],
+        ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -281,7 +292,9 @@ class _SellerOrdersPageState extends State<SellerOrdersPage> {
                 ),
               ),
             )
+      
         ],
+      ),
       ),
     );
   }

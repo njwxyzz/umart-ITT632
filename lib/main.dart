@@ -10,6 +10,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'firebase_options.dart';
 
 // Pages Imports
+import 'screens/admin_web/admin_dashboard_page.dart';
+
 import 'screens/buyer/profile_page.dart';
 import 'screens/buyer/all_products_page.dart';
 import 'screens/buyer/cart_page.dart';
@@ -45,6 +47,7 @@ class UMartApp extends StatelessWidget {
         scaffoldBackgroundColor: const Color(0xFFF5F7F2), 
       ),
       // CCTV PINTU PAGAR (Auth Gate)
+      /*
       home: StreamBuilder<User?>(
         stream: FirebaseAuth.instance.authStateChanges(),
         builder: (context, snapshot) {
@@ -60,6 +63,9 @@ class UMartApp extends StatelessWidget {
           return const OnboardingScreen(); 
         },
       ),
+      */
+
+      home: const AdminDashboardPage(),
     );
   }
 }
