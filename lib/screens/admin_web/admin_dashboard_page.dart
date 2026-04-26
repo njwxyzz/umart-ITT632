@@ -116,6 +116,8 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                   const SizedBox(height: 40),
                   
                   // ─── MAIN CONTENT AREA (DATA TABLE) ───
+                  // ─── MAIN CONTENT AREA (DATA TABLE) ───
+                  // ─── MAIN CONTENT AREA (DATA TABLE) ───
                   Expanded(
                     child: Container(
                       width: double.infinity,
@@ -125,15 +127,18 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                         boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10)],
                       ),
                       clipBehavior: Clip.antiAlias,
-                      // Logic: Show table only if menu 1 (Manage Users) is selected.
                       child: _selectedIndex == 1 
                           ? _buildUsersTable() 
-                          : Center(
-                              child: Text(
-                                _getPlaceholderText(_selectedIndex), 
-                                style: const TextStyle(color: Colors.grey, fontSize: 18)
-                              ),
-                            ),
+                          : _selectedIndex == 2
+                              ? _buildStoresTable()
+                              : _selectedIndex == 3
+                                  ? _buildOrdersTable() // Tunjuk jadual Orders kalau pilih menu ke-3
+                                  : Center(
+                                      child: Text(
+                                        _getPlaceholderText(_selectedIndex), 
+                                        style: const TextStyle(color: Colors.grey, fontSize: 18)
+                                      ),
+                                    ),
                     ),
                   )
                 ],
@@ -236,6 +241,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
               ],
               rows: List.generate(users.length, (index) {
                 var userData = users[index].data() as Map<String, dynamic>;
+                String docId = users[index].id; // we take docId for delete action
                 
                 // Tambah lebih banyak kemungkinan ejaan untuk tarik nama dari Firebase
                 String name = userData['name'] ?? userData['username'] ?? userData['fullName'] ?? userData['displayName'] ?? 'No Name';
@@ -268,9 +274,287 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                       IconButton(
                         icon: const Icon(Icons.delete_outline_rounded, color: Colors.red),
                         onPressed: () {
-                          // TODO: Add delete user from Firestore logic here
+                          _deleteUser(docId, name);
                         },
                       ),
+                    ),
+                  ]
+                );
+              }),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  // --- WIDGET HELPER: Fungsi Delete User ---
+  Future<void> _deleteUser(String docId, String userName) async {
+    // Tunjuk kotak pengesahan (Confirmation Dialog)
+    bool confirmDelete = await showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          backgroundColor: Colors.white,
+          title: const Text('Confirm Deletion', style: TextStyle(fontWeight: FontWeight.bold)),
+          content: Text('Are you sure you want to delete "$userName"? This action cannot be undone.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Delete', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        );
+      },
+    ) ?? false; // Kalau user tekan luar kotak, anggap false (cancel)
+
+    // Kalau admin tekan 'Delete', baru kita tembak Firebase
+    if (confirmDelete) {
+      try {
+        await FirebaseFirestore.instance.collection('users').doc(docId).delete();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('$userName has been deleted.'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error deleting user: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    }
+  }
+
+  // --- WIDGET HELPER: Update Store Status Function ---
+  Future<void> _updateStoreStatus(String docId, String storeName, String newStatus) async {
+    try {
+      // Assuming your Firebase collection for stores is named 'stores'
+      await FirebaseFirestore.instance.collection('stores').doc(docId).update({
+        'status': newStatus,
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Store "$storeName" marked as $newStatus.'),
+            backgroundColor: newStatus == 'Approved' ? Colors.green : Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error updating status: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  // --- WIDGET HELPER: Stores List Table (Manage Stores) ---
+  Widget _buildStoresTable() {
+    return StreamBuilder<QuerySnapshot>(
+      // Listen to the 'stores' collection
+      stream: FirebaseFirestore.instance.collection('stores').snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator(color: kPrimary));
+        }
+        
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          return const Center(child: Text('No store applications yet.', style: TextStyle(color: Colors.grey)));
+        }
+
+        var stores = snapshot.data!.docs;
+
+        return SingleChildScrollView(
+          child: SizedBox(
+            width: double.infinity,
+            child: DataTable(
+              headingRowColor: MaterialStateProperty.all(kBg),
+              columns: const [
+                DataColumn(label: Text('No.', style: TextStyle(fontWeight: FontWeight.bold))),
+                DataColumn(label: Text('Store Name', style: TextStyle(fontWeight: FontWeight.bold))),
+                DataColumn(label: Text('Owner', style: TextStyle(fontWeight: FontWeight.bold))),
+                DataColumn(label: Text('Status', style: TextStyle(fontWeight: FontWeight.bold))),
+                DataColumn(label: Text('Action', style: TextStyle(fontWeight: FontWeight.bold))),
+              ],
+              rows: List.generate(stores.length, (index) {
+                var storeData = stores[index].data() as Map<String, dynamic>;
+                String docId = stores[index].id;
+                
+                String storeName = storeData['storeName'] ?? 'Unnamed Store';
+                String ownerName = storeData['ownerName'] ?? storeData['sellerName'] ?? storeData['name'] ?? storeData['owner'] ?? 'Unknown Owner';
+                String status = storeData['status'] ?? 'Pending'; 
+
+                return DataRow(
+                  cells: [
+                    DataCell(Text('${index + 1}')),
+                    DataCell(Text(storeName, style: const TextStyle(fontWeight: FontWeight.w600))),
+                    
+                    // --- KITA TUKAR SEL OWNER JADI FUTUREBUILDER ---
+                    DataCell(
+                      storeData['ownerId'] != null 
+                        ? FutureBuilder<DocumentSnapshot>(
+                            future: FirebaseFirestore.instance.collection('users').doc(storeData['ownerId']).get(),
+                            builder: (context, userSnapshot) {
+                              if (userSnapshot.connectionState == ConnectionState.waiting) {
+                                return const Text('Loading...', style: TextStyle(color: Colors.grey, fontSize: 12, fontStyle: FontStyle.italic));
+                              }
+                              if (userSnapshot.hasData && userSnapshot.data!.exists) {
+                                var userData = userSnapshot.data!.data() as Map<String, dynamic>;
+                                // Tarik nama dari koleksi users
+                                String realName = userData['name'] ?? userData['username'] ?? userData['fullName'] ?? 'No Name';
+                                return Text(realName);
+                              }
+                              return const Text('User Deleted', style: TextStyle(color: Colors.red, fontSize: 12));
+                            },
+                          )
+                        : const Text('No ID', style: TextStyle(color: Colors.grey)),
+                    ),
+                    // ------------------------------------------------
+
+                    DataCell(
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: status == 'Approved' ? Colors.green.shade50 
+                               : status == 'Rejected' ? Colors.red.shade50 
+                               : Colors.orange.shade50,
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          status.toUpperCase(), 
+                          style: TextStyle(
+                            fontSize: 12, 
+                            fontWeight: FontWeight.bold,
+                            color: status == 'Approved' ? Colors.green.shade700 
+                                 : status == 'Rejected' ? Colors.red.shade700 
+                                 : Colors.orange.shade700
+                          )
+                        ),
+                      )
+                    ),
+                    DataCell(
+                      status == 'Pending' ? Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.check_circle_outline_rounded, color: Colors.green),
+                            tooltip: 'Approve Store',
+                            onPressed: () => _updateStoreStatus(docId, storeName, 'Approved'),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.cancel_outlined, color: Colors.red),
+                            tooltip: 'Reject Store',
+                            onPressed: () => _updateStoreStatus(docId, storeName, 'Rejected'),
+                          ),
+                        ],
+                      ) : Text(
+                        status == 'Approved' ? 'Done' : 'Closed', 
+                        style: TextStyle(color: Colors.grey.shade400, fontStyle: FontStyle.italic)
+                      ),
+                    ),
+                  ]
+                );
+              }),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  // --- WIDGET HELPER: All Orders List Table ---
+  Widget _buildOrdersTable() {
+    return StreamBuilder<QuerySnapshot>(
+      // Listen to the 'orders' collection
+      stream: FirebaseFirestore.instance.collection('orders').snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator(color: kPrimary));
+        }
+        
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          return const Center(child: Text('No transaction history yet.', style: TextStyle(color: Colors.grey)));
+        }
+
+        var orders = snapshot.data!.docs;
+
+        return SingleChildScrollView(
+          child: SizedBox(
+            width: double.infinity,
+            child: DataTable(
+              headingRowColor: MaterialStateProperty.all(kBg),
+              columns: const [
+                DataColumn(label: Text('No.', style: TextStyle(fontWeight: FontWeight.bold))),
+                DataColumn(label: Text('Order ID', style: TextStyle(fontWeight: FontWeight.bold))),
+                DataColumn(label: Text('Buyer', style: TextStyle(fontWeight: FontWeight.bold))),
+                DataColumn(label: Text('Item', style: TextStyle(fontWeight: FontWeight.bold))),
+                DataColumn(label: Text('Total (RM)', style: TextStyle(fontWeight: FontWeight.bold))),
+                DataColumn(label: Text('Status', style: TextStyle(fontWeight: FontWeight.bold))),
+              ],
+              rows: List.generate(orders.length, (index) {
+                var orderData = orders[index].data() as Map<String, dynamic>;
+                String docId = orders[index].id;
+                
+                // Format ID biar nampak lawa sikit (contoh: #UM-A1B2C)
+                String displayId = '#UM-${docId.substring(0, 5).toUpperCase()}';
+                
+                // Fallbacks
+                String buyerName = orderData['buyerName'] ?? 'Unknown Buyer';
+                String itemName = orderData['productName'] ?? 'Item';
+                String status = orderData['status'] ?? 'Pending';
+                
+                // Safe parsing for total price
+                double total = 0.0;
+                if (orderData['totalPrice'] != null) {
+                  total = (orderData['totalPrice'] as num).toDouble();
+                }
+
+                return DataRow(
+                  cells: [
+                    DataCell(Text('${index + 1}')),
+                    DataCell(Text(displayId, style: const TextStyle(fontWeight: FontWeight.w900, color: kPrimary))),
+                    DataCell(Text(buyerName)),
+                    DataCell(Text('1x $itemName', style: const TextStyle(fontWeight: FontWeight.w500))),
+                    DataCell(Text(total.toStringAsFixed(2), style: const TextStyle(fontWeight: FontWeight.bold))),
+                    DataCell(
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: status == 'Delivered' ? Colors.green.shade50 
+                               : status == 'Rejected' ? Colors.red.shade50 
+                               : status == 'Processing' ? Colors.blue.shade50
+                               : Colors.orange.shade50,
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          status.toUpperCase(), 
+                          style: TextStyle(
+                            fontSize: 12, 
+                            fontWeight: FontWeight.bold,
+                            color: status == 'Delivered' ? Colors.green.shade700 
+                                 : status == 'Rejected' ? Colors.red.shade700 
+                                 : status == 'Processing' ? Colors.blue.shade700
+                                 : Colors.orange.shade700
+                          )
+                        ),
+                      )
                     ),
                   ]
                 );
