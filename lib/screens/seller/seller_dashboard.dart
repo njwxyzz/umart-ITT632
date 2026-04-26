@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart'; 
+import 'package:firebase_auth/firebase_auth.dart';
 import 'add_product_page.dart';
 import 'seller_orders_page.dart';
+import 'view_product_page.dart';
+import 'edit_product_page.dart';
 
-// ─── Color Constants (TEMA UMART) ──────────────────────────────────────────
+// --- Color Constants (UMART THEME) ---
 const kPrimary      = Color(0xFF4C6B3F); 
 const kPrimaryDark  = Color(0xFF2C3E24); 
 const kAccent       = Color(0xFFF27B35); 
@@ -27,7 +29,7 @@ class SellerDashboard extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: kBg,
-      // ─── FLOATING ACTION BUTTON ───
+      // --- FLOATING ACTION BUTTON ---
       floatingActionButton: FloatingActionButton(
         onPressed: () {
           Navigator.push(
@@ -46,7 +48,7 @@ class SellerDashboard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // ─── 1. HEADER SELLER DENGAN BACK BUTTON ───
+              // --- 1. SELLER HEADER WITH BACK BUTTON ---
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 20, 24, 20),
                 child: Row(
@@ -54,7 +56,7 @@ class SellerDashboard extends StatelessWidget {
                   children: [
                     Row(
                       children: [
-                        // Butang Back
+                        // Back Button
                         IconButton(
                           icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Color(0xFF1A1A2E), size: 20),
                           onPressed: () => Navigator.pop(context),
@@ -90,7 +92,7 @@ class SellerDashboard extends StatelessWidget {
                 ),
               ),
 
-              // ─── 2. KOTAK ANALYTICS (2 KOTAK SEIMBANG) ───
+              // --- 2. ANALYTICS CARDS ---
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 24),
                 child: Row(
@@ -132,7 +134,6 @@ class SellerDashboard extends StatelessWidget {
 
                   return Column(
                     children: [
-                      // 2 Kotak Balance Kiri Kanan
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 24),
                         child: Row(
@@ -164,7 +165,7 @@ class SellerDashboard extends StatelessWidget {
                       
                       const SizedBox(height: 32),
 
-                      // ─── 3. EARNINGS & CHART SECTION ───
+                      // --- 3. EARNINGS & CHART SECTION ---
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 24),
                         child: Column(
@@ -233,7 +234,7 @@ class SellerDashboard extends StatelessWidget {
                                           _buildBar(30, kPrimary.withOpacity(0.3)),
                                           _buildBar(45, kPrimary.withOpacity(0.5)),
                                           _buildBar(25, kPrimary.withOpacity(0.3)),
-                                          _buildBar(55, kPrimary), // Highest
+                                          _buildBar(55, kPrimary), 
                                           _buildBar(40, kPrimary.withOpacity(0.5)),
                                         ],
                                       )
@@ -252,7 +253,7 @@ class SellerDashboard extends StatelessWidget {
 
               const SizedBox(height: 32),
 
-              // ─── 4. MY PRODUCTS SECTION (GRID) ───
+              // --- 4. MY PRODUCTS SECTION (GRID) ---
               StreamBuilder<QuerySnapshot>(
                 stream: FirebaseFirestore.instance.collection('products').where('sellerName', isEqualTo: storeName).snapshots(),
                 builder: (context, productSnapshot) {
@@ -293,7 +294,7 @@ class SellerDashboard extends StatelessWidget {
     );
   }
 
-  // ─── WIDGET BANTUAN ────────────────────────────────────────────────────────
+  // --- HELPER WIDGETS --------------------------------------------------------
 
   Widget _buildAnalyticCard({required String title, required String value, required String subtitle, required Color bgColor, required IconData iconData, required bool isUp}) {
     return Container(
@@ -314,7 +315,7 @@ class SellerDashboard extends StatelessWidget {
               Icon(isUp ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded, color: isUp ? Colors.greenAccent : Colors.redAccent, size: 16),
             ],
           ),
-          const SizedBox(height: 16), // Tambah sikit gap
+          const SizedBox(height: 16), 
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -435,6 +436,7 @@ class SellerDashboard extends StatelessWidget {
     );
   }
 
+  // --- BOTTOM SHEET MENU ---
   void _showProductOptions(BuildContext context, QueryDocumentSnapshot doc, Map<String, dynamic> item) {
     showModalBottomSheet(
       context: context,
@@ -454,33 +456,59 @@ class SellerDashboard extends StatelessWidget {
               Text(item['name'] ?? 'Product Options', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1A1A2E))),
               const SizedBox(height: 20),
               
+              // --- VIEW PRODUCT ---
               ListTile(
                 leading: Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: kPrimary.withOpacity(0.1), borderRadius: BorderRadius.circular(8)), child: const Icon(Icons.remove_red_eye_rounded, color: kPrimary)),
                 title: const Text('View Product', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
                 trailing: const Icon(Icons.chevron_right_rounded),
                 onTap: () {
-                  Navigator.pop(bottomSheetContext); 
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Function view coming soon!')));
+                  Navigator.pop(bottomSheetContext); // Close bottom sheet
+                  
+                  // TODO: Uncomment and create this navigation when ViewProductPage is ready
+                  
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => ViewProductPage(productId: doc.id, productData: item),
+                    ),
+                  );
+                  
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Navigate to View Product Page...')));
                 },
               ),
               
+              // --- EDIT PRODUCT ---
               ListTile(
                 leading: Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: Colors.blue.withOpacity(0.1), borderRadius: BorderRadius.circular(8)), child: const Icon(Icons.edit_rounded, color: Colors.blue)),
                 title: const Text('Edit Product', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
                 trailing: const Icon(Icons.chevron_right_rounded),
                 onTap: () {
-                  Navigator.pop(bottomSheetContext); 
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Function edit coming soon!')));
+                  Navigator.pop(bottomSheetContext); // Close bottom sheet
+                  
+                  // TODO: Uncomment and create this navigation when EditProductPage is ready
+                  
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => EditProductPage(productId: doc.id, productData: item),
+                    ),
+                  );
+                  
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Navigate to Edit Product Page...')));
                 },
               ),
-
+              
+              // --- DELETE PRODUCT ---
               ListTile(
                 leading: Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: Colors.red.withOpacity(0.1), borderRadius: BorderRadius.circular(8)), child: const Icon(Icons.delete_rounded, color: Colors.red)),
                 title: const Text('Delete Product', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red, fontSize: 15)),
-                trailing: const Icon(Icons.chevron_right_rounded),
+                trailing: const Icon(Icons.chevron_right_rounded, color: Colors.red),
                 onTap: () {
-                  Navigator.pop(bottomSheetContext); 
-                  _showDeleteConfirmation(context, doc.id, item['name'] ?? 'this item'); 
+                  Navigator.pop(bottomSheetContext); // Close bottom sheet
+                  
+                  // PRO TIP: Call the reusable dialog function here instead of rewriting the logic!
+                  String productName = item['name'] ?? 'This item';
+                  _showDeleteConfirmation(context, doc.id, productName);
                 },
               ),
               const SizedBox(height: 10),
@@ -491,6 +519,7 @@ class SellerDashboard extends StatelessWidget {
     );
   }
 
+  // --- REUSABLE DELETE CONFIRMATION DIALOG ---
   void _showDeleteConfirmation(BuildContext context, String productId, String productName) {
     showDialog(
       context: context,
@@ -513,9 +542,11 @@ class SellerDashboard extends StatelessWidget {
             ),
             ElevatedButton(
               onPressed: () async {
-                Navigator.pop(dialogContext); 
+                Navigator.pop(dialogContext); // Close the dialog first
                 try {
+                  // Execute the deletion using the passed productId
                   await FirebaseFirestore.instance.collection('products').doc(productId).delete();
+                  
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('"$productName" deleted successfully.'), backgroundColor: kPrimary));
                   }
