@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart'; // Wajib import untuk Login
 import '../../main.dart'; // Make sure this path to HomeScreen is correct
-import 'register_page.dart'; 
+import 'register_page.dart';
+import '../admin_web/admin_dashboard_page.dart';
 
 const kPrimary      = Color(0xFF4C6B3F); 
 const kPrimaryLight = Color(0xFF799B61); 
@@ -53,11 +54,17 @@ class _LoginPageState extends State<LoginPage> {
 
       // 4. If success, navigate to HomeScreen
       if (mounted) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const HomeScreen())
-        );
+        if (email.toLowerCase() == 'admin@umart.com') {
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(builder: (_) => const AdminDashboardPage())
+          );
+        }
+        else {
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(builder: (_) => const HomeScreen())
+          );
+        }
       }
-
     } on FirebaseAuthException catch (e) {
       // Stop loading if error occurs
       setState(() => _isLoading = false);

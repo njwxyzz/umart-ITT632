@@ -28,9 +28,12 @@ import 'screens/seller/seller_dashboard.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized(); 
+
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+
+
   runApp(const UMartApp()); 
 }
 
@@ -47,25 +50,40 @@ class UMartApp extends StatelessWidget {
         scaffoldBackgroundColor: const Color(0xFFF5F7F2), 
       ),
       // CCTV PINTU PAGAR (Auth Gate)
-      /*
       home: StreamBuilder<User?>(
         stream: FirebaseAuth.instance.authStateChanges(),
         builder: (context, snapshot) {
+          // 1. Tengah loading tunggu jawapan dari Firebase
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Scaffold(
-              backgroundColor: kBg,
-              body: Center(child: CircularProgressIndicator(color: kPrimary)),
+              backgroundColor: Color(0xFFF5F7F2),
+              body: Center(child: CircularProgressIndicator(color: Color(0xFF4C6B3F))),
             );
           }
+          
+          // 2. Kalau user DAH LOGIN
           if (snapshot.hasData) {
-            return const HomeScreen(); 
+            final user = snapshot.data!;
+
+            // debug
+            print("🚀 User logged in: ${user.email} (UID: ${user.uid})");
+
+
+            
+            // LOGIK VIP: Check kalau yang login tu e-mel admin
+            if (user.email?.trim().toLowerCase() == 'admin@umart.com') {
+              return const AdminDashboardPage(); 
+            } 
+            // Kalau e-mel budak student atau seller biasa
+            else {
+              return const HomeScreen(); 
+            }
           }
+          
+          // 3. Kalau user BELUM LOGIN (atau baru je tekan Logout)
           return const OnboardingScreen(); 
         },
       ),
-      */
-
-      home: const AdminDashboardPage(),
     );
   }
 }

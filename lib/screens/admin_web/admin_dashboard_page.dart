@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
+import '../auth/login_page.dart';
 // --- Color Constants ---
 const kPrimary = Color(0xFF4C6B3F); 
 const kBg = Color(0xFFF5F7F2); 
@@ -41,8 +43,48 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                 ListTile(
                   leading: const Icon(Icons.logout_rounded, color: Colors.red),
                   title: const Text('Logout', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
-                  onTap: () {
-                    // TODO: Add Firebase sign out function here
+                  onTap: () async {
+                    // 1. Tunjuk kotak pengesahan (optional tapi bagus untuk UX)
+                    bool confirmLogout = await showDialog(
+                      context: context,
+                      builder: (context) => AlertDialog(
+                        title: const Text('Confirm Logout'),
+                        content: const Text('Are you sure you want to sign out from Admin Panel?'),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(context, false),
+                            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+                          ),
+                          TextButton(
+                            onPressed: () => Navigator.pop(context, true),
+                            child: const Text('Logout', style: TextStyle(color: Colors.red)),
+                          ),
+                        ],
+                      ),
+                    ) ?? false;
+
+                    // 2. Kalau admin confirm nak logout
+                    if (confirmLogout) {
+                      try {
+                        await FirebaseAuth.instance.signOut();
+
+                        // ─── KITA TAMBAH ARAHAN PATAH BALIK KE LOGIN SCREEN ───
+                        if (mounted) {
+                          Navigator.pushAndRemoveUntil(
+                            context,
+                            MaterialPageRoute(builder: (context) => const LoginPage()),
+                            (Route<dynamic> route) => false, // Padam semua history skrin admin
+                          );
+                        }
+
+
+                        // Selepas ini, StreamBuilder kat main.dart akan automatik bawa kau ke skrin Login
+                      } catch (e) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Error logging out: $e')),
+                        );
+                      }
+                    }
                   },
                 ),
                 const SizedBox(height: 20),
