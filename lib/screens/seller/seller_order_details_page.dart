@@ -1,13 +1,15 @@
 import 'package:flutter/material.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
+
+// Buyer's location (Kolej Dahlia, UiTM Arau)
+const LatLng kBuyerLocation = LatLng(6.4497, 100.2704);
 
 class SellerOrderDetailsPage extends StatelessWidget {
-  // Nanti bila nak sambung Firebase, kita pass ID order atau data order masuk sini
-  // Buat masa ni kita guna dummy data dulu untuk tengok UI.
-  final String orderId = "#UM-XWGME";
+  final String orderId   = "#UM-XWGME";
   final String buyerName = "aminah";
-  final String address = "Kolej Dahlia 3, Block A";
-  final String phone = "012-3456789"; 
+  final String address   = "Kolej Dahlia 3, Block A";
+  final String phone     = "012-3456789";
 
   const SellerOrderDetailsPage({super.key});
 
@@ -23,53 +25,130 @@ class SellerOrderDetailsPage extends StatelessWidget {
           icon: const Icon(Icons.arrow_back_rounded, color: Color(0xFF1A1A2E)),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text('Order Details', style: TextStyle(color: Color(0xFF1A1A2E), fontWeight: FontWeight.bold, fontSize: 18)),
+        title: const Text(
+          'Order Details',
+          style: TextStyle(
+            color: Color(0xFF1A1A2E),
+            fontWeight: FontWeight.bold,
+            fontSize: 18,
+          ),
+        ),
         centerTitle: true,
       ),
       body: SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ─── 1. PETA LOKASI BUYER ───
+            // ─── 1. BUYER LOCATION MAP ───────────────────────────────────
             Container(
               height: 250,
               width: double.infinity,
               margin: const EdgeInsets.all(20),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(16),
-                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 10, offset: const Offset(0, 4))],
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.1),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  )
+                ],
               ),
               clipBehavior: Clip.antiAlias,
-              child: GoogleMap(
-                initialCameraPosition: const CameraPosition(
-                  target: LatLng(6.4497, 100.2704), // Koordinat UiTM Arau
-                  zoom: 16.0,
-                ),
-                markers: {
-                  const Marker(
-                    markerId: MarkerId('buyer_location'),
-                    position: LatLng(6.4497, 100.2704),
-                    infoWindow: InfoWindow(title: 'Lokasi Buyer (Kolej Dahlia)'),
+              child: FlutterMap(
+                options: const MapOptions(
+                  initialCenter: kBuyerLocation,
+                  initialZoom: 16,
+                  interactionOptions: InteractionOptions(
+                    flags: InteractiveFlag.none, // Disable pan/zoom for a static preview
                   ),
-                },
-                zoomControlsEnabled: false,
-                myLocationButtonEnabled: false,
+                ),
+                children: [
+                  // Map tiles
+                  TileLayer(
+                    urlTemplate:
+                        'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                    userAgentPackageName: 'com.example.app',
+                  ),
+
+                  // Buyer pin
+                  MarkerLayer(
+                    markers: [
+                      Marker(
+                        point: kBuyerLocation,
+                        width: 56,
+                        height: 56,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(6),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF27B35),
+                                shape: BoxShape.circle,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: const Color(0xFFF27B35)
+                                        .withOpacity(0.4),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 3),
+                                  )
+                                ],
+                              ),
+                              child: const Icon(
+                                Icons.person_pin_circle_rounded,
+                                color: Colors.white,
+                                size: 20,
+                              ),
+                            ),
+                            Container(
+                              margin: const EdgeInsets.only(top: 2),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 5, vertical: 1),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF27B35),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: const Text(
+                                'Buyer',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
             ),
 
-            // ─── 2. MAKLUMAT PEMBELI ───
+            // ─── 2. BUYER INFO ────────────────────────────────────────────
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Order $orderId', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: Color(0xFF1A1A2E))),
+                  Text(
+                    'Order $orderId',
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w900,
+                      color: Color(0xFF1A1A2E),
+                    ),
+                  ),
                   const SizedBox(height: 16),
-                  
-                  // Kotak Info Buyer
+
                   Container(
                     padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
                     child: Row(
                       children: [
                         CircleAvatar(
@@ -81,42 +160,77 @@ class SellerOrderDetailsPage extends StatelessWidget {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(buyerName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                              Text(
+                                buyerName,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
+                                ),
+                              ),
                               const SizedBox(height: 4),
                               Row(
                                 children: [
-                                  const Icon(Icons.location_on, size: 14, color: Color(0xFFF27B35)),
+                                  const Icon(Icons.location_on,
+                                      size: 14,
+                                      color: Color(0xFFF27B35)),
                                   const SizedBox(width: 4),
-                                  Expanded(child: Text(address, style: TextStyle(color: Colors.grey.shade600, fontSize: 13))),
+                                  Expanded(
+                                    child: Text(
+                                      address,
+                                      style: TextStyle(
+                                        color: Colors.grey.shade600,
+                                        fontSize: 13,
+                                      ),
+                                    ),
+                                  ),
                                 ],
                               ),
                             ],
                           ),
                         ),
-                        // Ikon Call (Nampak legit sikit ada button call runner/buyer)
                         IconButton(
-                          icon: const Icon(Icons.call, color: Color(0xFF00C48C)),
+                          icon: const Icon(Icons.call,
+                              color: Color(0xFF00C48C)),
                           onPressed: () {
-                            // Fungsi call nanti
+                            // Call function here
                           },
-                        )
+                        ),
                       ],
                     ),
                   ),
-                  
+
                   const SizedBox(height: 24),
 
-                  // ─── 3. SENARAI BARANG ───
-                  const Text('Items Ordered', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1A1A2E))),
+                  // ─── 3. ITEMS ORDERED ─────────────────────────────────
+                  const Text(
+                    'Items Ordered',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF1A1A2E),
+                    ),
+                  ),
                   const SizedBox(height: 12),
                   Container(
                     padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text('1x CHEESE & CHOCOLATE CAKE', style: TextStyle(fontWeight: FontWeight.w600)),
-                        Text('RM 8.00', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey.shade800)),
+                        const Text(
+                          '1x CHEESE & CHOCOLATE CAKE',
+                          style: TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                        Text(
+                          'RM 8.00',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.grey.shade800,
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -126,22 +240,31 @@ class SellerOrderDetailsPage extends StatelessWidget {
           ],
         ),
       ),
-      
-      // ─── 4. BUTANG MARK AS DELIVERED KAT BAWAH SEKALI ───
+
+      // ─── 4. MARK AS DELIVERED BUTTON ─────────────────────────────────────
       bottomNavigationBar: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(20),
           child: ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFF27B35), // Warna Oren
+              backgroundColor: const Color(0xFFF27B35),
               padding: const EdgeInsets.symmetric(vertical: 16),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
             ),
             onPressed: () {
-              // Nanti letak fungsi update Firebase status 'Delivered'
+              // Update Firebase status to 'Delivered' here
               Navigator.pop(context);
             },
-            child: const Text('Mark as Delivered', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+            child: const Text(
+              'Mark as Delivered',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
           ),
         ),
       ),

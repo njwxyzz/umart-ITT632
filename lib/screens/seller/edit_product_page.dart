@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+import 'dart:typed_data'; // WAJIB untuk handle gambar kat Web
+import 'package:image_picker/image_picker.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 
 // --- Color Constants ---
-const kPrimary = Color(0xFF4C6B3F); 
-const kBg = Color(0xFFF5F7F2); 
+const kPrimary = Color(0xFF4C6B3F);
+const kBg = Color(0xFFF5F7F2);
 const kWhite = Colors.white;
 
 class EditProductPage extends StatefulWidget {
@@ -26,48 +29,97 @@ class _EditProductPageState extends State<EditProductPage> {
   final TextEditingController _stockController = TextEditingController();
   final TextEditingController _descController = TextEditingController();
   final TextEditingController _variationController = TextEditingController();
-  
+
   List<String> _variations = [];
   late String _selectedCategory;
-  
+
+  // --- Image State (same approach as add_product_page.dart) ---
+  Uint8List? _newImageBytes;      // bytes of newly picked image
+  String? _existingImageUrl;      // URL loaded from Firestore
+
+  final ImagePicker _picker = ImagePicker();
+
   final List<String> _categories = [
-    'Food & Beverages', 
-    'Apparel', 
-    'Books & Stationery', 
-    'Electronics', 
-    'Others'
+    'Food & Beverages',
+    'Preloved Items',
+    'Books & Notes',
+    'Gadgets & Accessories',
+    'Others',
   ];
-  
+
   bool _isLoading = false;
 
   @override
   void initState() {
     super.initState();
-    // 1. Pre-fill basic text fields
-    _nameController.text = widget.productData['name'] ?? widget.productData['productName'] ?? '';
+    _nameController.text =
+        widget.productData['name'] ?? widget.productData['productName'] ?? '';
     _priceController.text = widget.productData['price']?.toString() ?? '';
-    _stockController.text = widget.productData['stock']?.toString() ?? '10'; // Default 10 if null
+    _stockController.text = widget.productData['stock']?.toString() ?? '10';
     _descController.text = widget.productData['description'] ?? '';
 
-    // 2. Pre-fill variations list (kalau sebelum ni dia ada letak variations)
     if (widget.productData['variations'] != null) {
       _variations = List<String>.from(widget.productData['variations']);
     }
 
-    // 3. Pre-fill category
     String currentCat = widget.productData['category'] ?? 'Others';
-    if (_categories.contains(currentCat)) {
-      _selectedCategory = currentCat;
-    } else {
-      _selectedCategory = 'Others';
+    _selectedCategory =
+        _categories.contains(currentCat) ? currentCat : 'Others';
+
+    _existingImageUrl = widget.productData['imageUrl'] as String?;
+  }
+
+  // --- Pick Image (Web-safe, same as add_product_page) ---
+  Future<void> _pickImage() async {
+    try {
+      final XFile? pickedFile = await _picker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 70,
+      );
+      if (pickedFile != null) {
+        final bytes = await pickedFile.readAsBytes();
+        setState(() {
+          _newImageBytes = bytes;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error picking image: $e');
     }
   }
 
-  // --- Fungsi Update ke Firebase ---
+  // --- Upload to Firebase Storage using putData (Web-safe) ---
+  Future<String?> _uploadImageToStorage() async {
+    if (_newImageBytes == null) return null;
+
+    try {
+      String fileName =
+          'products/${widget.productId}_${DateTime.now().millisecondsSinceEpoch}.jpg';
+      Reference storageRef = FirebaseStorage.instance.ref().child(fileName);
+
+      UploadTask uploadTask = storageRef.putData(_newImageBytes!);
+      TaskSnapshot snapshot = await uploadTask;
+
+      return await snapshot.ref.getDownloadURL();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text('Failed to upload image: $e'),
+              backgroundColor: Colors.red),
+        );
+      }
+      return null;
+    }
+  }
+
+  // --- Update Product ---
   Future<void> _updateProduct() async {
-    if (_nameController.text.isEmpty || _priceController.text.isEmpty) {
+    if (_nameController.text.trim().isEmpty ||
+        _priceController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please fill in product name and price.'), backgroundColor: Colors.red),
+        const SnackBar(
+            content: Text('Please fill in product name and price.'),
+            backgroundColor: Colors.red),
       );
       return;
     }
@@ -75,26 +127,64 @@ class _EditProductPageState extends State<EditProductPage> {
     setState(() => _isLoading = true);
 
     try {
-      await FirebaseFirestore.instance.collection('products').doc(widget.productId).update({
+      // 1. Upload new image if seller picked one
+      String? newImageUrl;
+      if (_newImageBytes != null) {
+        newImageUrl = await _uploadImageToStorage();
+        if (newImageUrl == null) {
+          setState(() => _isLoading = false);
+          return;
+        }
+      }
+
+      // 2. Build update map
+      final Map<String, dynamic> updateData = {
         'name': _nameController.text.trim(),
         'price': double.tryParse(_priceController.text.trim()) ?? 0.0,
         'stock': int.tryParse(_stockController.text.trim()) ?? 0,
         'description': _descController.text.trim(),
         'category': _selectedCategory,
-        'variations': _variations, // Save list variations baru
-        // Note: Image update logic boleh tambah kemudian
-      });
+        'variations': _variations,
+      };
+
+      // 3. Decide imageUrl:
+      //    New image picked     -> save new URL
+      //    No change            -> keep existing (don't touch field)
+      //    User removed image   -> delete field from Firestore
+      if (newImageUrl != null) {
+        updateData['imageUrl'] = newImageUrl;
+      } else if (_existingImageUrl == null) {
+        updateData['imageUrl'] = FieldValue.delete();
+      }
+
+      await FirebaseFirestore.instance
+          .collection('products')
+          .doc(widget.productId)
+          .update(updateData);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Product updated successfully!'), backgroundColor: Colors.green),
+          const SnackBar(
+            content: Row(
+              children: [
+                Icon(Icons.check_circle_rounded, color: kWhite),
+                SizedBox(width: 10),
+                Text('Product updated successfully!',
+                    style: TextStyle(fontWeight: FontWeight.bold)),
+              ],
+            ),
+            backgroundColor: kPrimary,
+            behavior: SnackBarBehavior.floating,
+          ),
         );
-        Navigator.pop(context); 
+        Navigator.pop(context);
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error updating product: $e'), backgroundColor: Colors.red),
+          SnackBar(
+              content: Text('Error updating product: $e'),
+              backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -102,7 +192,7 @@ class _EditProductPageState extends State<EditProductPage> {
     }
   }
 
-  // --- Fungsi Tambah Variation UI ---
+  // --- Add Variation ---
   void _addVariation() {
     String newVal = _variationController.text.trim();
     if (newVal.isNotEmpty && !_variations.contains(newVal)) {
@@ -130,46 +220,53 @@ class _EditProductPageState extends State<EditProductPage> {
       appBar: AppBar(
         backgroundColor: kBg,
         elevation: 0,
+        scrolledUnderElevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.black87, size: 20),
+          icon: const Icon(Icons.arrow_back_ios_new_rounded,
+              color: Colors.black87, size: 20),
           onPressed: () => Navigator.pop(context),
         ),
         centerTitle: true,
-        title: const Text('Edit Product', style: TextStyle(color: Colors.black87, fontWeight: FontWeight.bold)),
+        title: const Text('Edit Product',
+            style: TextStyle(
+                color: Colors.black87, fontWeight: FontWeight.bold)),
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24.0),
+        padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // --- 1. PRODUCT PHOTO ---
-            const Text('PRODUCT PHOTO', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black87)),
-            const SizedBox(height: 8),
-            Container(
-              width: double.infinity,
-              height: 150,
-              decoration: BoxDecoration(
-                color: kWhite,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.grey.shade300),
-              ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.camera_alt_outlined, size: 40, color: kPrimary.withOpacity(0.5)),
-                  const SizedBox(height: 8),
-                  Text('Tap to update image', style: TextStyle(color: Colors.grey.shade500, fontSize: 13)),
-                ],
+            _buildLabel('PRODUCT PHOTO'),
+            GestureDetector(
+              onTap: _pickImage,
+              child: Container(
+                height: 160,
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  color: kWhite,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                      color: kPrimary.withOpacity(0.3),
+                      width: 1.5,
+                      style: BorderStyle.solid),
+                ),
+                clipBehavior: Clip.hardEdge,
+                child: _buildImagePreview(),
               ),
             ),
-            const SizedBox(height: 20),
-            
+
+            const SizedBox(height: 16),
+
             // --- 2. PRODUCT NAME ---
             _buildLabel('PRODUCT NAME'),
-            _buildTextField(hint: 'e.g. Chocojar Viral', controller: _nameController, icon: Icons.fastfood_outlined),
-            const SizedBox(height: 20),
-            
-            // --- 3. PRICE & STOCK ROW ---
+            _buildTextField(
+                hint: 'e.g. Chocojar Viral',
+                controller: _nameController,
+                icon: Icons.fastfood_outlined),
+            const SizedBox(height: 16),
+
+            // --- 3. PRICE & STOCK ---
             Row(
               children: [
                 Expanded(
@@ -177,7 +274,11 @@ class _EditProductPageState extends State<EditProductPage> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       _buildLabel('PRICE (RM)'),
-                      _buildTextField(hint: '0.00', controller: _priceController, icon: Icons.attach_money_rounded, isNumber: true),
+                      _buildTextField(
+                          hint: '0.00',
+                          controller: _priceController,
+                          icon: Icons.attach_money_rounded,
+                          isNumber: true),
                     ],
                   ),
                 ),
@@ -187,13 +288,17 @@ class _EditProductPageState extends State<EditProductPage> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       _buildLabel('AVAILABLE STOCK'),
-                      _buildTextField(hint: 'e.g. 10', controller: _stockController, icon: Icons.inventory_2_outlined, isNumber: true),
+                      _buildTextField(
+                          hint: 'e.g. 10',
+                          controller: _stockController,
+                          icon: Icons.inventory_2_outlined,
+                          isNumber: true),
                     ],
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 16),
 
             // --- 4. VARIATIONS ---
             _buildLabel('VARIATIONS / FLAVORS (OPTIONAL)'),
@@ -201,80 +306,102 @@ class _EditProductPageState extends State<EditProductPage> {
               children: [
                 Expanded(
                   child: _buildTextField(
-                    hint: 'e.g. White Choc, Matcha...', 
-                    controller: _variationController, 
-                    icon: Icons.style_outlined
-                  ),
+                      hint: 'e.g. White Choc, Matcha...',
+                      controller: _variationController,
+                      icon: Icons.style_outlined),
                 ),
                 const SizedBox(width: 12),
-                InkWell(
+                GestureDetector(
                   onTap: _addVariation,
                   child: Container(
-                    height: 55,
-                    width: 55,
+                    height: 54,
+                    width: 54,
                     decoration: BoxDecoration(
                       color: kPrimary.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(16),
                     ),
-                    child: const Icon(Icons.add_rounded, color: kPrimary, size: 28),
+                    child: const Icon(Icons.add_rounded,
+                        color: kPrimary, size: 28),
                   ),
                 ),
               ],
             ),
-            // Paparkan tag variations yang dah ditambah
             if (_variations.isNotEmpty) ...[
               const SizedBox(height: 12),
               Wrap(
                 spacing: 8,
                 runSpacing: 8,
-                children: _variations.map((v) => Chip(
-                  label: Text(v, style: const TextStyle(fontSize: 12)),
-                  deleteIcon: const Icon(Icons.cancel, size: 16),
-                  onDeleted: () => setState(() => _variations.remove(v)),
-                  backgroundColor: kWhite,
-                  side: BorderSide(color: Colors.grey.shade300),
-                )).toList(),
+                children: _variations
+                    .map((v) => Chip(
+                          label: Text(v,
+                              style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                  color: kPrimary)),
+                          backgroundColor: kPrimary.withOpacity(0.1),
+                          deleteIcon:
+                              const Icon(Icons.close_rounded, size: 16),
+                          deleteIconColor: kPrimary,
+                          onDeleted: () =>
+                              setState(() => _variations.remove(v)),
+                          side: BorderSide.none,
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10)),
+                        ))
+                    .toList(),
               ),
             ],
-            const SizedBox(height: 20),
+            const SizedBox(height: 16),
 
             // --- 5. CATEGORY ---
             _buildLabel('CATEGORY'),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
               decoration: BoxDecoration(
-                color: kWhite, 
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.category_outlined, color: Colors.grey.shade400, size: 20),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: DropdownButtonHideUnderline(
-                      child: DropdownButton<String>(
-                        value: _selectedCategory,
-                        isExpanded: true,
-                        icon: const Icon(Icons.keyboard_arrow_down_rounded),
-                        items: _categories.map((String cat) => DropdownMenuItem(value: cat, child: Text(cat, style: const TextStyle(color: Colors.black87)))).toList(),
-                        onChanged: (val) => setState(() => _selectedCategory = val!),
-                      ),
-                    ),
-                  ),
+                color: kWhite,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                      color: Colors.black.withOpacity(0.03),
+                      blurRadius: 15,
+                      offset: const Offset(0, 5))
                 ],
               ),
+              child: DropdownButtonFormField<String>(
+                decoration: InputDecoration(
+                  prefixIcon: Icon(Icons.category_rounded,
+                      color: Colors.grey.shade400, size: 22),
+                  border: InputBorder.none,
+                  contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 20, vertical: 16),
+                ),
+                value: _selectedCategory,
+                icon: const Icon(Icons.keyboard_arrow_down_rounded,
+                    color: Colors.grey),
+                dropdownColor: kWhite,
+                borderRadius: BorderRadius.circular(16),
+                items: _categories
+                    .map((cat) => DropdownMenuItem(
+                        value: cat,
+                        child: Text(cat,
+                            style: const TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.black87))))
+                    .toList(),
+                onChanged: (val) => setState(() => _selectedCategory = val!),
+              ),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 16),
 
             // --- 6. DESCRIPTION ---
             _buildLabel('DESCRIPTION'),
             _buildTextField(
-              hint: 'Describe your product... (ingredients, condition, size, etc.)', 
-              controller: _descController, 
-              icon: Icons.subject_rounded, 
-              maxLines: 3
-            ),
-            
+                hint:
+                    'Describe your product... (ingredients, condition, size, etc.)',
+                controller: _descController,
+                icon: Icons.edit_note_rounded,
+                maxLines: 4),
+
             const SizedBox(height: 40),
 
             // --- UPDATE BUTTON ---
@@ -285,47 +412,170 @@ class _EditProductPageState extends State<EditProductPage> {
                 onPressed: _isLoading ? null : _updateProduct,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: kPrimary,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16)),
+                  elevation: 5,
+                  shadowColor: kPrimary.withOpacity(0.4),
                 ),
-                child: _isLoading 
-                    ? const CircularProgressIndicator(color: kWhite) 
-                    : const Text('Update Product', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: kWhite)),
+                child: _isLoading
+                    ? const SizedBox(
+                        height: 24,
+                        width: 24,
+                        child: CircularProgressIndicator(
+                            color: kWhite, strokeWidth: 3))
+                    : const Text('Update Product',
+                        style: TextStyle(
+                            color: kWhite,
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 0.5)),
               ),
             ),
+            const SizedBox(height: 40),
           ],
         ),
       ),
     );
   }
 
-  // --- UI Helpers ---
-  Widget _buildLabel(String text) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8.0),
-      child: Text(text, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black87)),
+  // --- Image Preview ---
+  Widget _buildImagePreview() {
+    if (_newImageBytes != null) {
+      return Stack(
+        fit: StackFit.expand,
+        children: [
+          Image.memory(_newImageBytes!, fit: BoxFit.cover),
+          Positioned(
+            bottom: 8,
+            right: 8,
+            child: Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                  color: Colors.black54,
+                  borderRadius: BorderRadius.circular(20)),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.edit, color: kWhite, size: 14),
+                  SizedBox(width: 4),
+                  Text('Change',
+                      style: TextStyle(color: kWhite, fontSize: 12)),
+                ],
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+
+    if (_existingImageUrl != null && _existingImageUrl!.isNotEmpty) {
+      return Stack(
+        fit: StackFit.expand,
+        children: [
+          Image.network(
+            _existingImageUrl!,
+            fit: BoxFit.cover,
+            loadingBuilder: (_, child, progress) => progress == null
+                ? child
+                : const Center(
+                    child: CircularProgressIndicator(color: kPrimary)),
+            errorBuilder: (_, __, ___) => _buildPlaceholder(),
+          ),
+          Positioned(
+            bottom: 8,
+            right: 8,
+            child: Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                  color: Colors.black54,
+                  borderRadius: BorderRadius.circular(20)),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.edit, color: kWhite, size: 14),
+                  SizedBox(width: 4),
+                  Text('Change',
+                      style: TextStyle(color: kWhite, fontSize: 12)),
+                ],
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+
+    return _buildPlaceholder();
+  }
+
+  Widget _buildPlaceholder() {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Icon(Icons.add_a_photo_outlined,
+            size: 40, color: kPrimary.withOpacity(0.6)),
+        const SizedBox(height: 12),
+        Text('Tap to upload image',
+            style: TextStyle(color: Colors.grey.shade500, fontSize: 14)),
+      ],
     );
   }
 
-  Widget _buildTextField({required String hint, required TextEditingController controller, required IconData icon, bool isNumber = false, int maxLines = 1}) {
+  Widget _buildLabel(String text) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8.0, top: 4.0),
+      child: Text(text,
+          style: const TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+              color: Color(0xFF1A1A2E),
+              letterSpacing: 0.8)),
+    );
+  }
+
+  Widget _buildTextField({
+    required String hint,
+    required TextEditingController controller,
+    required IconData icon,
+    bool isNumber = false,
+    int maxLines = 1,
+  }) {
     return Container(
       decoration: BoxDecoration(
         color: kWhite,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withOpacity(0.03),
+              blurRadius: 15,
+              offset: const Offset(0, 5))
+        ],
       ),
       child: TextField(
         controller: controller,
-        keyboardType: isNumber ? const TextInputType.numberWithOptions(decimal: true) : TextInputType.text,
+        keyboardType: isNumber
+            ? const TextInputType.numberWithOptions(decimal: true)
+            : TextInputType.text,
         maxLines: maxLines,
-        style: const TextStyle(fontSize: 14),
+        style: const TextStyle(
+            fontSize: 15,
+            color: Colors.black87,
+            fontWeight: FontWeight.w600),
         decoration: InputDecoration(
           hintText: hint,
-          hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 14),
+          hintStyle: TextStyle(
+              color: Colors.grey.shade400,
+              fontSize: 14,
+              fontWeight: FontWeight.w400),
           prefixIcon: Padding(
-            padding: EdgeInsets.only(bottom: maxLines > 1 ? 40 : 0), // Adjust icon position for textarea
-            child: Icon(icon, color: Colors.grey.shade400, size: 20),
+            padding:
+                EdgeInsets.only(bottom: maxLines > 1 ? (maxLines * 8.0) : 0),
+            child: Icon(icon, color: Colors.grey.shade400, size: 22),
           ),
           border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
         ),
       ),
     );
