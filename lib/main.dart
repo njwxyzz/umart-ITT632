@@ -10,6 +10,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'package:latlong2/latlong.dart';
 import 'firebase_options.dart';
+import 'theme/app_theme.dart';
 
 // Pages Imports
 import 'screens/admin_web/admin_dashboard_page.dart';
@@ -47,10 +48,7 @@ class UMartApp extends StatelessWidget {
     return MaterialApp(
       title: 'UMART',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        fontFamily: 'SF Pro Display',
-        scaffoldBackgroundColor: const Color(0xFFF5F7F2), 
-      ),
+      theme: AppTheme.light,
       // CCTV PINTU PAGAR (Auth Gate)
       home: StreamBuilder<User?>(
         stream: FirebaseAuth.instance.authStateChanges(),
@@ -58,8 +56,8 @@ class UMartApp extends StatelessWidget {
           // 1. Tengah loading tunggu jawapan dari Firebase
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Scaffold(
-              backgroundColor: Color(0xFFF5F7F2),
-              body: Center(child: CircularProgressIndicator(color: Color(0xFF4C6B3F))),
+              backgroundColor: AppColors.background,
+              body: Center(child: CircularProgressIndicator(color: AppColors.primary)),
             );
           }
           

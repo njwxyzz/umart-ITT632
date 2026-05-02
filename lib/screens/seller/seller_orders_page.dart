@@ -1,13 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:intl/intl.dart';
+
+import '../../theme/app_theme.dart';
 import 'seller_order_details_page.dart';
 
-// --- Color Constants ---
-const kPrimary = Color(0xFF4C6B3F); 
-const kAccent  = Color(0xFFF27B35); 
-const kBg      = Color(0xFFF5F7F2); 
-const kWhite   = Colors.white;
+String _formatOrderCreatedAt(dynamic raw, BuildContext context) {
+  if (raw is Timestamp) {
+    final dt = raw.toDate().toLocal();
+    final locale = Localizations.localeOf(context).toString();
+    return DateFormat('d MMM yyyy · h:mm a', locale).format(dt);
+  }
+  return '—';
+}
 
 class SellerOrdersPage extends StatefulWidget {
   const SellerOrdersPage({super.key});
@@ -30,7 +36,7 @@ class _SellerOrdersPageState extends State<SellerOrdersPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Order marked as $newStatus!', style: const TextStyle(fontWeight: FontWeight.bold)),
-            backgroundColor: newStatus == 'Rejected' ? Colors.red.shade400 : kPrimary,
+            backgroundColor: newStatus == 'Rejected' ? Colors.red.shade400 : AppColors.primary,
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           ),
@@ -49,16 +55,16 @@ class _SellerOrdersPageState extends State<SellerOrdersPage> {
     return DefaultTabController(
       length: 2,
       child: Scaffold(
-        backgroundColor: kBg,
+        backgroundColor: AppColors.background,
         appBar: AppBar(
-          backgroundColor: kBg,
+          backgroundColor: AppColors.background,
           elevation: 0,
           scrolledUnderElevation: 0,
           leading: IconButton(
-            icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Color(0xFF1A1A2E), size: 20),
+            icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.ink, size: 20),
             onPressed: () => Navigator.pop(context),
           ),
-          title: const Text('Incoming Orders', style: TextStyle(color: Color(0xFF1A1A2E), fontWeight: FontWeight.bold, fontSize: 18)),
+          title: const Text('Incoming Orders', style: TextStyle(color: AppColors.ink, fontWeight: FontWeight.bold, fontSize: 18)),
           centerTitle: true,
           bottom: PreferredSize(
             preferredSize: const Size.fromHeight(60),
@@ -67,11 +73,11 @@ class _SellerOrdersPageState extends State<SellerOrdersPage> {
               child: Container(
                 height: 45,
                 decoration: BoxDecoration(color: Colors.grey.shade200, borderRadius: BorderRadius.circular(25)),
-                child: const TabBar(
+                child: TabBar(
                   indicatorSize: TabBarIndicatorSize.tab,
                   dividerColor: Colors.transparent,
-                  indicator: BoxDecoration(color: kPrimary, borderRadius: BorderRadius.all(Radius.circular(25))),
-                  labelColor: kWhite,
+                  indicator: const BoxDecoration(color: AppColors.primary, borderRadius: BorderRadius.all(Radius.circular(25))),
+                  labelColor: Colors.white,
                   unselectedLabelColor: Colors.grey,
                   labelStyle: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                   tabs: [
@@ -100,7 +106,7 @@ class _SellerOrdersPageState extends State<SellerOrdersPage> {
             builder: (context, snapshot) {
               
               if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator(color: kPrimary));
+                return const Center(child: CircularProgressIndicator(color: AppColors.primary));
               }
 
               List<QueryDocumentSnapshot> allOrders = snapshot.hasData ? snapshot.data!.docs : [];
@@ -176,7 +182,7 @@ class _SellerOrdersPageState extends State<SellerOrdersPage> {
         margin: const EdgeInsets.only(bottom: 16),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: kWhite,
+          color: Colors.white,
           borderRadius: BorderRadius.circular(20),
           boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4))],
         ),
@@ -187,8 +193,11 @@ class _SellerOrdersPageState extends State<SellerOrdersPage> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(displayId, style: const TextStyle(fontWeight: FontWeight.w800, color: kPrimary, fontSize: 14)),
-              Text('Just now', style: TextStyle(color: Colors.grey.shade500, fontSize: 12, fontWeight: FontWeight.w500)), // You can add timestamp formatting later
+              Text(displayId, style: const TextStyle(fontWeight: FontWeight.w800, color: AppColors.primary, fontSize: 14)),
+              Text(
+                _formatOrderCreatedAt(order['createdAt'], context),
+                style: TextStyle(color: Colors.grey.shade500, fontSize: 11, fontWeight: FontWeight.w500),
+              ),
             ],
           ),
           const Padding(
@@ -202,33 +211,33 @@ class _SellerOrdersPageState extends State<SellerOrdersPage> {
             children: [
               Container(
                 width: 44, height: 44,
-                decoration: BoxDecoration(color: kPrimary.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
-                child: const Icon(Icons.person_rounded, color: kPrimary),
+                decoration: BoxDecoration(color: AppColors.primary.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
+                child: const Icon(Icons.person_rounded, color: AppColors.primary),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(order['buyerName'] ?? 'Student', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF1A1A2E))),
+                    Text(order['buyerName'] ?? 'Student', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: AppColors.ink)),
                     const SizedBox(height: 4),
                     Row(
                       children: [
-                        const Icon(Icons.location_on_rounded, size: 12, color: kAccent),
+                        const Icon(Icons.location_on_rounded, size: 12, color: AppColors.accent),
                         const SizedBox(width: 4),
                         Expanded(child: Text(order['buyerLocation'] ?? 'UiTM Campus', style: TextStyle(color: Colors.grey.shade600, fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis)),
                       ],
                     ),
                     const SizedBox(height: 8),
                     // Item list
-                    Text(order['productName']?.toString() ?? 'Item', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Color(0xFF1A1A2E)), maxLines: 2, overflow: TextOverflow.ellipsis),
+                    Text(order['productName']?.toString() ?? 'Item', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.ink), maxLines: 2, overflow: TextOverflow.ellipsis),
                     if (order['note'] != null && order['note'].toString().isNotEmpty)
                       Text('📝 ${order['note']}', style: TextStyle(fontSize: 12, color: Colors.grey.shade600, fontStyle: FontStyle.italic)),
                   ],
                 ),
               ),
               // Price
-              Text('RM ${totalPrice.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: Color(0xFF1A1A2E))),
+              Text('RM ${totalPrice.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: AppColors.ink)),
             ],
           ),
 
@@ -254,12 +263,12 @@ class _SellerOrdersPageState extends State<SellerOrdersPage> {
                   child: ElevatedButton(
                     onPressed: () => _updateOrderStatus(orderId, 'Processing'),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: kPrimary,
+                      backgroundColor: AppColors.primary,
                       elevation: 0,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       padding: const EdgeInsets.symmetric(vertical: 12),
                     ),
-                    child: const Text('Accept', style: TextStyle(color: kWhite, fontWeight: FontWeight.bold)),
+                    child: const Text('Accept', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                   ),
                 ),
               ],
@@ -269,10 +278,10 @@ class _SellerOrdersPageState extends State<SellerOrdersPage> {
               width: double.infinity,
               child: ElevatedButton.icon(
                 onPressed: () => _updateOrderStatus(orderId, 'Delivered'),
-                icon: const Icon(Icons.check_circle_outline_rounded, color: kWhite, size: 18),
-                label: const Text('Mark as Delivered', style: TextStyle(color: kWhite, fontWeight: FontWeight.bold)),
+                icon: const Icon(Icons.check_circle_outline_rounded, color: Colors.white, size: 18),
+                label: const Text('Mark as Delivered', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: kAccent,
+                  backgroundColor: AppColors.accent,
                   elevation: 0,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   padding: const EdgeInsets.symmetric(vertical: 12),
