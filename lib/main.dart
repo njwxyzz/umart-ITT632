@@ -7,6 +7,8 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart'; 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:intl/intl.dart';
+import 'package:latlong2/latlong.dart';
 import 'firebase_options.dart';
 
 // Pages Imports
@@ -114,7 +116,6 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int currentIndex = 0;
-  bool hasActiveOrder = true;
 
   // 🚨 KOTAK MEMORI UNTUK CARIAN 🚨
   String _searchQuery = ''; 
@@ -327,8 +328,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    if (currentIndex == 0 && hasActiveOrder) ...[
-                      Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: _TrackingBanner()),
+                    if (currentIndex == 0) ...[
+                      Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: const _HomeLiveTrackingBanner()),
                       const SizedBox(height: 10),
                     ],
                     Padding(
@@ -1145,9 +1146,117 @@ class _FoodCard extends StatelessWidget {
   }
 }
 // ============================================================================
-// LIVE TRACKING BANNER
+// LIVE TRACKING BANNER (Firestore — active order + live ETA / arrived)
 // ============================================================================
+
+bool _bannerLatLngValid(double lat, double lng) {
+  final latOk = lat.isFinite && !lat.isNaN && lat >= -90 && lat <= 90;
+  final lngOk = lng.isFinite && !lng.isNaN && lng >= -180 && lng <= 180;
+  return latOk && lngOk;
+}
+
+/// Same pace assumption as [TrackingPage] (_calculateEta → minutes).
+int _bannerEtaMinutes(LatLng from, LatLng to) {
+  const Distance distance = Distance();
+  final metres = distance.as(LengthUnit.Meter, from, to);
+  if (metres.isNaN || !metres.isFinite) return 1;
+  final minutes = (metres / 300 * 3).ceil();
+  return minutes.clamp(1, 24 * 60);
+}
+
+/// Active = Pending/Processing. Show only when seller is sharing (with valid coords) or has arrived.
+QueryDocumentSnapshot<Map<String, dynamic>>? _pickLiveTrackingOrder(
+  List<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
+) {
+  const activeStatuses = {'Pending', 'Processing'};
+  final trackable = <QueryDocumentSnapshot<Map<String, dynamic>>>[];
+  for (final doc in docs) {
+    final data = doc.data();
+    final status = (data['status'] ?? '').toString();
+    if (!activeStatuses.contains(status)) continue;
+
+    final arrived = data['sellerArrived'] == true;
+    final sharing = data['sellerSharing'] == true;
+
+    if (arrived) {
+      trackable.add(doc);
+      continue;
+    }
+    if (!sharing) continue;
+
+    final lat = (data['sellerLat'] as num?)?.toDouble();
+    final lng = (data['sellerLng'] as num?)?.toDouble();
+    final blat = (data['buyerLat'] as num?)?.toDouble();
+    final blng = (data['buyerLng'] as num?)?.toDouble();
+    if (lat == null || lng == null || blat == null || blng == null) continue;
+    if (!_bannerLatLngValid(lat, lng) || !_bannerLatLngValid(blat, blng)) continue;
+    trackable.add(doc);
+  }
+  if (trackable.isEmpty) return null;
+
+  trackable.sort((a, b) {
+    final ta = (a.data()['createdAt'] as Timestamp?)?.millisecondsSinceEpoch ?? 0;
+    final tb = (b.data()['createdAt'] as Timestamp?)?.millisecondsSinceEpoch ?? 0;
+    return tb.compareTo(ta);
+  });
+  return trackable.first;
+}
+
+class _HomeLiveTrackingBanner extends StatelessWidget {
+  const _HomeLiveTrackingBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return const SizedBox.shrink();
+
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance.collection('orders').where('buyerId', isEqualTo: uid).snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) return const SizedBox.shrink();
+        if (snapshot.hasError || snapshot.data == null) return const SizedBox.shrink();
+
+        final picked = _pickLiveTrackingOrder(snapshot.data!.docs);
+        if (picked == null) return const SizedBox.shrink();
+
+        final data = picked.data();
+        final buyerLoc = (data['buyerLocation'] ?? '').toString().trim();
+        final sellerArrived = data['sellerArrived'] == true;
+
+        late final String titleText;
+        late final String subtitleText;
+
+        if (sellerArrived) {
+          titleText = 'Seller has arrived!';
+          subtitleText = buyerLoc.isNotEmpty ? buyerLoc : 'Head to your pickup point';
+        } else {
+          final lat = (data['sellerLat'] as num?)!.toDouble();
+          final lng = (data['sellerLng'] as num?)!.toDouble();
+          final blat = (data['buyerLat'] as num?)!.toDouble();
+          final blng = (data['buyerLng'] as num?)!.toDouble();
+          final mins = _bannerEtaMinutes(LatLng(lat, lng), LatLng(blat, blng));
+          final arrivesAt = DateTime.now().add(Duration(minutes: mins));
+          titleText = 'Arrives by ${DateFormat('h:mm a').format(arrivesAt)}';
+          subtitleText = buyerLoc.isNotEmpty ? buyerLoc : 'Live delivery • ~$mins min';
+        }
+
+        return _TrackingBanner(orderId: picked.id, titleText: titleText, subtitleText: subtitleText);
+      },
+    );
+  }
+}
+
 class _TrackingBanner extends StatelessWidget {
+  final String orderId;
+  final String titleText;
+  final String subtitleText;
+
+  const _TrackingBanner({
+    required this.orderId,
+    required this.titleText,
+    required this.subtitleText,
+  });
+
   @override
   Widget build(BuildContext context) {
     return ClipRRect(
@@ -1161,10 +1270,21 @@ class _TrackingBanner extends StatelessWidget {
             children: [
               Container(width: 40, height: 40, decoration: BoxDecoration(color: kPrimaryLight.withOpacity(0.2), borderRadius: BorderRadius.circular(12)), child: const Icon(Icons.pedal_bike_rounded, color: kPrimary, size: 20)),
               const SizedBox(width: 12),
-              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const Text('Arriving in 5 mins', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)), Text('To Dahlia 3', style: TextStyle(color: Colors.grey[500], fontSize: 12))])),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(titleText, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                    Text(subtitleText, style: TextStyle(color: Colors.grey[500], fontSize: 12)),
+                  ],
+                ),
+              ),
               ElevatedButton(
                 onPressed: () {
-                  Navigator.push(context, MaterialPageRoute(builder: (_) => const TrackingPage()));
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => TrackingPage(orderId: orderId)),
+                  );
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: kAccent,

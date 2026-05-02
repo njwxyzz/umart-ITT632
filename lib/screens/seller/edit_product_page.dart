@@ -374,7 +374,7 @@ class _EditProductPageState extends State<EditProductPage> {
                   contentPadding: const EdgeInsets.symmetric(
                       horizontal: 20, vertical: 16),
                 ),
-                value: _selectedCategory,
+                initialValue: _selectedCategory,
                 icon: const Icon(Icons.keyboard_arrow_down_rounded,
                     color: Colors.grey),
                 dropdownColor: kWhite,

@@ -273,7 +273,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
           child: SizedBox(
             width: double.infinity, // Paksa jadual kembang penuh
             child: DataTable(
-              headingRowColor: MaterialStateProperty.all(kBg),
+              headingRowColor: WidgetStateProperty.all(kBg),
               columns: const [
                 DataColumn(label: Text('No.', style: TextStyle(fontWeight: FontWeight.bold))),
                 DataColumn(label: Text('Name', style: TextStyle(fontWeight: FontWeight.bold))),
@@ -427,7 +427,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
           child: SizedBox(
             width: double.infinity,
             child: DataTable(
-              headingRowColor: MaterialStateProperty.all(kBg),
+              headingRowColor: WidgetStateProperty.all(kBg),
               columns: const [
                 DataColumn(label: Text('No.', style: TextStyle(fontWeight: FontWeight.bold))),
                 DataColumn(label: Text('Store Name', style: TextStyle(fontWeight: FontWeight.bold))),
@@ -541,7 +541,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
           child: SizedBox(
             width: double.infinity,
             child: DataTable(
-              headingRowColor: MaterialStateProperty.all(kBg),
+              headingRowColor: WidgetStateProperty.all(kBg),
               columns: const [
                 DataColumn(label: Text('No.', style: TextStyle(fontWeight: FontWeight.bold))),
                 DataColumn(label: Text('Order ID', style: TextStyle(fontWeight: FontWeight.bold))),

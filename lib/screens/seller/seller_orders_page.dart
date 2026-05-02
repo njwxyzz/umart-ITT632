@@ -161,7 +161,14 @@ class _SellerOrdersPageState extends State<SellerOrdersPage> {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (context) => const SellerOrderDetailsPage(),
+            builder: (context) => SellerOrderDetailsPage(
+              orderId: orderId,
+              buyerName: order['buyerName'] ?? 'Student',
+              address: order['buyerLocation'] ?? 'UiTM Campus',
+              phone: order['buyerPhone'] ?? '',
+              buyerLat: (order['buyerLat'] as num?)?.toDouble() ?? 6.4497,
+              buyerLng: (order['buyerLng'] as num?)?.toDouble() ?? 100.2704,
+            ),
           ),
         );
       },
@@ -214,7 +221,7 @@ class _SellerOrdersPageState extends State<SellerOrdersPage> {
                     ),
                     const SizedBox(height: 8),
                     // Item list
-                    Text('1x ${order['productName'] ?? 'Item'}', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Color(0xFF1A1A2E))),
+                    Text(order['productName']?.toString() ?? 'Item', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Color(0xFF1A1A2E)), maxLines: 2, overflow: TextOverflow.ellipsis),
                     if (order['note'] != null && order['note'].toString().isNotEmpty)
                       Text('📝 ${order['note']}', style: TextStyle(fontSize: 12, color: Colors.grey.shade600, fontStyle: FontStyle.italic)),
                   ],

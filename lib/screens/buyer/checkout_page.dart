@@ -12,6 +12,31 @@ const kBg           = Color(0xFFF5F7F2);
 const kWhite        = Colors.white;
 const kGreen        = Color(0xFF00C48C); 
 
+/// Campus kolej pin (UiTM Perlis Arau area). Adjust lat/lng to match your GIS basemap.
+class KolejOption {
+  final String id;
+  final String name;
+  final double lat;
+  final double lng;
+
+  const KolejOption({
+    required this.id,
+    required this.name,
+    required this.lat,
+    required this.lng,
+  });
+}
+
+/// Placeholder coordinates around campus; replace with official points if you have them.
+const List<KolejOption> kUiTMPerlisKolej = [
+  KolejOption(id: 'dahlia', name: 'Kolej Dahlia', lat: 6.4438, lng: 100.2798),
+  KolejOption(id: 'mawar', name: 'Kolej Mawar', lat: 6.4442, lng: 100.2812),
+  KolejOption(id: 'cempaka', name: 'Kolej Cempaka', lat: 6.4426, lng: 100.2820),
+  KolejOption(id: 'melati', name: 'Kolej Melati', lat: 6.4420, lng: 100.2795),
+  KolejOption(id: 'kenanga', name: 'Kolej Kenanga', lat: 6.4445, lng: 100.2830),
+  KolejOption(id: 'sakura', name: 'Kolej Sakura', lat: 6.4414, lng: 100.2810),
+];
+
 class CheckoutPage extends StatefulWidget {
   final String note; // KITA TANGKAP NOTA DARI CART PAGE
   
@@ -25,15 +50,38 @@ class _CheckoutPageState extends State<CheckoutPage> {
   // Track selected payment method ('COD' or 'ONLINE')
   String _selectedPayment = 'COD';
 
+  KolejOption _selectedKolej = kUiTMPerlisKolej.first;
+  final TextEditingController _deliveryDetailController = TextEditingController();
+
+  @override
+  void dispose() {
+    _deliveryDetailController.dispose();
+    super.dispose();
+  }
+
   // --- AMBIL DATA DARI CART MANAGER ---
   List<CartItem> get _items => CartManager.instance.items;
   double get _subtotal => CartManager.instance.totalPrice;
   double get _deliveryFee => _subtotal >= 15.0 ? 0.0 : 3.00; 
   double get _total => _subtotal + _deliveryFee;
 
+  String get _composedBuyerLocation {
+    final detail = _deliveryDetailController.text.trim();
+    if (detail.isEmpty) return _selectedKolej.name;
+    return '${_selectedKolej.name} — $detail';
+  }
+
   // --- THE MATCHMAKER: FUNGSI HANTAR ORDER KE FIREBASE ---
   Future<void> _processOrder() async {
     if (_items.isEmpty) return;
+
+    final detail = _deliveryDetailController.text.trim();
+    if (detail.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please add room number or drop-off detail (e.g. At lobby).')),
+      );
+      return;
+    }
 
     // 1. Tunjuk loading spinner
     showDialog(context: context, barrierDismissible: false, builder: (_) => const Center(child: CircularProgressIndicator(color: kAccent)));
@@ -72,10 +120,15 @@ class _CheckoutPageState extends State<CheckoutPage> {
       String allItemsString = _items.map((e) => '${e.quantity}x ${e.name}').join(', ');
 
       // 3. Tembak masuk laci 'orders' kat Firebase!
-      await FirebaseFirestore.instance.collection('orders').add({
+      final docRef = await FirebaseFirestore.instance.collection('orders').add({
         'buyerId': currentUser.uid,
         'buyerName': realBuyerName, // <--- NAMA SEBENAR DAH MASUK SINI! 💅
-        'buyerLocation': 'Kolej Dahlia 3, Block A', // Nota: Nanti boleh ambil dari form alamat sebenar
+        'buyerLocation': _composedBuyerLocation,
+        'kolejId': _selectedKolej.id,
+        'kolejName': _selectedKolej.name,
+        'deliveryDetail': detail,
+        'buyerLat': _selectedKolej.lat,
+        'buyerLng': _selectedKolej.lng,
         'sellerId': targetSellerId,
         'sellerName': sellerName,
         'productName': allItemsString,
@@ -90,7 +143,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
       if (context.mounted) Navigator.pop(context);
 
       // 5. Tunjuk Bouncing Success Popup kau yang lawa tu!
-      _showSuccessPopup();
+      _showSuccessPopup(docRef.id);
 
     } catch (e) {
       if (context.mounted) Navigator.pop(context); // Tutup loading kalau error
@@ -100,7 +153,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
   }
 
   // --- THE CUTE BOUNCING SUCCESS POPUP ---
-  void _showSuccessPopup() {
+  void _showSuccessPopup(String orderId) {
     showDialog(
       context: context,
       barrierDismissible: false, 
@@ -152,7 +205,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
     Future.delayed(const Duration(milliseconds: 2500), () {
       CartManager.instance.clearCart(); // KOSONGKAN TROLI
       Navigator.pop(context); // Close Dialog
-      Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const TrackingPage()));
+      Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => TrackingPage(orderId: orderId)));
     });
   }
 
@@ -291,29 +344,79 @@ class _CheckoutPageState extends State<CheckoutPage> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 4))],
       ),
-      child: Row(
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(color: kAccent.withOpacity(0.1), shape: BoxShape.circle),
-            child: const Icon(Icons.location_on_rounded, color: kAccent, size: 24),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(color: kAccent.withOpacity(0.1), shape: BoxShape.circle),
+                child: const Icon(Icons.school_rounded, color: kAccent, size: 24),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Deliver to', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.black54)),
+                    const SizedBox(height: 6),
+                    DropdownButtonFormField<KolejOption>(
+                      value: _selectedKolej,
+                      isExpanded: true,
+                      decoration: InputDecoration(
+                        filled: true,
+                        fillColor: kBg,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade200)),
+                        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade200)),
+                      ),
+                      items: kUiTMPerlisKolej
+                          .map((k) => DropdownMenuItem<KolejOption>(value: k, child: Text(k.name, overflow: TextOverflow.ellipsis)))
+                          .toList(),
+                      onChanged: (k) {
+                        if (k == null) return;
+                        setState(() => _selectedKolej = k);
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
-          const SizedBox(width: 16),
-          const Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Kolej Dahlia 3', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF1A1A2E))),
-                SizedBox(height: 4),
-                Text('Block A, Room 204\n012-3456789 (Najwa)', style: TextStyle(color: Colors.black54, fontSize: 13, height: 1.4)),
-              ],
+          const SizedBox(height: 14),
+          Text(
+            'Room / meeting point',
+            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey.shade700),
+          ),
+          const SizedBox(height: 6),
+          TextField(
+            controller: _deliveryDetailController,
+            textInputAction: TextInputAction.done,
+            decoration: InputDecoration(
+              hintText: 'e.g. Block A Room 302, or At lobby',
+              hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 13),
+              filled: true,
+              fillColor: kBg,
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade200)),
+              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade200)),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             ),
           ),
-          TextButton(
-            onPressed: () {}, 
-            child: const Text('Edit', style: TextStyle(color: kPrimary, fontWeight: FontWeight.bold)),
-          )
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Icon(Icons.place_rounded, size: 16, color: kPrimary.withOpacity(0.85)),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  'Map pin: ${_selectedKolej.name} (UiTM)',
+                  style: TextStyle(fontSize: 11, color: Colors.grey.shade600, fontWeight: FontWeight.w500),
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );
