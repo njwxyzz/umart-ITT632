@@ -124,7 +124,8 @@ class _HomeScreenState extends State<HomeScreen> {
   List<_FoodItem> _printingItems = []; 
   List<_FoodItem> _otherItems = []; 
 
-  bool _isLoadingProducts = true; 
+  bool _isLoadingProducts = true;
+  bool _productsLoadFailed = false;
 
   @override
   void initState() {
@@ -133,6 +134,13 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _fetchProductsData() async {
+    if (mounted) {
+      setState(() {
+        _isLoadingProducts = true;
+        _productsLoadFailed = false;
+      });
+    }
+
     try {
       QuerySnapshot snapshot = await FirebaseFirestore.instance.collection('products').get();
       
@@ -183,13 +191,81 @@ class _HomeScreenState extends State<HomeScreen> {
           _prelovedItems = tempPreloved;
           _printingItems = tempPrinting;
           _otherItems = tempOther;
-          _isLoadingProducts = false; 
+          _isLoadingProducts = false;
+          _productsLoadFailed = false;
         });
       }
     } catch (e) {
       print("🚨 CRITICAL ERROR: Failed to fetch products -> $e");
-      if (mounted) setState(() => _isLoadingProducts = false);
+      if (!mounted) return;
+      setState(() {
+        _isLoadingProducts = false;
+        _productsLoadFailed = true;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text(
+            'Could not load products. Check your connection and try again.',
+            style: TextStyle(fontWeight: FontWeight.w600),
+          ),
+          backgroundColor: Colors.red.shade700,
+          behavior: SnackBarBehavior.floating,
+          action: SnackBarAction(
+            label: 'Retry',
+            textColor: Colors.white,
+            onPressed: () => _fetchProductsData(),
+          ),
+        ),
+      );
     }
+  }
+
+  Widget _buildProductsLoadErrorPanel() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+      child: Material(
+        color: kWhite,
+        borderRadius: BorderRadius.circular(20),
+        elevation: 2,
+        shadowColor: Colors.black.withOpacity(0.08),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.cloud_off_rounded, size: 56, color: Colors.grey.shade400),
+              const SizedBox(height: 16),
+              const Text(
+                'Products unavailable',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Color(0xFF1A1A2E)),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'We could not reach the product catalog. Check Wi‑Fi or mobile data, then try again.',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 14, height: 1.4, color: Colors.grey.shade600),
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: _isLoadingProducts ? null : () => _fetchProductsData(),
+                  icon: const Icon(Icons.refresh_rounded, color: kWhite),
+                  label: const Text('Retry', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: kPrimary,
+                    foregroundColor: kWhite,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   Widget _buildBody() {
@@ -275,6 +351,8 @@ class _HomeScreenState extends State<HomeScreen> {
           
           if (_isLoadingProducts) 
             const Center(child: Padding(padding: EdgeInsets.all(40.0), child: CircularProgressIndicator(color: kPrimary)))
+          else if (_productsLoadFailed)
+            _buildProductsLoadErrorPanel()
           else if (_searchQuery.isNotEmpty) 
             // KALAU ADA TAIP SESUATU, TUNJUK HASIL CARIAN
             _buildSearchResults()
