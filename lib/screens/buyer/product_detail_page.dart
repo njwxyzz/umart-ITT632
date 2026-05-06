@@ -34,15 +34,31 @@ class ProductDetailPage extends StatefulWidget {
 }
 
 class _ProductDetailPageState extends State<ProductDetailPage> {
+  final PageController _imagePageController = PageController();
   int quantity = 1;
   int soldCount = 0;
+  int selectedImageIndex = 0;
   String selectedVariation = '';
   List<String> displayVariations = [];
+  List<String> displayImages = [];
+  Map<String, double> variationPriceMap = {};
 
   @override
   void initState() {
     super.initState();
+    displayImages = [widget.imageUrl];
+    displayVariations = widget.variations ?? [];
+    if (displayVariations.isNotEmpty) {
+      selectedVariation = displayVariations.first;
+    }
     _loadProductMeta();
+  }
+
+  double get _selectedUnitPrice {
+    if (selectedVariation.isNotEmpty && variationPriceMap.containsKey(selectedVariation)) {
+      return variationPriceMap[selectedVariation]!;
+    }
+    return widget.price;
   }
 
   Future<void> _loadProductMeta() async {
@@ -59,18 +75,60 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
       final data = query.docs.first.data();
       final rawSoldCount = data['soldCount'];
       final rawVariations = data['variations'];
+      final rawVariationPrices = data['variationPrices'];
+      final rawImageUrls = data['imageUrls'] ?? data['images'] ?? data['gallery'];
 
       final fetchedSoldCount = rawSoldCount is num ? rawSoldCount.toInt() : 0;
       final fetchedVariations = rawVariations is List
           ? rawVariations.whereType<String>().toList()
           : <String>[];
+      final fetchedImages = rawImageUrls is List
+          ? rawImageUrls.whereType<String>().where((url) => url.trim().isNotEmpty).toList()
+          : <String>[];
+      final fetchedVariationPrices = <String, double>{};
+
+      if (rawVariationPrices is Map) {
+        for (final entry in rawVariationPrices.entries) {
+          final key = entry.key.toString();
+          final value = entry.value;
+          if (value is num) {
+            fetchedVariationPrices[key] = value.toDouble();
+          } else {
+            final parsed = double.tryParse(value?.toString() ?? '');
+            if (parsed != null) fetchedVariationPrices[key] = parsed;
+          }
+        }
+      } else if (rawVariationPrices is List) {
+        for (final item in rawVariationPrices) {
+          if (item is Map) {
+            final variationName = (item['name'] ?? item['variation'] ?? '').toString();
+            final priceValue = item['price'];
+            if (variationName.isEmpty) continue;
+            if (priceValue is num) {
+              fetchedVariationPrices[variationName] = priceValue.toDouble();
+            } else {
+              final parsed = double.tryParse(priceValue?.toString() ?? '');
+              if (parsed != null) fetchedVariationPrices[variationName] = parsed;
+            }
+          }
+        }
+      }
 
       if (!mounted) return;
       setState(() {
         soldCount = fetchedSoldCount;
-        displayVariations = fetchedVariations;
+        displayVariations = fetchedVariations.isNotEmpty
+            ? fetchedVariations
+            : (widget.variations ?? []);
+        variationPriceMap = fetchedVariationPrices;
+        displayImages = fetchedImages.isNotEmpty ? fetchedImages : [widget.imageUrl];
+        if (selectedImageIndex >= displayImages.length) {
+          selectedImageIndex = 0;
+        }
         if (displayVariations.isNotEmpty) {
-          selectedVariation = displayVariations.first;
+          if (!displayVariations.contains(selectedVariation)) {
+            selectedVariation = displayVariations.first;
+          }
         } else {
           selectedVariation = '';
         }
@@ -79,15 +137,19 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
       if (!mounted) return;
       setState(() {
         soldCount = 0;
-        displayVariations = [];
-        selectedVariation = '';
+        displayVariations = widget.variations ?? [];
+        displayImages = [widget.imageUrl];
+        variationPriceMap = {};
+        selectedVariation = displayVariations.isNotEmpty ? displayVariations.first : '';
+        selectedImageIndex = 0;
       });
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    double totalPrice = widget.price * quantity;
+    final unitPrice = _selectedUnitPrice;
+    final totalPrice = unitPrice * quantity;
 
     return Scaffold(
       backgroundColor: kBg,
@@ -103,15 +165,38 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                     SizedBox(
                       height: 320,
                       width: double.infinity,
-                      child: Image.network(
-                        widget.imageUrl,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => Container(
-                          color: kPrimary.withOpacity(0.1),
-                          child: const Icon(Icons.fastfood_rounded, size: 80, color: kPrimary),
-                        ),
+                      child: PageView.builder(
+                        controller: _imagePageController,
+                        itemCount: displayImages.length,
+                        onPageChanged: (index) => setState(() => selectedImageIndex = index),
+                        itemBuilder: (_, index) {
+                          return Image.network(
+                            displayImages[index],
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => Container(
+                              color: kPrimary.withOpacity(0.1),
+                              child: const Icon(Icons.fastfood_rounded, size: 80, color: kPrimary),
+                            ),
+                          );
+                        },
                       ),
                     ),
+                    if (displayImages.length > 1)
+                      Positioned(
+                        right: 14,
+                        bottom: 14,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withOpacity(0.55),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            '${selectedImageIndex + 1}/${displayImages.length}',
+                            style: const TextStyle(color: kWhite, fontWeight: FontWeight.w600, fontSize: 12),
+                          ),
+                        ),
+                      ),
                     SafeArea(
                       child: Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -132,6 +217,50 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                     ),
                   ],
                 ),
+                if (displayImages.length > 1)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
+                    child: SizedBox(
+                      height: 68,
+                      child: ListView.separated(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: displayImages.length,
+                        separatorBuilder: (_, __) => const SizedBox(width: 10),
+                        itemBuilder: (_, index) {
+                          final isSelected = index == selectedImageIndex;
+                          return GestureDetector(
+                            onTap: () {
+                              _imagePageController.animateToPage(
+                                index,
+                                duration: const Duration(milliseconds: 220),
+                                curve: Curves.easeInOut,
+                              );
+                            },
+                            child: Container(
+                              width: 68,
+                              height: 68,
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: isSelected ? kPrimary : Colors.grey.shade300,
+                                  width: isSelected ? 2 : 1,
+                                ),
+                              ),
+                              clipBehavior: Clip.hardEdge,
+                              child: Image.network(
+                                displayImages[index],
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) => Container(
+                                  color: kPrimary.withOpacity(0.08),
+                                  child: const Icon(Icons.image_not_supported_outlined, color: kPrimary),
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ),
 
                 Container(
                   transform: Matrix4.translationValues(0, -25, 0), 
@@ -159,7 +288,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                           ),
                           const SizedBox(width: 16),
                           Text(
-                            'RM${widget.price.toStringAsFixed(2)}',
+                            'RM${unitPrice.toStringAsFixed(2)}',
                             style: const TextStyle(
                               fontSize: 22,
                               fontWeight: FontWeight.w900,
@@ -271,7 +400,9 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                                   ),
                                 ),
                                 child: Text(
-                                  variation,
+                                  variationPriceMap.containsKey(variation)
+                                      ? '$variation (RM${variationPriceMap[variation]!.toStringAsFixed(2)})'
+                                      : variation,
                                   style: TextStyle(
                                     color: isSelected ? kWhite : Colors.grey.shade700,
                                     fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
@@ -372,7 +503,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                           CartManager.instance.addToCart(
                             CartItem(
                               name: widget.name,
-                              price: widget.price,
+                              price: unitPrice,
                               imageUrl: widget.imageUrl,
                               sellerName: widget.sellerName,
                               addons: selectedVariation,
@@ -433,5 +564,11 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
         child: Icon(icon, color: kWhite, size: 20),
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    _imagePageController.dispose();
+    super.dispose();
   }
 }

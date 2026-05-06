@@ -31,11 +31,12 @@ class _EditProductPageState extends State<EditProductPage> {
   final TextEditingController _variationController = TextEditingController();
 
   List<String> _variations = [];
+  final Map<String, TextEditingController> _variationPriceControllers = {};
   late String _selectedCategory;
 
-  // --- Image State (same approach as add_product_page.dart) ---
-  Uint8List? _newImageBytes;      // bytes of newly picked image
-  String? _existingImageUrl;      // URL loaded from Firestore
+  // --- Multi image state ---
+  final List<Uint8List> _newImageBytesList = [];
+  List<String> _existingImageUrls = [];
 
   final ImagePicker _picker = ImagePicker();
 
@@ -62,24 +63,51 @@ class _EditProductPageState extends State<EditProductPage> {
       _variations = List<String>.from(widget.productData['variations']);
     }
 
+    final rawVariationPrices = widget.productData['variationPrices'];
+    final parsedVariationPrices = <String, double>{};
+    if (rawVariationPrices is Map) {
+      for (final entry in rawVariationPrices.entries) {
+        final key = entry.key.toString();
+        final value = entry.value;
+        if (value is num) {
+          parsedVariationPrices[key] = value.toDouble();
+        } else {
+          final parsed = double.tryParse(value?.toString() ?? '');
+          if (parsed != null) parsedVariationPrices[key] = parsed;
+        }
+      }
+    }
+    for (final variation in _variations) {
+      _variationPriceControllers[variation] = TextEditingController(
+        text: parsedVariationPrices[variation]?.toString() ?? '',
+      );
+    }
+
     String currentCat = widget.productData['category'] ?? 'Others';
     _selectedCategory =
         _categories.contains(currentCat) ? currentCat : 'Others';
 
-    _existingImageUrl = widget.productData['imageUrl'] as String?;
+    final rawImageUrls = widget.productData['imageUrls'];
+    if (rawImageUrls is List) {
+      _existingImageUrls = rawImageUrls.whereType<String>().where((e) => e.trim().isNotEmpty).toList();
+    }
+    if (_existingImageUrls.isEmpty) {
+      final fallbackImageUrl = (widget.productData['imageUrl'] ?? '').toString();
+      if (fallbackImageUrl.isNotEmpty) _existingImageUrls = [fallbackImageUrl];
+    }
   }
 
   // --- Pick Image (Web-safe, same as add_product_page) ---
-  Future<void> _pickImage() async {
+  Future<void> _pickImages() async {
     try {
-      final XFile? pickedFile = await _picker.pickImage(
-        source: ImageSource.gallery,
-        imageQuality: 70,
-      );
-      if (pickedFile != null) {
-        final bytes = await pickedFile.readAsBytes();
+      final pickedFiles = await _picker.pickMultiImage(imageQuality: 70);
+      if (pickedFiles.isNotEmpty) {
+        final bytesList = <Uint8List>[];
+        for (final file in pickedFiles) {
+          bytesList.add(await file.readAsBytes());
+        }
         setState(() {
-          _newImageBytes = bytes;
+          _newImageBytesList.addAll(bytesList);
         });
       }
     } catch (e) {
@@ -88,27 +116,26 @@ class _EditProductPageState extends State<EditProductPage> {
   }
 
   // --- Upload to Firebase Storage using putData (Web-safe) ---
-  Future<String?> _uploadImageToStorage() async {
-    if (_newImageBytes == null) return null;
+  Future<List<String>> _uploadImagesToStorage() async {
+    if (_newImageBytesList.isEmpty) return [];
 
+    final urls = <String>[];
     try {
-      String fileName =
-          'products/${widget.productId}_${DateTime.now().millisecondsSinceEpoch}.jpg';
-      Reference storageRef = FirebaseStorage.instance.ref().child(fileName);
-
-      UploadTask uploadTask = storageRef.putData(_newImageBytes!);
-      TaskSnapshot snapshot = await uploadTask;
-
-      return await snapshot.ref.getDownloadURL();
+      for (int i = 0; i < _newImageBytesList.length; i++) {
+        final fileName = 'products/${widget.productId}_${DateTime.now().millisecondsSinceEpoch}_$i.jpg';
+        final storageRef = FirebaseStorage.instance.ref().child(fileName);
+        final uploadTask = storageRef.putData(_newImageBytesList[i]);
+        final snapshot = await uploadTask;
+        urls.add(await snapshot.ref.getDownloadURL());
+      }
+      return urls;
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text('Failed to upload image: $e'),
-              backgroundColor: Colors.red),
+          SnackBar(content: Text('Failed to upload image: $e'), backgroundColor: Colors.red),
         );
       }
-      return null;
+      return [];
     }
   }
 
@@ -127,15 +154,24 @@ class _EditProductPageState extends State<EditProductPage> {
     setState(() => _isLoading = true);
 
     try {
-      // 1. Upload new image if seller picked one
-      String? newImageUrl;
-      if (_newImageBytes != null) {
-        newImageUrl = await _uploadImageToStorage();
-        if (newImageUrl == null) {
+      // 1. Upload new images if seller picked any
+      List<String> newImageUrls = [];
+      if (_newImageBytesList.isNotEmpty) {
+        newImageUrls = await _uploadImagesToStorage();
+        if (newImageUrls.isEmpty) {
           setState(() => _isLoading = false);
           return;
         }
       }
+
+      final variationPrices = <String, double>{};
+      for (final variation in _variations) {
+        final priceText = _variationPriceControllers[variation]?.text.trim() ?? '';
+        final parsed = double.tryParse(priceText);
+        if (parsed != null) variationPrices[variation] = parsed;
+      }
+
+      final finalImageUrls = [..._existingImageUrls, ...newImageUrls];
 
       // 2. Build update map
       final Map<String, dynamic> updateData = {
@@ -145,16 +181,19 @@ class _EditProductPageState extends State<EditProductPage> {
         'description': _descController.text.trim(),
         'category': _selectedCategory,
         'variations': _variations,
+        'variationPrices': variationPrices,
       };
 
       // 3. Decide imageUrl:
       //    New image picked     -> save new URL
       //    No change            -> keep existing (don't touch field)
       //    User removed image   -> delete field from Firestore
-      if (newImageUrl != null) {
-        updateData['imageUrl'] = newImageUrl;
-      } else if (_existingImageUrl == null) {
+      if (finalImageUrls.isNotEmpty) {
+        updateData['imageUrl'] = finalImageUrls.first;
+        updateData['imageUrls'] = finalImageUrls;
+      } else {
         updateData['imageUrl'] = FieldValue.delete();
+        updateData['imageUrls'] = FieldValue.delete();
       }
 
       await FirebaseFirestore.instance
@@ -198,9 +237,28 @@ class _EditProductPageState extends State<EditProductPage> {
     if (newVal.isNotEmpty && !_variations.contains(newVal)) {
       setState(() {
         _variations.add(newVal);
+        _variationPriceControllers[newVal] = TextEditingController();
         _variationController.clear();
       });
     }
+  }
+
+  void _moveExistingImage(int oldIndex, int newIndex) {
+    if (oldIndex < 0 || oldIndex >= _existingImageUrls.length) return;
+    if (newIndex < 0 || newIndex >= _existingImageUrls.length) return;
+    setState(() {
+      final item = _existingImageUrls.removeAt(oldIndex);
+      _existingImageUrls.insert(newIndex, item);
+    });
+  }
+
+  void _moveNewImage(int oldIndex, int newIndex) {
+    if (oldIndex < 0 || oldIndex >= _newImageBytesList.length) return;
+    if (newIndex < 0 || newIndex >= _newImageBytesList.length) return;
+    setState(() {
+      final item = _newImageBytesList.removeAt(oldIndex);
+      _newImageBytesList.insert(newIndex, item);
+    });
   }
 
   @override
@@ -210,6 +268,9 @@ class _EditProductPageState extends State<EditProductPage> {
     _stockController.dispose();
     _descController.dispose();
     _variationController.dispose();
+    for (final c in _variationPriceControllers.values) {
+      c.dispose();
+    }
     super.dispose();
   }
 
@@ -239,7 +300,7 @@ class _EditProductPageState extends State<EditProductPage> {
             // --- 1. PRODUCT PHOTO ---
             _buildLabel('PRODUCT PHOTO'),
             GestureDetector(
-              onTap: _pickImage,
+              onTap: _pickImages,
               child: Container(
                 height: 160,
                 width: double.infinity,
@@ -255,6 +316,153 @@ class _EditProductPageState extends State<EditProductPage> {
                 child: _buildImagePreview(),
               ),
             ),
+            if (_existingImageUrls.isNotEmpty || _newImageBytesList.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              SizedBox(
+                height: 72,
+                child: ListView(
+                  scrollDirection: Axis.horizontal,
+                  children: [
+                    ..._existingImageUrls.asMap().entries.map((entry) {
+                      final index = entry.key;
+                      final url = entry.value;
+                      return Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: Stack(
+                          children: [
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(10),
+                              child: Image.network(
+                                url,
+                                width: 72,
+                                height: 72,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) => Container(
+                                  width: 72,
+                                  height: 72,
+                                  color: kPrimary.withOpacity(0.08),
+                                  child: const Icon(Icons.image_not_supported_outlined, color: kPrimary),
+                                ),
+                              ),
+                            ),
+                            Positioned(
+                              right: 2,
+                              top: 2,
+                              child: GestureDetector(
+                                onTap: () => setState(() => _existingImageUrls.removeAt(index)),
+                                child: Container(
+                                  decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle),
+                                  child: const Icon(Icons.close, size: 14, color: Colors.white),
+                                ),
+                              ),
+                            ),
+                            if (_existingImageUrls.length > 1)
+                              Positioned(
+                                left: 2,
+                                bottom: 2,
+                                child: Row(
+                                  children: [
+                                    GestureDetector(
+                                      onTap: index > 0 ? () => _moveExistingImage(index, index - 1) : null,
+                                      child: Container(
+                                        decoration: BoxDecoration(
+                                          color: index > 0 ? Colors.black54 : Colors.black26,
+                                          shape: BoxShape.circle,
+                                        ),
+                                        child: const Icon(Icons.chevron_left, size: 14, color: Colors.white),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    GestureDetector(
+                                      onTap: index < _existingImageUrls.length - 1
+                                          ? () => _moveExistingImage(index, index + 1)
+                                          : null,
+                                      child: Container(
+                                        decoration: BoxDecoration(
+                                          color: index < _existingImageUrls.length - 1
+                                              ? Colors.black54
+                                              : Colors.black26,
+                                          shape: BoxShape.circle,
+                                        ),
+                                        child: const Icon(Icons.chevron_right, size: 14, color: Colors.white),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                          ],
+                        ),
+                      );
+                    }),
+                    ..._newImageBytesList.asMap().entries.map((entry) {
+                      final index = entry.key;
+                      final bytes = entry.value;
+                      return Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: Stack(
+                          children: [
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(10),
+                              child: Image.memory(bytes, width: 72, height: 72, fit: BoxFit.cover),
+                            ),
+                            Positioned(
+                              right: 2,
+                              top: 2,
+                              child: GestureDetector(
+                                onTap: () => setState(() => _newImageBytesList.removeAt(index)),
+                                child: Container(
+                                  decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle),
+                                  child: const Icon(Icons.close, size: 14, color: Colors.white),
+                                ),
+                              ),
+                            ),
+                            if (_newImageBytesList.length > 1)
+                              Positioned(
+                                left: 2,
+                                bottom: 2,
+                                child: Row(
+                                  children: [
+                                    GestureDetector(
+                                      onTap: index > 0 ? () => _moveNewImage(index, index - 1) : null,
+                                      child: Container(
+                                        decoration: BoxDecoration(
+                                          color: index > 0 ? Colors.black54 : Colors.black26,
+                                          shape: BoxShape.circle,
+                                        ),
+                                        child: const Icon(Icons.chevron_left, size: 14, color: Colors.white),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    GestureDetector(
+                                      onTap: index < _newImageBytesList.length - 1
+                                          ? () => _moveNewImage(index, index + 1)
+                                          : null,
+                                      child: Container(
+                                        decoration: BoxDecoration(
+                                          color: index < _newImageBytesList.length - 1
+                                              ? Colors.black54
+                                              : Colors.black26,
+                                          shape: BoxShape.circle,
+                                        ),
+                                        child: const Icon(Icons.chevron_right, size: 14, color: Colors.white),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                          ],
+                        ),
+                      );
+                    }),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Tip: First image becomes cover image. Reorder with arrows.',
+                style: TextStyle(color: Colors.grey.shade600, fontSize: 12, fontWeight: FontWeight.w500),
+              ),
+            ],
 
             const SizedBox(height: 16),
 
@@ -328,27 +536,49 @@ class _EditProductPageState extends State<EditProductPage> {
             ),
             if (_variations.isNotEmpty) ...[
               const SizedBox(height: 12),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: _variations
-                    .map((v) => Chip(
-                          label: Text(v,
-                              style: const TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.bold,
-                                  color: kPrimary)),
-                          backgroundColor: kPrimary.withOpacity(0.1),
-                          deleteIcon:
-                              const Icon(Icons.close_rounded, size: 16),
-                          deleteIconColor: kPrimary,
-                          onDeleted: () =>
-                              setState(() => _variations.remove(v)),
-                          side: BorderSide.none,
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10)),
-                        ))
-                    .toList(),
+              Column(
+                children: _variations.map((v) {
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                            decoration: BoxDecoration(
+                              color: kPrimary.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Text(
+                              v,
+                              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: kPrimary),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        SizedBox(
+                          width: 120,
+                          child: _buildTextField(
+                            hint: 'Price',
+                            controller: _variationPriceControllers[v]!,
+                            icon: Icons.payments_outlined,
+                            isNumber: true,
+                          ),
+                        ),
+                        IconButton(
+                          onPressed: () {
+                            setState(() {
+                              _variationPriceControllers[v]?.dispose();
+                              _variationPriceControllers.remove(v);
+                              _variations.remove(v);
+                            });
+                          },
+                          icon: const Icon(Icons.close_rounded, color: kPrimary),
+                        ),
+                      ],
+                    ),
+                  );
+                }).toList(),
               ),
             ],
             const SizedBox(height: 16),
@@ -440,11 +670,11 @@ class _EditProductPageState extends State<EditProductPage> {
 
   // --- Image Preview ---
   Widget _buildImagePreview() {
-    if (_newImageBytes != null) {
+    if (_newImageBytesList.isNotEmpty) {
       return Stack(
         fit: StackFit.expand,
         children: [
-          Image.memory(_newImageBytes!, fit: BoxFit.cover),
+          Image.memory(_newImageBytesList.first, fit: BoxFit.cover),
           Positioned(
             bottom: 8,
             right: 8,
@@ -469,12 +699,12 @@ class _EditProductPageState extends State<EditProductPage> {
       );
     }
 
-    if (_existingImageUrl != null && _existingImageUrl!.isNotEmpty) {
+    if (_existingImageUrls.isNotEmpty) {
       return Stack(
         fit: StackFit.expand,
         children: [
           Image.network(
-            _existingImageUrl!,
+            _existingImageUrls.first,
             fit: BoxFit.cover,
             loadingBuilder: (_, child, progress) => progress == null
                 ? child

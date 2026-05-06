@@ -30,24 +30,23 @@ class _AddProductPageState extends State<AddProductPage> {
   final TextEditingController _variantController = TextEditingController();
 
   // 🚨 TUKAR DARI FILE KE UINT8LIST UNTUK WEB 🚨
-  Uint8List? _selectedImageBytes; 
+  final List<Uint8List> _selectedImageBytesList = [];
   final ImagePicker _picker = ImagePicker();
   
   bool _isLoading = false; 
 
   // --- 1. FUNCTION: PICK IMAGE (WEB SAFE) ---
-  Future<void> _pickImage() async {
+  Future<void> _pickImages() async {
     try {
-      final XFile? pickedFile = await _picker.pickImage(
-        source: ImageSource.gallery, 
-        imageQuality: 70, 
-      );
+      final List<XFile> pickedFiles = await _picker.pickMultiImage(imageQuality: 70);
 
-      if (pickedFile != null) {
-        // Baca sebagai memory bytes, bukan File path
-        final bytes = await pickedFile.readAsBytes();
+      if (pickedFiles.isNotEmpty) {
+        final bytesList = <Uint8List>[];
+        for (final file in pickedFiles) {
+          bytesList.add(await file.readAsBytes());
+        }
         setState(() {
-          _selectedImageBytes = bytes;
+          _selectedImageBytesList.addAll(bytesList);
         });
       }
     } catch (e) {
@@ -65,14 +64,26 @@ class _AddProductPageState extends State<AddProductPage> {
   ];
 
   final List<String> _variations = [];
+  final Map<String, TextEditingController> _variationPriceControllers = {};
 
   void _addVariation() {
-    if (_variantController.text.trim().isNotEmpty) {
+    final variationName = _variantController.text.trim();
+    if (variationName.isNotEmpty && !_variations.contains(variationName)) {
       setState(() {
-        _variations.add(_variantController.text.trim());
+        _variations.add(variationName);
+        _variationPriceControllers[variationName] = TextEditingController();
         _variantController.clear();
       });
     }
+  }
+
+  void _moveImage(int oldIndex, int newIndex) {
+    if (oldIndex < 0 || oldIndex >= _selectedImageBytesList.length) return;
+    if (newIndex < 0 || newIndex >= _selectedImageBytesList.length) return;
+    setState(() {
+      final item = _selectedImageBytesList.removeAt(oldIndex);
+      _selectedImageBytesList.insert(newIndex, item);
+    });
   }
 
   // --- 2. FUNCTION: UPLOAD KE STORAGE & FIRESTORE ---
@@ -84,9 +95,9 @@ class _AddProductPageState extends State<AddProductPage> {
       return;
     }
 
-    if (_selectedImageBytes == null) {
+    if (_selectedImageBytesList.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select an image first! 📸')),
+        const SnackBar(content: Text('Please select at least one image first! 📸')),
       );
       return;
     }
@@ -94,18 +105,23 @@ class _AddProductPageState extends State<AddProductPage> {
     setState(() => _isLoading = true);
 
     try {
-      String finalImageUrl = ""; 
-      
-      // A. HANTAR GAMBAR KE FIREBASE STORAGE DULU
-      String fileName = 'products/${DateTime.now().millisecondsSinceEpoch}.jpg';
-      Reference storageRef = FirebaseStorage.instance.ref().child(fileName);
-      
-      // Upload bytes ke Storage
-      UploadTask uploadTask = storageRef.putData(_selectedImageBytes!);
-      TaskSnapshot snapshot = await uploadTask;
-      
-      // Dapatkan URL rasmi lepas siap upload
-      finalImageUrl = await snapshot.ref.getDownloadURL();
+      final imageUrls = <String>[];
+
+      // A. Upload semua gambar dulu ke Firebase Storage
+      for (int i = 0; i < _selectedImageBytesList.length; i++) {
+        final fileName = 'products/${DateTime.now().millisecondsSinceEpoch}_$i.jpg';
+        final storageRef = FirebaseStorage.instance.ref().child(fileName);
+        final uploadTask = storageRef.putData(_selectedImageBytesList[i]);
+        final snapshot = await uploadTask;
+        imageUrls.add(await snapshot.ref.getDownloadURL());
+      }
+
+      final variationPrices = <String, double>{};
+      for (final variation in _variations) {
+        final priceText = _variationPriceControllers[variation]?.text.trim() ?? '';
+        final parsed = double.tryParse(priceText);
+        if (parsed != null) variationPrices[variation] = parsed;
+      }
 
       // B. HANTAR INFO KE FIRESTORE (Database)
       final sellerId = FirebaseAuth.instance.currentUser?.uid ?? '';
@@ -116,9 +132,11 @@ class _AddProductPageState extends State<AddProductPage> {
         'description': _descController.text.trim().isEmpty ? 'No description' : _descController.text.trim(),
         'category': _selectedCategory ?? 'Others',
         'variations': _variations, 
+        'variationPrices': variationPrices,
         'sellerName': widget.storeName, 
         'sellerId': sellerId,
-        'imageUrl': finalImageUrl, // Masukkan URL yang dah dapat kat atas
+        'imageUrl': imageUrls.first, // Backward compatibility
+        'imageUrls': imageUrls,
         'createdAt': FieldValue.serverTimestamp(),
       });
 
@@ -156,6 +174,9 @@ class _AddProductPageState extends State<AddProductPage> {
     _stockController.dispose();
     _descController.dispose();
     _variantController.dispose();
+    for (final c in _variationPriceControllers.values) {
+      c.dispose();
+    }
     super.dispose();
   }
 
@@ -182,7 +203,7 @@ class _AddProductPageState extends State<AddProductPage> {
             // --- PRODUCT PHOTO SECTION ---
             _buildInputLabel('PRODUCT PHOTO'),
             GestureDetector(
-              onTap: _pickImage, 
+              onTap: _pickImages, 
               child: Container(
                 height: 160,
                 width: double.infinity,
@@ -192,10 +213,9 @@ class _AddProductPageState extends State<AddProductPage> {
                   border: Border.all(color: kPrimary.withOpacity(0.3), width: 1.5, style: BorderStyle.solid),
                 ),
                 clipBehavior: Clip.hardEdge, 
-                // 🚨 UI CHECK GUNA _selectedImageBytes 🚨
-                child: _selectedImageBytes != null 
+                child: _selectedImageBytesList.isNotEmpty
                     ? Image.memory(
-                        _selectedImageBytes!,
+                        _selectedImageBytesList.first,
                         fit: BoxFit.cover,
                         width: double.infinity,
                       )
@@ -209,6 +229,82 @@ class _AddProductPageState extends State<AddProductPage> {
                       ),
               ),
             ),
+            if (_selectedImageBytesList.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              SizedBox(
+                height: 72,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: _selectedImageBytesList.length,
+                  separatorBuilder: (_, __) => const SizedBox(width: 8),
+                  itemBuilder: (_, index) {
+                    return Stack(
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(10),
+                          child: Image.memory(
+                            _selectedImageBytesList[index],
+                            width: 72,
+                            height: 72,
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                        Positioned(
+                          right: 2,
+                          top: 2,
+                          child: GestureDetector(
+                            onTap: () => setState(() => _selectedImageBytesList.removeAt(index)),
+                            child: Container(
+                              decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle),
+                              child: const Icon(Icons.close, size: 14, color: Colors.white),
+                            ),
+                          ),
+                        ),
+                        if (_selectedImageBytesList.length > 1)
+                          Positioned(
+                            left: 2,
+                            bottom: 2,
+                            child: Row(
+                              children: [
+                                GestureDetector(
+                                  onTap: index > 0 ? () => _moveImage(index, index - 1) : null,
+                                  child: Container(
+                                    decoration: BoxDecoration(
+                                      color: index > 0 ? Colors.black54 : Colors.black26,
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: const Icon(Icons.chevron_left, size: 14, color: Colors.white),
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                                GestureDetector(
+                                  onTap: index < _selectedImageBytesList.length - 1
+                                      ? () => _moveImage(index, index + 1)
+                                      : null,
+                                  child: Container(
+                                    decoration: BoxDecoration(
+                                      color: index < _selectedImageBytesList.length - 1
+                                          ? Colors.black54
+                                          : Colors.black26,
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: const Icon(Icons.chevron_right, size: 14, color: Colors.white),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                      ],
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Tip: First image becomes cover image. Use arrows to reorder.',
+                style: TextStyle(color: Colors.grey.shade600, fontSize: 12, fontWeight: FontWeight.w500),
+              ),
+            ],
             
             const SizedBox(height: 16),
 
@@ -281,22 +377,48 @@ class _AddProductPageState extends State<AddProductPage> {
             
             if (_variations.isNotEmpty) ...[
               const SizedBox(height: 12),
-              Wrap(
-                spacing: 8.0, 
-                runSpacing: 8.0, 
+              Column(
                 children: _variations.map((variant) {
-                  return Chip(
-                    label: Text(variant, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: kPrimary)),
-                    backgroundColor: kPrimary.withOpacity(0.1),
-                    deleteIcon: const Icon(Icons.close_rounded, size: 16),
-                    deleteIconColor: kPrimary,
-                    onDeleted: () {
-                      setState(() {
-                        _variations.remove(variant);
-                      });
-                    },
-                    side: BorderSide.none, 
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                            decoration: BoxDecoration(
+                              color: kPrimary.withOpacity(0.08),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Text(
+                              variant,
+                              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: kPrimary),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        SizedBox(
+                          width: 120,
+                          child: _buildCleanTextField(
+                            hint: 'Price',
+                            icon: Icons.payments_outlined,
+                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                            controller: _variationPriceControllers[variant],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        IconButton(
+                          onPressed: () {
+                            setState(() {
+                              _variationPriceControllers[variant]?.dispose();
+                              _variationPriceControllers.remove(variant);
+                              _variations.remove(variant);
+                            });
+                          },
+                          icon: const Icon(Icons.close_rounded, color: kPrimary),
+                        ),
+                      ],
+                    ),
                   );
                 }).toList(),
               ),
