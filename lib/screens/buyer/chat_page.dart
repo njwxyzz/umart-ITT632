@@ -261,9 +261,30 @@ class _ChatPageState extends State<ChatPage> {
                         }
                         if (snapshot.hasError) {
                           return Center(
-                            child: Text(
-                              'Failed to load messages',
-                              style: TextStyle(color: Colors.grey.shade600),
+                            child: Padding(
+                              padding: const EdgeInsets.all(24),
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.cloud_off_rounded, size: 48, color: Colors.grey.shade400),
+                                  const SizedBox(height: 14),
+                                  Text(
+                                    'Unable to load messages',
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w700,
+                                      color: Colors.grey.shade800,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    'Check your connection and reopen this chat.',
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(fontSize: 13, height: 1.4, color: Colors.grey.shade600),
+                                  ),
+                                ],
+                              ),
                             ),
                           );
                         }

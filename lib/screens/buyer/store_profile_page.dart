@@ -193,7 +193,6 @@ class StoreProfilePage extends StatelessWidget {
           name: product['name'],
           price: product['price'],
           imageUrl: product['image'], 
-          rating: product['rating'],
           sellerName: product['sellerName'],    // <-- POKET BARU (Dari Dummy Data)
           description: product['description'],  // <-- POKET BARU (Dari Dummy Data)
         )));

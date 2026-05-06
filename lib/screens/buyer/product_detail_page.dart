@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'cart_page.dart'; 
 import 'cart_manager.dart'; // 🚨 IMPORT OTAK TROLI KAT SINI
+import 'store_profile_page.dart';
 
 const kPrimary      = Color(0xFF4C6B3F);
 const kAccent       = Color(0xFFF27B35);
@@ -11,7 +13,6 @@ class ProductDetailPage extends StatefulWidget {
   final String name;
   final double price;
   final String imageUrl;
-  final double rating;
   final String sellerName;
   final String description;
   final List<String>? variations; 
@@ -21,7 +22,6 @@ class ProductDetailPage extends StatefulWidget {
     required this.name,
     required this.price,
     required this.imageUrl,
-    required this.rating,
     required this.sellerName,
     required this.description,
     this.variations, 
@@ -33,18 +33,53 @@ class ProductDetailPage extends StatefulWidget {
 
 class _ProductDetailPageState extends State<ProductDetailPage> {
   int quantity = 1;
+  int soldCount = 0;
   String selectedVariation = '';
-  late List<String> displayVariations;
+  List<String> displayVariations = [];
 
   @override
   void initState() {
     super.initState();
-    displayVariations = (widget.variations != null && widget.variations!.isNotEmpty) 
-        ? widget.variations! 
-        : ['Standard', 'Matcha', 'Chocolate']; 
+    _loadProductMeta();
+  }
 
-    if (displayVariations.isNotEmpty) {
-      selectedVariation = displayVariations[0]; 
+  Future<void> _loadProductMeta() async {
+    try {
+      final query = await FirebaseFirestore.instance
+          .collection('products')
+          .where('name', isEqualTo: widget.name)
+          .where('sellerName', isEqualTo: widget.sellerName)
+          .limit(1)
+          .get();
+
+      if (query.docs.isEmpty) return;
+
+      final data = query.docs.first.data();
+      final rawSoldCount = data['soldCount'];
+      final rawVariations = data['variations'];
+
+      final fetchedSoldCount = rawSoldCount is num ? rawSoldCount.toInt() : 0;
+      final fetchedVariations = rawVariations is List
+          ? rawVariations.whereType<String>().toList()
+          : <String>[];
+
+      if (!mounted) return;
+      setState(() {
+        soldCount = fetchedSoldCount;
+        displayVariations = fetchedVariations;
+        if (displayVariations.isNotEmpty) {
+          selectedVariation = displayVariations.first;
+        } else {
+          selectedVariation = '';
+        }
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        soldCount = 0;
+        displayVariations = [];
+        selectedVariation = '';
+      });
     }
   }
 
@@ -134,20 +169,80 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                       const SizedBox(height: 12),
                       Row(
                         children: [
-                          const Icon(Icons.star_rounded, color: kAccent, size: 18),
-                          const SizedBox(width: 4),
                           Text(
-                            widget.rating.toStringAsFixed(1),
-                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                          ),
-                          const SizedBox(width: 16),
-                          Icon(Icons.storefront_rounded, color: Colors.grey.shade400, size: 18),
-                          const SizedBox(width: 4),
-                          Text(
-                            'Sold by ${widget.sellerName}',
-                            style: TextStyle(color: Colors.grey.shade600, fontSize: 14, fontWeight: FontWeight.w500),
+                            '$soldCount Sold',
+                            style: TextStyle(
+                              color: Colors.grey.shade600,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 14,
+                            ),
                           ),
                         ],
+                      ),
+                      const SizedBox(height: 14),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: kBg,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: const Color(0xFFE9EDE2)),
+                        ),
+                        child: Row(
+                          children: [
+                            CircleAvatar(
+                              radius: 20,
+                              backgroundColor: kPrimary.withOpacity(0.12),
+                              child: Text(
+                                widget.sellerName.isNotEmpty
+                                    ? widget.sellerName[0].toUpperCase()
+                                    : 'S',
+                                style: const TextStyle(
+                                  color: kPrimary,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                widget.sellerName,
+                                style: const TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFF1A1A2E),
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            OutlinedButton(
+                              onPressed: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => const StoreProfilePage(),
+                                    settings: RouteSettings(
+                                      arguments: {'storeName': widget.sellerName},
+                                    ),
+                                  ),
+                                );
+                                // TODO: Update StoreProfilePage to read passed storeName/sellerId directly.
+                              },
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: kPrimary,
+                                side: const BorderSide(color: kPrimary),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(24),
+                                ),
+                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                              ),
+                              child: const Text(
+                                'Visit Store',
+                                style: TextStyle(fontWeight: FontWeight.w700),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                       
                       const Padding(
@@ -155,40 +250,41 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                         child: Divider(height: 1, color: Color(0xFFEEEEEE)),
                       ),
 
-                      const Text(
-                        'Select Variation',
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1A1A2E)),
-                      ),
-                      const SizedBox(height: 12),
-                      Wrap(
-                        spacing: 10,
-                        runSpacing: 10,
-                        children: displayVariations.map((variation) {
-                          bool isSelected = selectedVariation == variation;
-                          return GestureDetector(
-                            onTap: () => setState(() => selectedVariation = variation),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                              decoration: BoxDecoration(
-                                color: isSelected ? kPrimary : kBg,
-                                borderRadius: BorderRadius.circular(20),
-                                border: Border.all(
-                                  color: isSelected ? kPrimary : Colors.grey.shade300,
+                      if (displayVariations.isNotEmpty) ...[
+                        const Text(
+                          'Select Variation',
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1A1A2E)),
+                        ),
+                        const SizedBox(height: 12),
+                        Wrap(
+                          spacing: 10,
+                          runSpacing: 10,
+                          children: displayVariations.map((variation) {
+                            bool isSelected = selectedVariation == variation;
+                            return GestureDetector(
+                              onTap: () => setState(() => selectedVariation = variation),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                                decoration: BoxDecoration(
+                                  color: isSelected ? kPrimary : kBg,
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(
+                                    color: isSelected ? kPrimary : Colors.grey.shade300,
+                                  ),
+                                ),
+                                child: Text(
+                                  variation,
+                                  style: TextStyle(
+                                    color: isSelected ? kWhite : Colors.grey.shade700,
+                                    fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                                  ),
                                 ),
                               ),
-                              child: Text(
-                                variation,
-                                style: TextStyle(
-                                  color: isSelected ? kWhite : Colors.grey.shade700,
-                                  fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
-                                ),
-                              ),
-                            ),
-                          );
-                        }).toList(),
-                      ),
-                      
-                      const SizedBox(height: 24),
+                            );
+                          }).toList(),
+                        ),
+                        const SizedBox(height: 24),
+                      ],
 
                       const Text(
                         'Description',

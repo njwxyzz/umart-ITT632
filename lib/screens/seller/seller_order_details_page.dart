@@ -507,6 +507,24 @@ class _SellerOrderDetailsPageState extends State<SellerOrderDetailsPage> {
                           child: const Center(child: CircularProgressIndicator(color: kPrimary, strokeWidth: 2)),
                         );
                       }
+                      if (snapshot.hasError) {
+                        return Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(color: kWhite, borderRadius: BorderRadius.circular(16)),
+                          child: Row(
+                            children: [
+                              Icon(Icons.wifi_off_rounded, color: Colors.grey.shade500, size: 22),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  'Unable to load order items. Check your connection.',
+                                  style: TextStyle(color: Colors.grey.shade700, fontSize: 13, height: 1.35),
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }
                       if (!snapshot.hasData || !snapshot.data!.exists) {
                         return Container(
                           padding: const EdgeInsets.all(16),

@@ -991,7 +991,6 @@ class _FoodCard extends StatelessWidget {
             name: item.label,
             price: item.price,
             imageUrl: item.imageUrl,
-            rating: item.rating,
             sellerName: item.sellerName,
             description: item.description,
           ),
@@ -1289,8 +1288,16 @@ class _HomeLiveTrackingBanner extends StatelessWidget {
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
       stream: FirebaseFirestore.instance.collection('orders').where('buyerId', isEqualTo: uid).snapshots(),
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) return const SizedBox.shrink();
-        if (snapshot.hasError || snapshot.data == null) return const SizedBox.shrink();
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const SizedBox.shrink();
+        }
+        // Firestore / rules errors: fail silently so home layout stays clean (optional banner).
+        if (snapshot.hasError) {
+          return const SizedBox.shrink();
+        }
+        if (!snapshot.hasData || snapshot.data == null) {
+          return const SizedBox.shrink();
+        }
 
         final picked = _pickLiveTrackingOrder(snapshot.data!.docs);
         if (picked == null) return const SizedBox.shrink();
@@ -1544,6 +1551,9 @@ class _BottomNav extends StatelessWidget {
                           .where('participants', arrayContains: currentUserId)
                           .snapshots(),
                       builder: (context, snapshot) {
+                        if (snapshot.hasError) {
+                          return const SizedBox.shrink();
+                        }
                         if (!snapshot.hasData) return const SizedBox.shrink();
                         int totalUnread = 0;
                         for (final doc in snapshot.data!.docs) {

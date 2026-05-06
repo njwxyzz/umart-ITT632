@@ -16,6 +16,34 @@ String? _trimmedOrNull(dynamic v) {
   return s;
 }
 
+Widget _sellerDashboardStreamErrorNote(String message) {
+  return Padding(
+    padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
+    child: Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(14),
+      elevation: 1,
+      shadowColor: Colors.black.withOpacity(0.06),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(Icons.cloud_off_outlined, color: Colors.orange.shade700, size: 22),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                message,
+                style: TextStyle(color: Colors.grey.shade800, fontSize: 13, height: 1.35),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
 class SellerDashboard extends StatelessWidget {
   final String storeName;
   final String storeLocation;
@@ -272,6 +300,12 @@ class SellerDashboard extends StatelessWidget {
               StreamBuilder<QuerySnapshot>(
                 stream: FirebaseFirestore.instance.collection('orders').where('sellerId', isEqualTo: uid).snapshots(),
                 builder: (context, orderSnapshot) {
+                  if (orderSnapshot.hasError) {
+                    return _sellerDashboardStreamErrorNote(
+                      'Unable to load order analytics. The rest of your dashboard is still available.',
+                    );
+                  }
+
                   double totalSales = 0.0;
                   double monthSales = 0.0;
                   double prevMonthSales = 0.0;
@@ -508,6 +542,12 @@ class SellerDashboard extends StatelessWidget {
               StreamBuilder<QuerySnapshot>(
                 stream: FirebaseFirestore.instance.collection('products').where('sellerId', isEqualTo: uid).snapshots(),
                 builder: (context, productSnapshot) {
+                  if (productSnapshot.hasError) {
+                    return _sellerDashboardStreamErrorNote(
+                      'Unable to load your products list. Check your connection and try again.',
+                    );
+                  }
+
                   int totalProducts = productSnapshot.hasData ? productSnapshot.data!.docs.length : 0;
 
                   return Padding(

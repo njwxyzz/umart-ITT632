@@ -155,9 +155,38 @@ class _OrdersPageState extends State<OrdersPage> {
                 .where('buyerId', isEqualTo: currentUserId)
                 .snapshots(),
             builder: (context, snapshot) {
-              
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const Center(child: CircularProgressIndicator(color: kPrimary));
+              }
+
+              if (snapshot.hasError) {
+                return Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(28),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.cloud_off_rounded, size: 52, color: Colors.grey.shade400),
+                        const SizedBox(height: 16),
+                        Text(
+                          'Unable to load your orders',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.grey.shade800,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Please check your connection and try again in a moment.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(fontSize: 14, height: 1.4, color: Colors.grey.shade600),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
               }
 
               List<OrderHistory> allOrders = [];

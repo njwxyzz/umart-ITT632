@@ -120,10 +120,30 @@ class _InboxPageState extends State<InboxPage> {
 
                   if (snapshot.hasError) {
                     return Center(
-                      child: Text(
-                        'Failed to load messages\n${snapshot.error}',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(color: Colors.grey.shade600),
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.cloud_off_rounded, size: 48, color: Colors.grey.shade400),
+                            const SizedBox(height: 16),
+                            Text(
+                              'Unable to load conversations',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 17,
+                                fontWeight: FontWeight.w800,
+                                color: Colors.grey.shade800,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Check your connection and try again shortly.',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(fontSize: 14, height: 1.4, color: Colors.grey.shade600),
+                            ),
+                          ],
+                        ),
                       ),
                     );
                   }

@@ -104,9 +104,12 @@ class _SellerOrdersPageState extends State<SellerOrdersPage> {
                 .where('sellerId', isEqualTo: currentUserId) // Filter orders for this seller
                 .snapshots(),
             builder: (context, snapshot) {
-              
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const Center(child: CircularProgressIndicator(color: AppColors.primary));
+              }
+
+              if (snapshot.hasError) {
+                return const Center(child: Text('Unable to load orders'));
               }
 
               List<QueryDocumentSnapshot> allOrders = snapshot.hasData ? snapshot.data!.docs : [];
