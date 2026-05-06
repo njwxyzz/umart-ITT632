@@ -991,6 +991,7 @@ class _FoodCard extends StatelessWidget {
             name: item.label,
             price: item.price,
             imageUrl: item.imageUrl,
+            sellerId: item.sellerId,
             sellerName: item.sellerName,
             description: item.description,
           ),
@@ -1193,7 +1194,7 @@ class _FoodCard extends StatelessWidget {
                       
                       GestureDetector(
                         onTap: () {
-                          Navigator.push(context, MaterialPageRoute(builder: (_) => const StoreProfilePage()));
+                          Navigator.push(context, MaterialPageRoute(builder: (_) => StoreProfilePage(sellerId: item.sellerId)));
                         },
                         behavior: HitTestBehavior.opaque, 
                         child: Padding(

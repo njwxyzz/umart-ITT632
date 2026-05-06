@@ -125,6 +125,7 @@ class _ProductListCard extends StatelessWidget {
         name: title,        
         price: price,       
         imageUrl: imageUrl, 
+        sellerId: sellerId,
         sellerName: sellerName, 
         description: description, 
       )));

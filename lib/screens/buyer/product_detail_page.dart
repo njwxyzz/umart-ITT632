@@ -13,6 +13,7 @@ class ProductDetailPage extends StatefulWidget {
   final String name;
   final double price;
   final String imageUrl;
+  final String sellerId;
   final String sellerName;
   final String description;
   final List<String>? variations; 
@@ -22,6 +23,7 @@ class ProductDetailPage extends StatefulWidget {
     required this.name,
     required this.price,
     required this.imageUrl,
+    required this.sellerId,
     required this.sellerName,
     required this.description,
     this.variations, 
@@ -47,8 +49,8 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     try {
       final query = await FirebaseFirestore.instance
           .collection('products')
+          .where('sellerId', isEqualTo: widget.sellerId)
           .where('name', isEqualTo: widget.name)
-          .where('sellerName', isEqualTo: widget.sellerName)
           .limit(1)
           .get();
 
@@ -220,13 +222,9 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                                 Navigator.push(
                                   context,
                                   MaterialPageRoute(
-                                    builder: (_) => const StoreProfilePage(),
-                                    settings: RouteSettings(
-                                      arguments: {'storeName': widget.sellerName},
-                                    ),
+                                    builder: (_) => StoreProfilePage(sellerId: widget.sellerId),
                                   ),
                                 );
-                                // TODO: Update StoreProfilePage to read passed storeName/sellerId directly.
                               },
                               style: OutlinedButton.styleFrom(
                                 foregroundColor: kPrimary,
