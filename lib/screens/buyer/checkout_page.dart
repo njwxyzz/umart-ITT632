@@ -118,6 +118,18 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
       // Susun nama barang cantik-cantik untuk order
       String allItemsString = _items.map((e) => '${e.quantity}x ${e.name}').join(', ');
+      final structuredItems = _items
+          .map((e) => {
+                'productId': e.productId,
+                'name': e.name,
+                'quantity': e.quantity,
+                'unitPrice': e.price,
+                'lineTotal': e.price * e.quantity,
+                'sellerId': e.sellerId,
+                'sellerName': e.sellerName,
+                'addons': e.addons,
+              })
+          .toList();
 
       // 3. Tembak masuk laci 'orders' kat Firebase!
       final docRef = await FirebaseFirestore.instance.collection('orders').add({
@@ -132,6 +144,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
         'sellerId': targetSellerId,
         'sellerName': sellerName,
         'productName': allItemsString,
+        'items': structuredItems,
         'totalPrice': _total,
         'status': 'Pending',
         'note': widget.note, // Nota tak nak taugeh

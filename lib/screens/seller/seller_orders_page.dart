@@ -23,10 +23,187 @@ class SellerOrdersPage extends StatefulWidget {
 }
 
 class _SellerOrdersPageState extends State<SellerOrdersPage> {
+  bool _ranLegacyItemsBackfill = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _runLegacyItemsBackfill();
+  }
+
+  Future<void> _runLegacyItemsBackfill() async {
+    if (_ranLegacyItemsBackfill) return;
+    _ranLegacyItemsBackfill = true;
+
+    final sellerId = FirebaseAuth.instance.currentUser?.uid ?? '';
+    if (sellerId.isEmpty) return;
+
+    try {
+      final ordersSnap = await FirebaseFirestore.instance
+          .collection('orders')
+          .where('sellerId', isEqualTo: sellerId)
+          .get();
+      if (ordersSnap.docs.isEmpty) return;
+
+      final productsSnap = await FirebaseFirestore.instance
+          .collection('products')
+          .where('sellerId', isEqualTo: sellerId)
+          .get();
+
+      final productIdByName = <String, String>{};
+      for (final p in productsSnap.docs) {
+        final name = (p.data()['name'] ?? '').toString().trim();
+        if (name.isEmpty) continue;
+        productIdByName.putIfAbsent(name, () => p.id);
+      }
+
+      final batch = FirebaseFirestore.instance.batch();
+      int updates = 0;
+
+      for (final orderDoc in ordersSnap.docs) {
+        final data = orderDoc.data();
+        final existingItems = data['items'];
+        if (existingItems is List && existingItems.isNotEmpty) continue;
+
+        final rawItems = (data['productName'] ?? '').toString().trim();
+        if (rawItems.isEmpty) continue;
+
+        final parsedItems = _parseOrderItems(rawItems);
+        if (parsedItems.isEmpty) continue;
+
+        final totalPrice =
+            (data['totalPrice'] as num?)?.toDouble() ?? 0.0;
+        final totalQty = parsedItems.fold<int>(0, (sum, e) => sum + e.value);
+        final unitFallback = totalQty > 0 ? (totalPrice / totalQty) : 0.0;
+
+        final structuredItems = parsedItems
+            .map((entry) {
+              final qty = entry.value;
+              final name = entry.key;
+              final lineTotal = unitFallback * qty;
+              return <String, dynamic>{
+                'productId': productIdByName[name] ?? '',
+                'name': name,
+                'quantity': qty,
+                'unitPrice': unitFallback,
+                'lineTotal': lineTotal,
+                'sellerId': sellerId,
+                'sellerName': (data['sellerName'] ?? '').toString(),
+                'addons': '',
+              };
+            })
+            .toList();
+
+        batch.update(orderDoc.reference, {
+          'items': structuredItems,
+          'legacyItemsBackfilled': true,
+          'legacyItemsBackfilledAt': FieldValue.serverTimestamp(),
+        });
+        updates++;
+      }
+
+      if (updates > 0) {
+        await batch.commit();
+      }
+    } catch (_) {
+      // Silent fail: migration is best-effort and should not block seller UI.
+    }
+  }
+
+  List<MapEntry<String, int>> _parseOrderItems(String rawItems) {
+    final parsed = <MapEntry<String, int>>[];
+    final parts = rawItems
+        .split(',')
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty);
+    final qtyPattern = RegExp(r'^(\d+)\s*x\s*(.+)$', caseSensitive: false);
+
+    for (final part in parts) {
+      final match = qtyPattern.firstMatch(part);
+      if (match != null) {
+        final qty = int.tryParse(match.group(1) ?? '1') ?? 1;
+        final name = (match.group(2) ?? '').trim();
+        if (name.isNotEmpty) parsed.add(MapEntry(name, qty));
+      } else {
+        parsed.add(MapEntry(part, 1));
+      }
+    }
+    return parsed;
+  }
+
+  Future<void> _incrementSoldCountForDeliveredOrder(
+      Map<String, dynamic> orderData) async {
+    final rawStructuredItems = orderData['items'];
+    if (rawStructuredItems is List && rawStructuredItems.isNotEmpty) {
+      for (final raw in rawStructuredItems) {
+        if (raw is! Map) continue;
+        final productId = (raw['productId'] ?? '').toString().trim();
+        final qtyRaw = raw['quantity'];
+        final qty = qtyRaw is num
+            ? qtyRaw.toInt()
+            : int.tryParse(qtyRaw?.toString() ?? '1') ?? 1;
+        if (productId.isEmpty) continue;
+        await FirebaseFirestore.instance.collection('products').doc(productId).update({
+          'sold': FieldValue.increment(qty),
+          'soldCount': FieldValue.increment(qty),
+          'totalSold': FieldValue.increment(qty),
+        });
+      }
+      return;
+    }
+
+    final rawItems = (orderData['productName'] ?? '').toString().trim();
+    if (rawItems.isEmpty) return;
+
+    final sellerId = (orderData['sellerId'] ?? '').toString().trim();
+    final sellerName = (orderData['sellerName'] ?? '').toString().trim();
+    final items = _parseOrderItems(rawItems);
+    if (items.isEmpty) return;
+
+    for (final entry in items) {
+      final productName = entry.key;
+      final qty = entry.value;
+      QuerySnapshot<Map<String, dynamic>> result;
+
+      if (sellerId.isNotEmpty && sellerId != 'UNKNOWN_SELLER') {
+        result = await FirebaseFirestore.instance
+            .collection('products')
+            .where('sellerId', isEqualTo: sellerId)
+            .where('name', isEqualTo: productName)
+            .limit(1)
+            .get();
+      } else {
+        result = await FirebaseFirestore.instance
+            .collection('products')
+            .where('sellerName', isEqualTo: sellerName)
+            .where('name', isEqualTo: productName)
+            .limit(1)
+            .get();
+      }
+
+      if (result.docs.isEmpty) continue;
+
+      await result.docs.first.reference.update({
+        'sold': FieldValue.increment(qty),
+        'soldCount': FieldValue.increment(qty),
+        'totalSold': FieldValue.increment(qty),
+      });
+    }
+  }
 
   // --- Functions to update order status (Now talking to Firebase!) ---
   Future<void> _updateOrderStatus(String orderId, String newStatus) async {
     try {
+      final orderRef = FirebaseFirestore.instance.collection('orders').doc(orderId);
+      final snap = await orderRef.get();
+      final orderData = snap.data();
+      if (orderData == null) return;
+      final currentStatus = (orderData['status'] ?? '').toString();
+
+      if (newStatus == 'Delivered' && currentStatus != 'Delivered') {
+        await _incrementSoldCountForDeliveredOrder(orderData);
+      }
+
       await FirebaseFirestore.instance.collection('orders').doc(orderId).update({
         'status': newStatus,
       });

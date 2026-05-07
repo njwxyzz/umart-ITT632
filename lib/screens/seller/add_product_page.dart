@@ -25,6 +25,7 @@ class _AddProductPageState extends State<AddProductPage> {
   // --- CONTROLLERS ---
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _priceController = TextEditingController();
+  final TextEditingController _deliveryFeeController = TextEditingController();
   final TextEditingController _stockController = TextEditingController();
   final TextEditingController _descController = TextEditingController();
   final TextEditingController _variantController = TextEditingController();
@@ -128,6 +129,7 @@ class _AddProductPageState extends State<AddProductPage> {
       await FirebaseFirestore.instance.collection('products').add({
         'name': _nameController.text.trim(),
         'price': double.tryParse(_priceController.text.trim()) ?? 0.0,
+        'deliveryFee': double.tryParse(_deliveryFeeController.text.trim()) ?? 0.0,
         'stock': int.tryParse(_stockController.text.trim()) ?? 0,
         'description': _descController.text.trim().isEmpty ? 'No description' : _descController.text.trim(),
         'category': _selectedCategory ?? 'Others',
@@ -171,6 +173,7 @@ class _AddProductPageState extends State<AddProductPage> {
   void dispose() {
     _nameController.dispose();
     _priceController.dispose();
+    _deliveryFeeController.dispose();
     _stockController.dispose();
     _descController.dispose();
     _variantController.dispose();
@@ -348,6 +351,24 @@ class _AddProductPageState extends State<AddProductPage> {
                   ),
                 ),
               ],
+            ),
+            _buildInputLabel('DELIVERY FEE (RM)'),
+            _buildCleanTextField(
+              hint: '0.00 (Enter 0 for Free Delivery)',
+              icon: Icons.local_shipping_outlined,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              controller: _deliveryFeeController,
+            ),
+            Padding(
+              padding: const EdgeInsets.only(top: 6.0),
+              child: Text(
+                'Enter 0 if you want to offer Free Delivery.',
+                style: TextStyle(
+                  color: Colors.grey.shade600,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
             ),
 
             _buildInputLabel('VARIATIONS / FLAVORS (OPTIONAL)'),

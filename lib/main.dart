@@ -154,17 +154,24 @@ class _HomeScreenState extends State<HomeScreen> {
         var data = doc.data() as Map<String, dynamic>;
 
         double harga = data['price'] is num ? (data['price'] as num).toDouble() : double.tryParse(data['price'].toString()) ?? 0.0;
-        double rating = data['rating'] is num ? (data['rating'] as num).toDouble() : double.tryParse(data['rating'].toString()) ?? 0.0;
+        int soldCount = 0;
+        final soldRaw = data['sold'] ?? data['soldCount'] ?? data['totalSold'];
+        if (soldRaw is num) {
+          soldCount = soldRaw.toInt();
+        } else {
+          soldCount = int.tryParse(soldRaw?.toString() ?? '0') ?? 0;
+        }
 
         String productCategory = data['category'] ?? 'Others';
 
         _FoodItem item = _FoodItem(
+          productId: doc.id,
           label: data['name'] ?? 'Unknown Item', 
           badge: data['badge'], 
           badgeColor: data['badge'] != null ? kAccent : null, 
           imageUrl: data['imageUrl'] ?? 'https://via.placeholder.com/150',
           price: harga,
-          rating: rating,
+          soldCount: soldCount,
           sellerName: data['sellerName'] ?? 'Unknown Seller',
           sellerId: (data['sellerId'] ?? data['ownerId'] ?? '').toString(),
           category: productCategory, 
@@ -919,24 +926,26 @@ class _PromoBannerState extends State<_PromoBanner> {
 // HORIZONTAL FOOD CAROUSEL
 // ============================================================================
 class _FoodItem {
+  final String productId;
   final String label;
   final String? badge;
   final Color? badgeColor;
   final String imageUrl;
   final double price;
-  final double rating;
+  final int soldCount;
   final String sellerName;
   final String sellerId;
   final String category;
   final String description;
 
   const _FoodItem({
+    required this.productId,
     required this.label, 
     required this.badge, 
     required this.badgeColor, 
     required this.imageUrl, 
     required this.price, 
-    required this.rating, 
+    required this.soldCount, 
     required this.sellerName,
     required this.sellerId,
     required this.category, 
@@ -988,6 +997,7 @@ class _FoodCard extends StatelessWidget {
         context,
         MaterialPageRoute(
           builder: (_) => ProductDetailPage(
+            productId: item.productId,
             name: item.label,
             price: item.price,
             imageUrl: item.imageUrl,
@@ -1189,7 +1199,27 @@ class _FoodCard extends StatelessWidget {
                     children: [
                       Text(item.label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12), maxLines: 2, overflow: TextOverflow.ellipsis),
                       const SizedBox(height: 4),
-                      Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text('RM${item.price.toStringAsFixed(2)}', style: const TextStyle(color: kAccent, fontWeight: FontWeight.w700, fontSize: 12)), Row(mainAxisSize: MainAxisSize.min, children: [const Icon(Icons.star_rounded, color: kAccent, size: 12), const SizedBox(width: 2), Text(item.rating.toStringAsFixed(1), style: TextStyle(color: Colors.grey[700], fontSize: 10))])]),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'RM${item.price.toStringAsFixed(2)}',
+                            style: const TextStyle(
+                              color: kAccent,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 12,
+                            ),
+                          ),
+                          Text(
+                            '${item.soldCount} sold',
+                            style: TextStyle(
+                              color: Colors.grey[700],
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
                       const SizedBox(height: 4),
                       
                       GestureDetector(
@@ -1240,42 +1270,27 @@ int _bannerEtaMinutes(LatLng from, LatLng to) {
   return minutes.clamp(1, 24 * 60);
 }
 
-/// Active = Pending/Processing. Show only when seller is sharing (with valid coords) or has arrived.
+/// Active = pending/processing/shipped (case-insensitive).
+/// Pick the newest active order for the banner.
 QueryDocumentSnapshot<Map<String, dynamic>>? _pickLiveTrackingOrder(
   List<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
 ) {
-  const activeStatuses = {'Pending', 'Processing'};
-  final trackable = <QueryDocumentSnapshot<Map<String, dynamic>>>[];
+  const activeStatuses = {'pending', 'processing', 'shipped'};
+  final activeDocs = <QueryDocumentSnapshot<Map<String, dynamic>>>[];
   for (final doc in docs) {
     final data = doc.data();
-    final status = (data['status'] ?? '').toString();
+    final status = (data['status'] ?? '').toString().trim().toLowerCase();
     if (!activeStatuses.contains(status)) continue;
-
-    final arrived = data['sellerArrived'] == true;
-    final sharing = data['sellerSharing'] == true;
-
-    if (arrived) {
-      trackable.add(doc);
-      continue;
-    }
-    if (!sharing) continue;
-
-    final lat = (data['sellerLat'] as num?)?.toDouble();
-    final lng = (data['sellerLng'] as num?)?.toDouble();
-    final blat = (data['buyerLat'] as num?)?.toDouble();
-    final blng = (data['buyerLng'] as num?)?.toDouble();
-    if (lat == null || lng == null || blat == null || blng == null) continue;
-    if (!_bannerLatLngValid(lat, lng) || !_bannerLatLngValid(blat, blng)) continue;
-    trackable.add(doc);
+    activeDocs.add(doc);
   }
-  if (trackable.isEmpty) return null;
+  if (activeDocs.isEmpty) return null;
 
-  trackable.sort((a, b) {
+  activeDocs.sort((a, b) {
     final ta = (a.data()['createdAt'] as Timestamp?)?.millisecondsSinceEpoch ?? 0;
     final tb = (b.data()['createdAt'] as Timestamp?)?.millisecondsSinceEpoch ?? 0;
     return tb.compareTo(ta);
   });
-  return trackable.first;
+  return activeDocs.first;
 }
 
 class _HomeLiveTrackingBanner extends StatelessWidget {
@@ -1314,14 +1329,37 @@ class _HomeLiveTrackingBanner extends StatelessWidget {
           titleText = 'Seller has arrived!';
           subtitleText = buyerLoc.isNotEmpty ? buyerLoc : 'Head to your pickup point';
         } else {
-          final lat = (data['sellerLat'] as num?)!.toDouble();
-          final lng = (data['sellerLng'] as num?)!.toDouble();
-          final blat = (data['buyerLat'] as num?)!.toDouble();
-          final blng = (data['buyerLng'] as num?)!.toDouble();
-          final mins = _bannerEtaMinutes(LatLng(lat, lng), LatLng(blat, blng));
-          final arrivesAt = DateTime.now().add(Duration(minutes: mins));
-          titleText = 'Arrives by ${DateFormat('h:mm a').format(arrivesAt)}';
-          subtitleText = buyerLoc.isNotEmpty ? buyerLoc : 'Live delivery • ~$mins min';
+          final status = (data['status'] ?? '').toString().trim().toLowerCase();
+          final sharing = data['sellerSharing'] == true;
+          final lat = (data['sellerLat'] as num?)?.toDouble();
+          final lng = (data['sellerLng'] as num?)?.toDouble();
+          final blat = (data['buyerLat'] as num?)?.toDouble();
+          final blng = (data['buyerLng'] as num?)?.toDouble();
+          final canComputeEta = sharing &&
+              lat != null &&
+              lng != null &&
+              blat != null &&
+              blng != null &&
+              _bannerLatLngValid(lat, lng) &&
+              _bannerLatLngValid(blat, blng);
+
+          if (canComputeEta) {
+            final mins = _bannerEtaMinutes(LatLng(lat, lng), LatLng(blat, blng));
+            final arrivesAt = DateTime.now().add(Duration(minutes: mins));
+            titleText = 'Arrives by ${DateFormat('h:mm a').format(arrivesAt)}';
+            subtitleText = buyerLoc.isNotEmpty ? buyerLoc : 'Live delivery • ~$mins min';
+          } else {
+            if (status == 'pending') {
+              titleText = 'Order received';
+              subtitleText = 'Waiting for seller to accept your order';
+            } else if (status == 'processing') {
+              titleText = 'Preparing your order';
+              subtitleText = 'Seller will share live tracking once on the way';
+            } else {
+              titleText = 'Order is on the way';
+              subtitleText = buyerLoc.isNotEmpty ? buyerLoc : 'Tap Track for latest status';
+            }
+          }
         }
 
         return _TrackingBanner(orderId: picked.id, titleText: titleText, subtitleText: subtitleText);

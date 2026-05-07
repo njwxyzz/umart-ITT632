@@ -1,18 +1,22 @@
 import 'package:flutter/material.dart'; // for ValueNotifier and other Flutter basics
 
 class CartItem {
+  final String productId;
   final String name;
   final double price; 
   final String imageUrl;
   final String sellerName;
+  final String sellerId;
   final String addons;
   int quantity;
 
   CartItem({
+    required this.productId,
     required this.name,
     required this.price,
     required this.imageUrl,
     required this.sellerName,
+    required this.sellerId,
     required this.addons,
     required this.quantity,
   });

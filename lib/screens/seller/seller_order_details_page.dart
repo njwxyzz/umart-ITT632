@@ -46,6 +46,93 @@ class _SellerOrderDetailsPageState extends State<SellerOrderDetailsPage> {
 
   late LatLng _buyerLatLng;
 
+  List<MapEntry<String, int>> _parseOrderItems(String rawItems) {
+    final parsed = <MapEntry<String, int>>[];
+    final parts = rawItems
+        .split(',')
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty);
+    final qtyPattern = RegExp(r'^(\d+)\s*x\s*(.+)$', caseSensitive: false);
+
+    for (final part in parts) {
+      final match = qtyPattern.firstMatch(part);
+      if (match != null) {
+        final qty = int.tryParse(match.group(1) ?? '1') ?? 1;
+        final name = (match.group(2) ?? '').trim();
+        if (name.isNotEmpty) parsed.add(MapEntry(name, qty));
+      } else {
+        parsed.add(MapEntry(part, 1));
+      }
+    }
+    return parsed;
+  }
+
+  Future<void> _markDeliveredAndIncrementSold() async {
+    final orderRef = FirebaseFirestore.instance.collection('orders').doc(widget.orderId);
+    final orderSnap = await orderRef.get();
+    final orderData = orderSnap.data();
+    if (orderData == null) return;
+
+    final status = (orderData['status'] ?? '').toString();
+    if (status == 'Delivered') return;
+
+    final rawStructuredItems = orderData['items'];
+    if (rawStructuredItems is List && rawStructuredItems.isNotEmpty) {
+      for (final raw in rawStructuredItems) {
+        if (raw is! Map) continue;
+        final productId = (raw['productId'] ?? '').toString().trim();
+        final qtyRaw = raw['quantity'];
+        final qty = qtyRaw is num
+            ? qtyRaw.toInt()
+            : int.tryParse(qtyRaw?.toString() ?? '1') ?? 1;
+        if (productId.isEmpty) continue;
+        await FirebaseFirestore.instance.collection('products').doc(productId).update({
+          'sold': FieldValue.increment(qty),
+          'soldCount': FieldValue.increment(qty),
+          'totalSold': FieldValue.increment(qty),
+        });
+      }
+      await orderRef.update({'status': 'Delivered'});
+      return;
+    }
+
+    final rawItems = (orderData['productName'] ?? '').toString().trim();
+    final sellerId = (orderData['sellerId'] ?? '').toString().trim();
+    final sellerName = (orderData['sellerName'] ?? '').toString().trim();
+    final items = _parseOrderItems(rawItems);
+
+    for (final entry in items) {
+      final productName = entry.key;
+      final qty = entry.value;
+      QuerySnapshot<Map<String, dynamic>> result;
+
+      if (sellerId.isNotEmpty && sellerId != 'UNKNOWN_SELLER') {
+        result = await FirebaseFirestore.instance
+            .collection('products')
+            .where('sellerId', isEqualTo: sellerId)
+            .where('name', isEqualTo: productName)
+            .limit(1)
+            .get();
+      } else {
+        result = await FirebaseFirestore.instance
+            .collection('products')
+            .where('sellerName', isEqualTo: sellerName)
+            .where('name', isEqualTo: productName)
+            .limit(1)
+            .get();
+      }
+
+      if (result.docs.isEmpty) continue;
+      await result.docs.first.reference.update({
+        'sold': FieldValue.increment(qty),
+        'soldCount': FieldValue.increment(qty),
+        'totalSold': FieldValue.increment(qty),
+      });
+    }
+
+    await orderRef.update({'status': 'Delivered'});
+  }
+
   @override
   void initState() {
     super.initState();
@@ -595,10 +682,7 @@ class _SellerOrderDetailsPageState extends State<SellerOrderDetailsPage> {
             ),
             onPressed: () async {
               await _stopSharing();
-              await FirebaseFirestore.instance
-                  .collection('orders')
-                  .doc(widget.orderId)
-                  .update({'status': 'Delivered'});
+              await _markDeliveredAndIncrementSold();
               if (mounted) Navigator.pop(context);
             },
             child: const Text('Mark as Delivered',

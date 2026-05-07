@@ -76,9 +76,10 @@ class AllProductPage extends StatelessWidget {
                 itemBuilder: (context, index) {   
                   final item = items[index];  
                   return _ProductListCard(   
+                    productId: item.productId,
                     title: item.label,  
                     price: item.price,
-                    rating: item.rating,
+                    soldCount: item.soldCount,
                     sellerName: item.sellerName,
                     sellerId: item.sellerId, 
                     badge: item.badge,
@@ -95,9 +96,10 @@ class AllProductPage extends StatelessWidget {
 
 // 🚨 DESIGN KAD BARU (MELINTANG MACAM REFERENCE) 🚨
 class _ProductListCard extends StatelessWidget { 
+  final String productId;
   final String title; 
   final double price; 
-  final double rating; 
+  final int soldCount; 
   final String sellerName; 
   final String sellerId; 
   final String? badge; 
@@ -106,9 +108,10 @@ class _ProductListCard extends StatelessWidget {
   final String description;
 
   const _ProductListCard({
+    required this.productId,
     required this.title, 
     required this.price, 
-    required this.rating, 
+    required this.soldCount, 
     required this.sellerName, 
     required this.sellerId, 
     this.badge, 
@@ -122,6 +125,7 @@ class _ProductListCard extends StatelessWidget {
     
     void openProductDetail() {
       Navigator.push(context, MaterialPageRoute(builder: (_) => ProductDetailPage(
+        productId: productId,
         name: title,        
         price: price,       
         imageUrl: imageUrl, 
