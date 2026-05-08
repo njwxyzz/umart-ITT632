@@ -98,6 +98,7 @@ flutter:
   uses-material-design: true
   assets:
   - assets/icons/
+  - assets/logo.png
   - assets/bg_pattern.jpg
   - assets/bg_onboard.jpg
   - assets/bg_onboard2.jpg
