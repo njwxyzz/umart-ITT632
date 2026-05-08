@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'cart_page.dart'; 
 import 'cart_manager.dart'; // 🚨 IMPORT OTAK TROLI KAT SINI
 import 'store_profile_page.dart';
@@ -45,6 +46,11 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
   List<String> displayImages = [];
   Map<String, double> variationPriceMap = {};
   String _resolvedProductId = '';
+
+  bool get _isOwnStoreProduct {
+    final currentUserId = FirebaseAuth.instance.currentUser?.uid ?? '';
+    return currentUserId.isNotEmpty && currentUserId == widget.sellerId;
+  }
 
   @override
   void initState() {
@@ -588,6 +594,16 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                   Expanded(
                     child: ElevatedButton(
                       onPressed: () {
+                        if (_isOwnStoreProduct) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('You cannot buy from your own shop.'),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                          return;
+                        }
+
                         // 🚨 MAGIK TROLI BERMULA DI SINI 🚨
                         
                         bool itemExists = false;

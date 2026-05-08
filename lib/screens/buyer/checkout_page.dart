@@ -244,6 +244,17 @@ class _CheckoutPageState extends State<CheckoutPage> {
         targetSellerId = "UNKNOWN_SELLER"; // Kalau kedai hantu
       }
 
+      if (targetSellerId == currentUser.uid) {
+        if (context.mounted) Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('You cannot place order from your own shop.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+
       // Susun nama barang cantik-cantik untuk order
       String allItemsString = _items.map((e) => '${e.quantity}x ${e.name}').join(', ');
       final structuredItems = _items
