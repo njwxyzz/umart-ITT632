@@ -802,7 +802,7 @@ class _PromoBannerState extends State<_PromoBanner> {
   final List<Map<String, String>> _bannerTexts = [
     {
       'badge': 'MIDNIGHT CRAVINGS',
-      'title': 'Free Delivery to\nKolej Dahlia!',
+      'title': 'Order from your\nfavorite campus sellers!',
     },
     {
       'badge': 'PRELOVED FASHION',

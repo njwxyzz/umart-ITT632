@@ -35,12 +35,20 @@ class KolejOption {
 
 /// Placeholder coordinates around campus; replace with official points if you have them.
 const List<KolejOption> kUiTMPerlisKolej = [
-  KolejOption(id: 'dahlia', name: 'Kolej Dahlia', lat: 6.4438, lng: 100.2798),
-  KolejOption(id: 'mawar', name: 'Kolej Mawar', lat: 6.4442, lng: 100.2812),
-  KolejOption(id: 'cempaka', name: 'Kolej Cempaka', lat: 6.4426, lng: 100.2820),
-  KolejOption(id: 'melati', name: 'Kolej Melati', lat: 6.4420, lng: 100.2795),
-  KolejOption(id: 'kenanga', name: 'Kolej Kenanga', lat: 6.4445, lng: 100.2830),
-  KolejOption(id: 'sakura', name: 'Kolej Sakura', lat: 6.4414, lng: 100.2810),
+  KolejOption(id: 'kolej_dahlia_1', name: 'Kolej Dahlia 1', lat: 6.4438, lng: 100.2798),
+  KolejOption(id: 'kolej_dahlia_2', name: 'Kolej Dahlia 2', lat: 6.4438, lng: 100.2798),
+  KolejOption(id: 'kolej_dahlia_3', name: 'Kolej Dahlia 3', lat: 6.4438, lng: 100.2798),
+  KolejOption(id: 'kolej_kesinai_1', name: 'Kolej Kesinai 1', lat: 6.4442, lng: 100.2812),
+  KolejOption(id: 'kolej_kesinai_2', name: 'Kolej Kesinai 2', lat: 6.4442, lng: 100.2812),
+  KolejOption(id: 'kolej_kesinai_3', name: 'Kolej Kesinai 3', lat: 6.4442, lng: 100.2812),
+  KolejOption(id: 'kolej_cengal_1', name: 'Kolej Cengal 1', lat: 6.4426, lng: 100.2820),
+  KolejOption(id: 'kolej_cengal_2', name: 'Kolej Cengal 2', lat: 6.4426, lng: 100.2820),
+  KolejOption(id: 'kolej_cengal_3', name: 'Kolej Cengal 3', lat: 6.4426, lng: 100.2820),
+  KolejOption(id: 'kolej_cengal_4', name: 'Kolej Cengal 4', lat: 6.4426, lng: 100.2820),
+  KolejOption(id: 'kolej_cengal_5', name: 'Kolej Cengal 5', lat: 6.4426, lng: 100.2820),
+  KolejOption(id: 'kolej_cengal_6', name: 'Kolej Cengal 6', lat: 6.4426, lng: 100.2820),
+  KolejOption(id: 'kolej_cengal_7', name: 'Kolej Cengal 7', lat: 6.4426, lng: 100.2820),
+  KolejOption(id: 'non_resident_nr', name: 'Non-Resident (NR)', lat: 6.4414, lng: 100.2810),
 ];
 
 class CheckoutPage extends StatefulWidget {
@@ -178,7 +186,13 @@ class _CheckoutPageState extends State<CheckoutPage> {
   // --- AMBIL DATA DARI CART MANAGER ---
   List<CartItem> get _items => CartManager.instance.items;
   double get _subtotal => CartManager.instance.totalPrice;
-  double get _deliveryFee => _subtotal >= 15.0 ? 0.0 : 3.00; 
+  double get _deliveryFee {
+    if (_items.isEmpty) return 0.0;
+    // Single-store cart rule is enforced. If products have different fees, use the highest fee.
+    return _items
+        .map((e) => e.deliveryFee)
+        .reduce((a, b) => a > b ? a : b);
+  }
   double get _total => _subtotal + _deliveryFee;
 
   String get _composedBuyerLocation {
@@ -267,6 +281,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
                 'sellerId': e.sellerId,
                 'sellerName': e.sellerName,
                 'addons': e.addons,
+                'deliveryFee': e.deliveryFee,
               })
           .toList();
 
@@ -284,6 +299,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
         'sellerName': sellerName,
         'productName': allItemsString,
         'items': structuredItems,
+        'deliveryFee': _deliveryFee,
         'totalPrice': _total,
         'status': 'Pending',
         'note': widget.note, // Nota tak nak taugeh

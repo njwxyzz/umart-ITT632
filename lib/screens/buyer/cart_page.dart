@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'checkout_page.dart';
 import 'cart_manager.dart'; // <-- THE BRAIN IS IMPORTED HERE
 
@@ -20,8 +21,7 @@ class CartPage extends StatefulWidget {
 }
 
 class _CartPageState extends State<CartPage> {
-  static const double _freeDeliveryThreshold = 15.0;
-  static const double _deliveryFee = 3.00; // Example delivery fee, changes to 0 if threshold met
+  String _sellerLocation = '';
 
   // to hold student remarks (if any)
   final TextEditingController _noteController = TextEditingController();
@@ -31,14 +31,44 @@ class _CartPageState extends State<CartPage> {
 
   double get _subtotal => CartManager.instance.totalPrice;
   
-  double get _currentDeliveryFee => _subtotal >= _freeDeliveryThreshold ? 0.0 : _deliveryFee;
+  double get _currentDeliveryFee {
+    if (_items.isEmpty) return 0.0;
+    // Single-store cart rule is enforced. If products have different fees, use the highest fee.
+    return _items
+        .map((e) => e.deliveryFee)
+        .reduce((a, b) => a > b ? a : b);
+  }
   
   double get _total => _subtotal + _currentDeliveryFee;
-  
-  double get _amountNeededForFreeDelivery => (_freeDeliveryThreshold - _subtotal).clamp(0.0, double.infinity);
-  
-  double get _freeDeliveryProgress => (_subtotal / _freeDeliveryThreshold).clamp(0.0, 1.0);
 
+  @override
+  void initState() {
+    super.initState();
+    _loadSellerLocation();
+  }
+
+  Future<void> _loadSellerLocation() async {
+    if (_items.isEmpty) return;
+    final sellerId = _items.first.sellerId.trim();
+    if (sellerId.isEmpty) return;
+
+    try {
+      final storeDoc = await FirebaseFirestore.instance
+          .collection('stores')
+          .doc(sellerId)
+          .get();
+      final data = storeDoc.data();
+      if (!mounted || data == null) return;
+
+      final location = (data['storeLocation'] ?? data['location'] ?? '').toString().trim();
+      if (location.isNotEmpty) {
+        setState(() => _sellerLocation = location);
+      }
+    } catch (_) {
+      // Keep fallback UI if store location can't be fetched.
+    }
+  }
+  
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -94,12 +124,7 @@ class _CartPageState extends State<CartPage> {
                       children: [
                         _SellerHeaderCard(
                           shopName: _items.isNotEmpty ? _items.first.sellerName : 'UMART Store', // Dynamic seller name
-                          location: 'UiTM Campus',
-                        ),
-                        const SizedBox(height: 16),
-                        _FreeDeliveryProgress(
-                          amountNeeded: _amountNeededForFreeDelivery,
-                          progress: _freeDeliveryProgress,
+                          location: _sellerLocation.isNotEmpty ? _sellerLocation : 'Location not provided',
                         ),
                         const SizedBox(height: 20),
                         
@@ -185,89 +210,6 @@ class _CartPageState extends State<CartPage> {
                   ),
                 ],
               ),
-      ),
-    );
-  }
-}
-
-// ─── Free Delivery Progress Bar ─────────────────────────────────────────────
-
-class _FreeDeliveryProgress extends StatelessWidget {
-  final double amountNeeded;
-  final double progress;
-
-  const _FreeDeliveryProgress({
-    required this.amountNeeded,
-    required this.progress,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    if (amountNeeded <= 0) {
-      return Container(
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
-        decoration: BoxDecoration(
-          color: kWhite,
-          borderRadius: BorderRadius.circular(14),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 10,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: const Row(
-          children: [
-            Text('🚚 ', style: TextStyle(fontSize: 16, color: kGreen)),
-            Text(
-              "You've unlocked FREE delivery!",
-              style: TextStyle(
-                fontWeight: FontWeight.w600,
-                fontSize: 14,
-                color: kGreen,
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: kWhite,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Add RM${amountNeeded.toStringAsFixed(2)} more to unlock 🚚 FREE Delivery!',
-            style: const TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: Color(0xFF1A1A2E),
-            ),
-          ),
-          const SizedBox(height: 10),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(4),
-            child: LinearProgressIndicator(
-              value: progress,
-              minHeight: 6,
-              backgroundColor: Colors.grey[200],
-              valueColor: const AlwaysStoppedAnimation<Color>(kAccent), 
-            ),
-          ),
-        ],
       ),
     );
   }

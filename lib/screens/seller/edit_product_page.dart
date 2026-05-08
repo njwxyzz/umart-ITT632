@@ -26,6 +26,7 @@ class EditProductPage extends StatefulWidget {
 class _EditProductPageState extends State<EditProductPage> {
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _priceController = TextEditingController();
+  final TextEditingController _deliveryFeeController = TextEditingController();
   final TextEditingController _stockController = TextEditingController();
   final TextEditingController _descController = TextEditingController();
   final TextEditingController _variationController = TextEditingController();
@@ -56,6 +57,12 @@ class _EditProductPageState extends State<EditProductPage> {
     _nameController.text =
         widget.productData['name'] ?? widget.productData['productName'] ?? '';
     _priceController.text = widget.productData['price']?.toString() ?? '';
+    final rawDeliveryFee = widget.productData['deliveryFee'];
+    if (rawDeliveryFee is num) {
+      _deliveryFeeController.text = rawDeliveryFee.toDouble().toString();
+    } else if (rawDeliveryFee != null) {
+      _deliveryFeeController.text = rawDeliveryFee.toString();
+    }
     _stockController.text = widget.productData['stock']?.toString() ?? '10';
     _descController.text = widget.productData['description'] ?? '';
 
@@ -177,6 +184,7 @@ class _EditProductPageState extends State<EditProductPage> {
       final Map<String, dynamic> updateData = {
         'name': _nameController.text.trim(),
         'price': double.tryParse(_priceController.text.trim()) ?? 0.0,
+        'deliveryFee': double.tryParse(_deliveryFeeController.text.trim()) ?? 0.0,
         'stock': int.tryParse(_stockController.text.trim()) ?? 0,
         'description': _descController.text.trim(),
         'category': _selectedCategory,
@@ -265,6 +273,7 @@ class _EditProductPageState extends State<EditProductPage> {
   void dispose() {
     _nameController.dispose();
     _priceController.dispose();
+    _deliveryFeeController.dispose();
     _stockController.dispose();
     _descController.dispose();
     _variationController.dispose();
@@ -505,6 +514,26 @@ class _EditProductPageState extends State<EditProductPage> {
                   ),
                 ),
               ],
+            ),
+            const SizedBox(height: 16),
+
+            _buildLabel('DELIVERY FEE (RM)'),
+            _buildTextField(
+              hint: '0.00 (Enter 0 for Free Delivery)',
+              controller: _deliveryFeeController,
+              icon: Icons.local_shipping_outlined,
+              isNumber: true,
+            ),
+            Padding(
+              padding: const EdgeInsets.only(top: 6.0),
+              child: Text(
+                'Enter 0 if you want to offer Free Delivery.',
+                style: TextStyle(
+                  color: Colors.grey.shade600,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
             ),
             const SizedBox(height: 16),
 

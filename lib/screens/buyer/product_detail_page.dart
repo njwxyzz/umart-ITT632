@@ -46,6 +46,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
   List<String> displayImages = [];
   Map<String, double> variationPriceMap = {};
   String _resolvedProductId = '';
+  double _productDeliveryFee = 0.0;
 
   bool get _isOwnStoreProduct {
     final currentUserId = FirebaseAuth.instance.currentUser?.uid ?? '';
@@ -102,6 +103,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
       final rawVariations = data['variations'];
       final rawVariationPrices = data['variationPrices'];
       final rawImageUrls = data['imageUrls'] ?? data['images'] ?? data['gallery'];
+      final rawDeliveryFee = data['deliveryFee'];
 
       final fetchedSoldCount = rawSoldCount is num
           ? rawSoldCount.toInt()
@@ -113,6 +115,9 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
           ? rawImageUrls.whereType<String>().where((url) => url.trim().isNotEmpty).toList()
           : <String>[];
       final fetchedVariationPrices = <String, double>{};
+      final fetchedDeliveryFee = rawDeliveryFee is num
+          ? rawDeliveryFee.toDouble()
+          : double.tryParse(rawDeliveryFee?.toString() ?? '') ?? 0.0;
 
       if (rawVariationPrices is Map) {
         for (final entry in rawVariationPrices.entries) {
@@ -149,6 +154,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
             ? fetchedVariations
             : (widget.variations ?? []);
         variationPriceMap = fetchedVariationPrices;
+        _productDeliveryFee = fetchedDeliveryFee;
         displayImages = fetchedImages.isNotEmpty ? fetchedImages : [widget.imageUrl];
         if (selectedImageIndex >= displayImages.length) {
           selectedImageIndex = 0;
@@ -169,6 +175,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
         displayVariations = widget.variations ?? [];
         displayImages = [widget.imageUrl];
         variationPriceMap = {};
+        _productDeliveryFee = 0.0;
         selectedVariation = displayVariations.isNotEmpty ? displayVariations.first : '';
         selectedImageIndex = 0;
       });
@@ -605,7 +612,17 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                         }
 
                         // 🚨 MAGIK TROLI BERMULA DI SINI 🚨
-                        
+                        if (CartManager.instance.items.isNotEmpty &&
+                            CartManager.instance.items.first.sellerId != widget.sellerId) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('You can only add items from the same store in one order.'),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                          return;
+                        }
+
                         bool itemExists = false;
                         
                         // 1. Kita check dulu dalam troli, ada tak barang yg SAMA & PERISA yg SAMA
@@ -625,6 +642,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                               productId: _resolvedProductId,
                               name: widget.name,
                               price: unitPrice,
+                              deliveryFee: _productDeliveryFee,
                               imageUrl: widget.imageUrl,
                               sellerName: widget.sellerName,
                               sellerId: widget.sellerId,

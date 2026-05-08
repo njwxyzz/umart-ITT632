@@ -4,6 +4,7 @@ class CartItem {
   final String productId;
   final String name;
   final double price; 
+  final double deliveryFee;
   final String imageUrl;
   final String sellerName;
   final String sellerId;
@@ -14,6 +15,7 @@ class CartItem {
     required this.productId,
     required this.name,
     required this.price,
+    required this.deliveryFee,
     required this.imageUrl,
     required this.sellerName,
     required this.sellerId,
