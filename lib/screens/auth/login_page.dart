@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart'; // Wajib import untuk Login
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../main.dart'; // Make sure this path to HomeScreen is correct
 import 'register_page.dart';
 import '../admin_web/admin_dashboard_page.dart';
@@ -26,9 +27,88 @@ class _LoginPageState extends State<LoginPage> {
   bool _rememberMe = false; // For checkbox
   bool _isLoading = false; // For button loading state
 
+  Future<void> _syncFirestoreEmailVerified(User user) async {
+    try {
+      await FirebaseFirestore.instance.collection('users').doc(user.uid).set(
+        {'emailVerified': true},
+        SetOptions(merge: true),
+      );
+    } catch (_) {
+      // Keep this best-effort only. Auth emailVerified is the source of truth.
+    }
+  }
+
+  Future<void> _resendVerificationEmail() async {
+    final email = _emailController.text.trim().toLowerCase();
+    final password = _passwordController.text.trim();
+
+    if (email.isEmpty || password.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Enter your email and password first to resend verification.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      final userCredential = await FirebaseAuth.instance.signInWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+
+      await userCredential.user?.reload();
+      final user = FirebaseAuth.instance.currentUser;
+      final isAdmin = email == 'admin@umart.com';
+
+      if (!isAdmin && user != null && !user.emailVerified) {
+        await user.sendEmailVerification();
+        await FirebaseAuth.instance.signOut();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Verification email sent. Please check Inbox or Spam/Junk.'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      } else {
+        await FirebaseAuth.instance.signOut();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Your email is already verified. You can log in now.'),
+              backgroundColor: Colors.blue,
+            ),
+          );
+        }
+      }
+    } on FirebaseAuthException catch (e) {
+      String errorMsg = 'Unable to resend verification email.';
+      if (e.code == 'user-not-found' || e.code == 'invalid-credential' || e.code == 'wrong-password') {
+        errorMsg = 'Incorrect email or password.';
+      } else if (e.code == 'invalid-email') {
+        errorMsg = 'Please enter a valid email format.';
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(errorMsg), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
   // --- Firebase Login Logic ---
   Future<void> _loginUser() async {
-    final email = _emailController.text.trim();
+    final email = _emailController.text.trim().toLowerCase();
     final password = _passwordController.text.trim();
 
     // 1. Check if fields are empty
@@ -44,17 +124,40 @@ class _LoginPageState extends State<LoginPage> {
 
     try {
       // 3. Request login from Firebase
-      await FirebaseAuth.instance.signInWithEmailAndPassword(
+      final userCredential = await FirebaseAuth.instance.signInWithEmailAndPassword(
         email: email,
         password: password,
       );
+
+      await userCredential.user?.reload();
+      final user = FirebaseAuth.instance.currentUser;
+      final isAdmin = email == 'admin@umart.com';
+
+      if (!isAdmin && user != null && !user.emailVerified) {
+        await user.sendEmailVerification();
+        await FirebaseAuth.instance.signOut();
+        setState(() => _isLoading = false);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Please verify your UiTM email first. New verification link sent.'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+        return;
+      }
+
+      if (!isAdmin && user != null && user.emailVerified) {
+        _syncFirestoreEmailVerified(user);
+      }
 
       // Stop loading
       setState(() => _isLoading = false);
 
       // 4. If success, navigate to HomeScreen
       if (mounted) {
-        if (email.toLowerCase() == 'admin@umart.com') {
+        if (isAdmin) {
           Navigator.of(context).pushReplacement(
             MaterialPageRoute(builder: (_) => const AdminDashboardPage())
           );
@@ -209,6 +312,25 @@ class _LoginPageState extends State<LoginPage> {
                       child: _isLoading 
                         ? const CircularProgressIndicator(color: kWhite) 
                         : const Text('Log In', style: TextStyle(color: kWhite, fontSize: 16, fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+
+                  const SizedBox(height: 10),
+                  Center(
+                    child: TextButton(
+                      onPressed: _isLoading ? null : _resendVerificationEmail,
+                      child: const Text(
+                        'Resend verification email',
+                        style: TextStyle(color: kPrimary, fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    child: Text(
+                      'If email is not received, check your Spam/Junk folder.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
                     ),
                   ),
 
