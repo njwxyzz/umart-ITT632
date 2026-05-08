@@ -76,6 +76,56 @@ class _OrdersPageState extends State<OrdersPage> {
     return '$h:$m';
   }
 
+  bool _canBuyerCancel(OrderHistory order) => order.status == 'Pending';
+
+  Future<void> _cancelOrder(String orderId) async {
+    final shouldCancel = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Cancel this order?'),
+        content: const Text(
+          'You can only cancel before seller accepts your order. This action cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Keep Order'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Cancel Order'),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldCancel != true) return;
+
+    try {
+      await FirebaseFirestore.instance.collection('orders').doc(orderId).update({
+        'status': 'Cancelled',
+        'cancelledBy': 'Buyer',
+        'cancelledAt': FieldValue.serverTimestamp(),
+      });
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Order cancelled successfully.'),
+          backgroundColor: kPrimary,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to cancel order: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
   OrderHistory _fromFirestore(QueryDocumentSnapshot doc) {
     var data = doc.data() as Map<String, dynamic>;
     
@@ -194,8 +244,16 @@ class _OrdersPageState extends State<OrdersPage> {
                 allOrders = snapshot.data!.docs.map((doc) => _fromFirestore(doc)).toList();
               }
 
-              final activeOrders = allOrders.where((o) => o.status == 'Pending' || o.status == 'Processing').toList();
-              final completedOrders = allOrders.where((o) => o.status == 'Delivered' || o.status == 'Rejected' || o.status == 'Completed').toList();
+              final activeOrders = allOrders
+                  .where((o) => o.status == 'Pending' || o.status == 'Processing')
+                  .toList();
+              final completedOrders = allOrders
+                  .where((o) =>
+                      o.status == 'Delivered' ||
+                      o.status == 'Rejected' ||
+                      o.status == 'Completed' ||
+                      o.status == 'Cancelled')
+                  .toList();
 
               activeOrders.sort((a, b) => b.dateTime.compareTo(a.dateTime));
               completedOrders.sort((a, b) => b.dateTime.compareTo(a.dateTime));
@@ -296,12 +354,44 @@ class _OrdersPageState extends State<OrdersPage> {
                   ),
                 ],
               ),
-              OutlinedButton(
-                onPressed: () {
-                  Navigator.push(context, MaterialPageRoute(builder: (_) => OrderDetailPage(order: order)));
-                },
-                style: OutlinedButton.styleFrom(side: const BorderSide(color: kPrimary), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20))),
-                child: const Text('View Details', style: TextStyle(color: kPrimary, fontWeight: FontWeight.bold)),
+              Row(
+                children: [
+                  if (_canBuyerCancel(order))
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: OutlinedButton(
+                        onPressed: () => _cancelOrder(order.orderId),
+                        style: OutlinedButton.styleFrom(
+                          side: BorderSide(color: Colors.red.shade300),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                        ),
+                        child: const Text(
+                          'Cancel',
+                          style: TextStyle(
+                            color: Colors.red,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                  OutlinedButton(
+                    onPressed: () {
+                      Navigator.push(context, MaterialPageRoute(builder: (_) => OrderDetailPage(order: order)));
+                    },
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: kPrimary),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                    ),
+                    child: const Text(
+                      'View Details',
+                      style: TextStyle(color: kPrimary, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ],
               )
             ],
           )
@@ -336,7 +426,9 @@ class _OrderHistoryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    Color statusColor = order.status == 'Rejected' ? Colors.red : kPrimary;
+    Color statusColor = order.status == 'Rejected' || order.status == 'Cancelled'
+        ? Colors.red
+        : kPrimary;
 
     return GestureDetector(
       onTap: onTap,

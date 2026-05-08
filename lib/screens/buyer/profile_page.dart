@@ -83,8 +83,12 @@ class _ProfilePageState extends State<ProfilePage> {
 
       for (var doc in ordersQuery.docs) {
         var data = doc.data();
-        
-        if (data['status'] != 'Rejected') {
+
+        final status = (data['status'] ?? '').toString();
+        final shouldCountInSpending =
+            status != 'Rejected' && status != 'Cancelled';
+
+        if (shouldCountInSpending) {
           double price = data['totalPrice'] is num ? (data['totalPrice'] as num).toDouble() : 0.0;
           orderCount++;
           spent += price;

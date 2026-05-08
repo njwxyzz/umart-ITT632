@@ -27,6 +27,7 @@ class _TrackingPageState extends State<TrackingPage> {
   LatLng? _buyerLocation;
   bool _isLocating = true;
   String? _locationError;
+  bool _isCancellingOrder = false;
 
   @override
   void initState() {
@@ -120,6 +121,65 @@ class _TrackingPageState extends State<TrackingPage> {
 
   int min(int a, int b) => a < b ? a : b;
 
+  bool _canCancelOrder(String status) => status == 'Pending';
+
+  Future<void> _cancelOrder() async {
+    if (_isCancellingOrder) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Cancel this order?'),
+        content: const Text(
+          'You can only cancel before seller accepts your order. This action cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Keep Order'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Cancel Order'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _isCancellingOrder = true);
+    try {
+      await FirebaseFirestore.instance
+          .collection('orders')
+          .doc(widget.orderId)
+          .update({
+        'status': 'Cancelled',
+        'cancelledBy': 'Buyer',
+        'cancelledAt': FieldValue.serverTimestamp(),
+      });
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Order cancelled successfully.'),
+          backgroundColor: kPrimary,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Could not cancel order: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isCancellingOrder = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -180,6 +240,7 @@ class _TrackingPageState extends State<TrackingPage> {
           final dynamic createdAt    = data['createdAt'];
           final bool sellerArrived   = data['sellerArrived'] == true;
           final String displayId     = _displayId(widget.orderId);
+          final bool isCancelled     = status == 'Cancelled';
 
           // Seller live location update
           final bool sharing = data['sellerSharing'] == true;
@@ -198,6 +259,8 @@ class _TrackingPageState extends State<TrackingPage> {
           bool sellerSharing = false;
           String etaText = isDelivered
               ? 'Order has been delivered!'
+              : isCancelled
+                  ? 'This order has been cancelled.'
               : sellerArrived
                   ? 'Please meet seller at your pickup point.'
                   : 'Seller is preparing your order...';
@@ -267,6 +330,8 @@ class _TrackingPageState extends State<TrackingPage> {
                             Text(
                               isDelivered
                                   ? 'Order Delivered!'
+                                  : isCancelled
+                                      ? 'Order Cancelled'
                                   : sellerArrived
                                       ? 'Seller has arrived!'
                                   : sellerSharing
@@ -370,6 +435,40 @@ class _TrackingPageState extends State<TrackingPage> {
                 ),
 
                 const SizedBox(height: 24),
+
+                if (_canCancelOrder(status)) ...[
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: _isCancellingOrder ? null : _cancelOrder,
+                      icon: _isCancellingOrder
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.red,
+                              ),
+                            )
+                          : const Icon(Icons.cancel_outlined, color: Colors.red),
+                      label: const Text(
+                        'Cancel Order',
+                        style: TextStyle(
+                          color: Colors.red,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        side: BorderSide(color: Colors.red.shade300),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                ],
 
                 // ─── 4. TIMELINE ─────────────────────────────────────────
                 const Text('Order Status',
