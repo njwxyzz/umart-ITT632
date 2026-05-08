@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/services.dart';
+import 'dart:math';
 
 import '../auth/login_page.dart';
 // --- Color Constants ---
@@ -38,6 +39,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
   bool _userSortAsc = true;
   bool _storeSortAsc = true;
   bool _orderSortAsc = true;
+  final Random _random = Random();
 
   @override
   Widget build(BuildContext context) {
@@ -679,6 +681,35 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                     _buildQuickActionButton(Icons.receipt_long_rounded, 'Monitor Orders', _AdminSection.orders),
                   ],
                 ),
+                const SizedBox(height: 14),
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
+                  children: [
+                    OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size(0, 46),
+                        side: BorderSide(color: Colors.green.shade200),
+                        backgroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      ),
+                      onPressed: _seedDemoProducts,
+                      icon: const Icon(Icons.auto_awesome_rounded, color: kPrimary),
+                      label: const Text('Seed Demo Products', style: TextStyle(color: kCardText)),
+                    ),
+                    OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size(0, 46),
+                        side: BorderSide(color: Colors.red.shade200),
+                        backgroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      ),
+                      onPressed: _clearDemoProducts,
+                      icon: const Icon(Icons.delete_sweep_rounded, color: Colors.red),
+                      label: const Text('Clear Demo Products', style: TextStyle(color: kCardText)),
+                    ),
+                  ],
+                ),
                 const SizedBox(height: 28),
                 const Text('Operational Notes', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: kCardText)),
                 const SizedBox(height: 16),
@@ -943,6 +974,187 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
       }),
     ];
     return rows.join('\n');
+  }
+
+  Future<void> _seedDemoProducts() async {
+    final shouldSeed = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Seed demo products?'),
+          content: const Text(
+            'This will add 100 demo products with realistic names, prices, and dates. Continue?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: kPrimary),
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Seed'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (shouldSeed != true) return;
+
+    try {
+      final currentUid = FirebaseAuth.instance.currentUser?.uid;
+      if (currentUid == null || currentUid.isEmpty) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('You must be logged in to seed demo products.')),
+        );
+        return;
+      }
+
+      String sellerName = 'UMART Demo Store';
+      final ownStore = await FirebaseFirestore.instance
+          .collection('stores')
+          .where('ownerId', isEqualTo: currentUid)
+          .limit(1)
+          .get();
+      if (ownStore.docs.isNotEmpty) {
+        final data = ownStore.docs.first.data();
+        sellerName = (data['storeName'] ?? sellerName).toString();
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Seeding demo products... please wait.')),
+        );
+      }
+
+      final now = DateTime.now();
+      final categories = <String>[
+        'Food & Beverages',
+        'Preloved Items',
+        'Books & Notes',
+        'Gadgets & Accessories',
+        'Others',
+      ];
+
+      final productsByCategory = <String, List<String>>{
+        'Food & Beverages': ['Choco Jar', 'Iced Coffee', 'Spicy Macaroni', 'Pasta Bowl', 'Fruit Sandwich'],
+        'Preloved Items': ['Hoodie Bundle', 'Campus Backpack', 'Desk Lamp', 'Sports Shoes', 'Water Flask'],
+        'Books & Notes': ['Math Notes Set', 'Final Exam Spot', 'Reference Book', 'Printed Slides', 'Lab Report Template'],
+        'Gadgets & Accessories': ['Type-C Cable', 'Wireless Mouse', 'Phone Holder', 'Laptop Stand', 'Earbuds Case'],
+        'Others': ['Study Planner', 'Mini Whiteboard', 'Sticky Notes Pack', 'Pen Bundle', 'Gift Set'],
+      };
+
+      final batch = FirebaseFirestore.instance.batch();
+      final collection = FirebaseFirestore.instance.collection('products');
+
+      for (int i = 0; i < 100; i++) {
+        final category = categories[_random.nextInt(categories.length)];
+        final pool = productsByCategory[category] ?? const ['Campus Item'];
+        final baseName = pool[_random.nextInt(pool.length)];
+        final createdAt = now.subtract(
+          Duration(
+            days: _random.nextInt(90),
+            hours: _random.nextInt(24),
+            minutes: _random.nextInt(60),
+          ),
+        );
+        final price = 2.5 + (_random.nextInt(600) / 10.0);
+        final deliveryFee = _random.nextBool() ? 0.0 : (1 + _random.nextInt(4)).toDouble();
+        final stock = 4 + _random.nextInt(60);
+        final imageSeed = 'umart_${category.replaceAll(' ', '_')}_$i';
+        final imageUrls = <String>[
+          'https://picsum.photos/seed/${imageSeed}a/720/720',
+          'https://picsum.photos/seed/${imageSeed}b/720/720',
+        ];
+
+        final docRef = collection.doc();
+        batch.set(docRef, {
+          'name': '$baseName ${100 + i}',
+          'price': double.parse(price.toStringAsFixed(2)),
+          'deliveryFee': deliveryFee,
+          'stock': stock,
+          'description': 'Popular among UMART users. Fresh listing for campus community.',
+          'category': category,
+          'variations': <String>[],
+          'variationPrices': <String, double>{},
+          'sellerName': sellerName,
+          'sellerId': currentUid,
+          'imageUrl': imageUrls.first,
+          'imageUrls': imageUrls,
+          'createdAt': Timestamp.fromDate(createdAt),
+          'isDemo': true,
+        });
+      }
+
+      await batch.commit();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Demo seeding completed: 100 products added.')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Demo seeding failed: $e')),
+      );
+    }
+  }
+
+  Future<void> _clearDemoProducts() async {
+    final shouldClear = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Clear demo products?'),
+          content: const Text('This only deletes products where isDemo = true.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Delete'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (shouldClear != true) return;
+
+    try {
+      int totalDeleted = 0;
+
+      while (true) {
+        final snapshot = await FirebaseFirestore.instance
+            .collection('products')
+            .where('isDemo', isEqualTo: true)
+            .limit(250)
+            .get();
+
+        if (snapshot.docs.isEmpty) break;
+
+        final batch = FirebaseFirestore.instance.batch();
+        for (final doc in snapshot.docs) {
+          batch.delete(doc.reference);
+        }
+        await batch.commit();
+        totalDeleted += snapshot.docs.length;
+      }
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Demo cleanup completed: $totalDeleted products deleted.')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Demo cleanup failed: $e')),
+      );
+    }
   }
 
   Color _statusColor(String status) {

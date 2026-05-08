@@ -17,6 +17,86 @@ class OrderDetailPage extends StatelessWidget {
 
   const OrderDetailPage({super.key, required this.order});
 
+  Future<Map<String, dynamic>> _loadSellerInfo() async {
+    final fallback = <String, dynamic>{
+      'name': order.sellerName,
+      'photo': order.sellerPhoto,
+      'address': order.sellerAddress,
+      'rating': 0.0,
+      'reviews': 0,
+      'location': order.sellerLocation,
+    };
+
+    try {
+      final orderDoc = await FirebaseFirestore.instance.collection('orders').doc(order.orderId).get();
+      final orderData = orderDoc.data() ?? <String, dynamic>{};
+      final sellerId = (orderData['sellerId'] ?? '').toString();
+
+      Map<String, dynamic>? store;
+
+      if (sellerId.isNotEmpty) {
+        final byOwner = await FirebaseFirestore.instance
+            .collection('stores')
+            .where('ownerId', isEqualTo: sellerId)
+            .limit(1)
+            .get();
+        if (byOwner.docs.isNotEmpty) {
+          store = byOwner.docs.first.data();
+        } else {
+          final byDocId = await FirebaseFirestore.instance.collection('stores').doc(sellerId).get();
+          if (byDocId.exists && byDocId.data() != null) {
+            store = byDocId.data();
+          }
+        }
+      }
+
+      if (store == null) {
+        final byStoreName = await FirebaseFirestore.instance
+            .collection('stores')
+            .where('storeName', isEqualTo: order.sellerName)
+            .limit(1)
+            .get();
+        if (byStoreName.docs.isNotEmpty) {
+          store = byStoreName.docs.first.data();
+        }
+      }
+
+      if (store == null) {
+        final routeLocation =
+            (orderData['sellerLocation'] ?? orderData['sellerAddress'] ?? fallback['location']).toString();
+        return <String, dynamic>{
+          ...fallback,
+          'location': routeLocation,
+          'address': routeLocation,
+        };
+      }
+      final String storeName = (store['storeName'] ?? fallback['name']).toString();
+      final String photo = (store['storePhoto'] ??
+              store['storePhotoUrl'] ??
+              store['logoUrl'] ??
+              store['profileImage'] ??
+              store['imageUrl'] ??
+              fallback['photo'])
+          .toString();
+      final String address = (store['address'] ??
+              store['storeAddress'] ??
+              store['storeLocation'] ??
+              store['location'] ??
+              fallback['address'])
+          .toString();
+      final String location =
+          (store['location'] ?? store['storeLocation'] ?? orderData['sellerLocation'] ?? address).toString();
+      return <String, dynamic>{
+        'name': storeName,
+        'photo': photo,
+        'address': address,
+        'location': location,
+      };
+    } catch (_) {
+      return fallback;
+    }
+  }
+
   String _formatDate(DateTime dt) {
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     return '${dt.day} ${months[dt.month - 1]} ${dt.year}';
@@ -140,6 +220,7 @@ class OrderDetailPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final topPad = MediaQuery.of(context).padding.top;
     final bottomPad = MediaQuery.of(context).padding.bottom;
+    final sellerInfoFuture = _loadSellerInfo();
 
     return Scaffold(
       backgroundColor: kBg,
@@ -167,9 +248,9 @@ class OrderDetailPage extends StatelessWidget {
                       children: [
                         _buildOrderMeta(),
                         const SizedBox(height: 14),
-                        _buildSellerCard(),
+                        _buildSellerCard(sellerInfoFuture),
                         const SizedBox(height: 14),
-                        _buildRouteCard(),
+                        _buildRouteCard(sellerInfoFuture),
                         const SizedBox(height: 14),
                         _buildOrderSummary(),
                         const SizedBox(height: 14),
@@ -247,7 +328,7 @@ class OrderDetailPage extends StatelessWidget {
   }
 
   // ── Seller Card ────────────────────────────────────────────────────────────
-  Widget _buildSellerCard() {
+  Widget _buildSellerCard(Future<Map<String, dynamic>> sellerInfoFuture) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(color: kWhite, borderRadius: BorderRadius.circular(20), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 3))]),
@@ -256,43 +337,64 @@ class OrderDetailPage extends StatelessWidget {
         children: [
           const _SectionTitle(title: 'Seller Info', icon: Icons.storefront_rounded),
           const SizedBox(height: 14),
-          Row(
-            children: [
-              Container(
-                width: 60, height: 60, decoration: BoxDecoration(borderRadius: BorderRadius.circular(16), color: kBg),
-                clipBehavior: Clip.hardEdge,
-                child: Image.network(order.sellerPhoto, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Container(color: kPrimary.withOpacity(0.1), child: const Icon(Icons.person_rounded, color: kPrimary, size: 30))),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(order.sellerName, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: Color(0xFF1A1A2E))),
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        const Icon(Icons.location_on_rounded, size: 12, color: kAccent),
-                        const SizedBox(width: 3),
-                        Expanded(child: Text(order.sellerAddress, style: TextStyle(color: Colors.grey[500], fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis)),
-                      ],
+          FutureBuilder<Map<String, dynamic>>(
+            future: sellerInfoFuture,
+            builder: (context, snapshot) {
+              final data = snapshot.data;
+              final sellerName = (data?['name'] ?? order.sellerName).toString();
+              final sellerPhoto = (data?['photo'] ?? order.sellerPhoto).toString();
+              final sellerAddress = (data?['address'] ?? order.sellerAddress).toString();
+
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 8),
+                  child: LinearProgressIndicator(color: kPrimary, minHeight: 2),
+                );
+              }
+
+              return Row(
+                children: [
+                  Container(
+                    width: 60,
+                    height: 60,
+                    decoration: BoxDecoration(borderRadius: BorderRadius.circular(16), color: kBg),
+                    clipBehavior: Clip.hardEdge,
+                    child: Image.network(
+                      sellerPhoto,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Container(
+                        color: kPrimary.withOpacity(0.1),
+                        child: const Icon(Icons.person_rounded, color: kPrimary, size: 30),
+                      ),
                     ),
-                    const SizedBox(height: 6),
-                    Row(
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                          decoration: BoxDecoration(color: kAccent.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
-                          child: Row(children: [const Icon(Icons.star_rounded, color: kAccent, size: 12), const SizedBox(width: 3), Text(order.sellerRating.toStringAsFixed(1), style: const TextStyle(color: kAccent, fontSize: 11, fontWeight: FontWeight.w700))]),
+                        Text(sellerName, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: Color(0xFF1A1A2E))),
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            const Icon(Icons.location_on_rounded, size: 12, color: kAccent),
+                            const SizedBox(width: 3),
+                            Expanded(
+                              child: Text(
+                                sellerAddress,
+                                style: TextStyle(color: Colors.grey[500], fontSize: 12),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(width: 6),
-                        Text('(${order.sellerReviews} reviews)', style: TextStyle(color: Colors.grey[400], fontSize: 11)),
                       ],
                     ),
-                  ],
-                ),
-              ),
-            ],
+                  ),
+                ],
+              );
+            },
           ),
         ],
       ),
@@ -300,7 +402,7 @@ class OrderDetailPage extends StatelessWidget {
   }
 
   // ── Route Card ─────────────────────────────────────────────────────────────
-  Widget _buildRouteCard() {
+  Widget _buildRouteCard(Future<Map<String, dynamic>> sellerInfoFuture) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(color: kWhite, borderRadius: BorderRadius.circular(20), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 3))]),
@@ -309,47 +411,54 @@ class OrderDetailPage extends StatelessWidget {
         children: [
           const _SectionTitle(title: 'Delivery Route', icon: Icons.route_rounded),
           const SizedBox(height: 14),
-          Row(
-            children: [
-              Column(
+          FutureBuilder<Map<String, dynamic>>(
+            future: sellerInfoFuture,
+            builder: (context, snapshot) {
+              final data = snapshot.data;
+              final fromLocation = (data?['location'] ?? order.sellerLocation).toString();
+              return Row(
                 children: [
-                  Container(width: 10, height: 10, decoration: const BoxDecoration(color: kPrimary, shape: BoxShape.circle)),
-                  Container(width: 2, height: 36, decoration: const BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [kPrimary, kAccent]))),
-                  Container(width: 10, height: 10, decoration: const BoxDecoration(color: kAccent, shape: BoxShape.circle)),
+                  Column(
+                    children: [
+                      Container(width: 10, height: 10, decoration: const BoxDecoration(color: kPrimary, shape: BoxShape.circle)),
+                      Container(width: 2, height: 36, decoration: const BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [kPrimary, kAccent]))),
+                      Container(width: 10, height: 10, decoration: const BoxDecoration(color: kAccent, shape: BoxShape.circle)),
+                    ],
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                          decoration: BoxDecoration(color: kPrimary.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.storefront_rounded, size: 14, color: kPrimary),
+                              const SizedBox(width: 8),
+                              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const Text('From', style: TextStyle(color: kPrimary, fontSize: 10, fontWeight: FontWeight.w600)), Text(fromLocation, style: const TextStyle(color: Color(0xFF1A1A2E), fontSize: 13, fontWeight: FontWeight.w600))])),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                          decoration: BoxDecoration(color: kAccent.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.home_rounded, size: 14, color: kAccent),
+                              const SizedBox(width: 8),
+                              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const Text('To', style: TextStyle(color: kAccent, fontSize: 10, fontWeight: FontWeight.w600)), Text(order.buyerLocation, style: const TextStyle(color: Color(0xFF1A1A2E), fontSize: 13, fontWeight: FontWeight.w600))])),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ],
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                      decoration: BoxDecoration(color: kPrimary.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.storefront_rounded, size: 14, color: kPrimary),
-                          const SizedBox(width: 8),
-                          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const Text('From', style: TextStyle(color: kPrimary, fontSize: 10, fontWeight: FontWeight.w600)), Text(order.sellerLocation, style: const TextStyle(color: Color(0xFF1A1A2E), fontSize: 13, fontWeight: FontWeight.w600))])),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                      decoration: BoxDecoration(color: kAccent.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.home_rounded, size: 14, color: kAccent),
-                          const SizedBox(width: 8),
-                          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const Text('To', style: TextStyle(color: kAccent, fontSize: 10, fontWeight: FontWeight.w600)), Text(order.buyerLocation, style: const TextStyle(color: Color(0xFF1A1A2E), fontSize: 13, fontWeight: FontWeight.w600))])),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
+              );
+            },
           ),
         ],
       ),

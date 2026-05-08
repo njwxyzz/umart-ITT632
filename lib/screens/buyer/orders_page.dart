@@ -130,6 +130,7 @@ class _OrdersPageState extends State<OrdersPage> {
     var data = doc.data() as Map<String, dynamic>;
     
     double totalPrice = data['totalPrice'] is num ? (data['totalPrice'] as num).toDouble() : 0.0;
+    double deliveryFee = data['deliveryFee'] is num ? (data['deliveryFee'] as num).toDouble() : 0.0;
     String rawItemName = data['productName'] ?? 'Items';
 
     return OrderHistory(
@@ -143,8 +144,8 @@ class _OrdersPageState extends State<OrdersPage> {
       sellerLocation: 'UiTM Perlis',
       buyerLocation: data['buyerLocation'] ?? 'Kolej Dahlia 3',
       dateTime: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
-      subtotal: totalPrice,
-      deliveryFee: 0.0, 
+      subtotal: (totalPrice - deliveryFee).clamp(0, double.infinity),
+      deliveryFee: deliveryFee,
       status: data['status'] ?? 'Pending',
       items: [
         OrderLineItem(name: rawItemName, qty: 1, price: totalPrice),
