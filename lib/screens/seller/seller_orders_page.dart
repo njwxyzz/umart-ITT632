@@ -25,6 +25,29 @@ class SellerOrdersPage extends StatefulWidget {
 class _SellerOrdersPageState extends State<SellerOrdersPage> {
   bool _ranLegacyItemsBackfill = false;
 
+  bool _isOnlineOrder(Map<String, dynamic> orderData) {
+    return (orderData['paymentMethod'] ?? '').toString().toUpperCase() == 'ONLINE';
+  }
+
+  bool _hasReceiptProof(Map<String, dynamic> orderData) {
+    final url = (orderData['paymentReceiptUrl'] ?? '').toString().trim();
+    return url.isNotEmpty;
+  }
+
+  Future<void> _handleAcceptOrder(String orderId, Map<String, dynamic> orderData) async {
+    if (_isOnlineOrder(orderData) && !_hasReceiptProof(orderData)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Cannot accept yet. Buyer has not uploaded receipt proof.'),
+          backgroundColor: Colors.red.shade400,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+    await _updateOrderStatus(orderId, 'Processing');
+  }
+
   @override
   void initState() {
     super.initState();
@@ -199,6 +222,21 @@ class _SellerOrdersPageState extends State<SellerOrdersPage> {
       final orderData = snap.data();
       if (orderData == null) return;
       final currentStatus = (orderData['status'] ?? '').toString();
+      final paymentMethod = (orderData['paymentMethod'] ?? '').toString().toUpperCase();
+      final receiptUrl = (orderData['paymentReceiptUrl'] ?? '').toString().trim();
+
+      if (newStatus == 'Processing' && paymentMethod == 'ONLINE' && receiptUrl.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('Receipt verification required before accepting online payment orders.'),
+              backgroundColor: Colors.red.shade400,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+        return;
+      }
 
       if (newStatus == 'Delivered' && currentStatus != 'Delivered') {
         await _incrementSoldCountForDeliveredOrder(orderData);
@@ -337,6 +375,8 @@ class _SellerOrdersPageState extends State<SellerOrdersPage> {
     
     final status = order['status'] ?? 'Pending';
     double totalPrice = order['totalPrice'] is num ? (order['totalPrice'] as num).toDouble() : 0.0;
+    final onlinePayment = _isOnlineOrder(order);
+    final hasReceipt = _hasReceiptProof(order);
 
     String displayId = '#UM-${orderId.substring(0, 5).toUpperCase()}';
 
@@ -411,6 +451,28 @@ class _SellerOrdersPageState extends State<SellerOrdersPage> {
                     const SizedBox(height: 8),
                     // Item list
                     Text(order['productName']?.toString() ?? 'Item', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.ink), maxLines: 2, overflow: TextOverflow.ellipsis),
+                    if (onlinePayment)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 6),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: hasReceipt ? Colors.green.shade50 : Colors.orange.shade50,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: hasReceipt ? Colors.green.shade200 : Colors.orange.shade200,
+                            ),
+                          ),
+                          child: Text(
+                            hasReceipt ? 'Receipt uploaded' : 'Waiting receipt proof',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: hasReceipt ? Colors.green.shade700 : Colors.orange.shade700,
+                            ),
+                          ),
+                        ),
+                      ),
                     if (order['note'] != null && order['note'].toString().isNotEmpty)
                       Text('📝 ${order['note']}', style: TextStyle(fontSize: 12, color: Colors.grey.shade600, fontStyle: FontStyle.italic)),
                   ],
@@ -441,7 +503,7 @@ class _SellerOrdersPageState extends State<SellerOrdersPage> {
                 const SizedBox(width: 12),
                 Expanded(
                   child: ElevatedButton(
-                    onPressed: () => _updateOrderStatus(orderId, 'Processing'),
+                    onPressed: () => _handleAcceptOrder(orderId, order),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.primary,
                       elevation: 0,

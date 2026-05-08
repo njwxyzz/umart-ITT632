@@ -33,6 +33,8 @@ class _SellerEditShopPageState extends State<SellerEditShopPage> {
   String? _category;
   Uint8List? _newImageBytes;
   String? _existingPhotoUrl;
+  Uint8List? _newPaymentQrBytes;
+  String? _existingPaymentQrUrl;
   String _originalStoreName = '';
   bool _loading = true;
   bool _saving = false;
@@ -79,6 +81,8 @@ class _SellerEditShopPageState extends State<SellerEditShopPage> {
       _category = _categories.contains(cat) ? cat : 'Others';
       final url = (d['storePhotoUrl'] ?? '').toString().trim();
       _existingPhotoUrl = url.isEmpty ? null : url;
+      final qrUrl = (d['paymentQrUrl'] ?? '').toString().trim();
+      _existingPaymentQrUrl = qrUrl.isEmpty ? null : qrUrl;
       setState(() => _loading = false);
     } catch (_) {
       if (mounted) setState(() => _loading = false);
@@ -94,6 +98,19 @@ class _SellerEditShopPageState extends State<SellerEditShopPage> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not pick image: $e')));
+      }
+    }
+  }
+
+  Future<void> _pickPaymentQrImage() async {
+    try {
+      final XFile? f = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 90);
+      if (f == null) return;
+      final bytes = await f.readAsBytes();
+      setState(() => _newPaymentQrBytes = bytes);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not pick QR image: $e')));
       }
     }
   }
@@ -118,12 +135,23 @@ class _SellerEditShopPageState extends State<SellerEditShopPage> {
         photoUrl = await snap.ref.getDownloadURL();
       }
 
+      String paymentQrUrl = _existingPaymentQrUrl ?? '';
+      if (_newPaymentQrBytes != null) {
+        final qrRef = FirebaseStorage.instance.ref().child('store_payment_qr/$uid.jpg');
+        final qrSnap = await qrRef.putData(
+          _newPaymentQrBytes!,
+          SettableMetadata(contentType: 'image/jpeg'),
+        );
+        paymentQrUrl = await qrSnap.ref.getDownloadURL();
+      }
+
       await FirebaseFirestore.instance.collection('stores').doc(uid).update({
         'storeName': name,
         'storeLocation': _locCtrl.text.trim(),
         'description': _descCtrl.text.trim(),
         'category': _category ?? 'Others',
         if (photoUrl.isNotEmpty) 'storePhotoUrl': photoUrl,
+        if (paymentQrUrl.isNotEmpty) 'paymentQrUrl': paymentQrUrl,
         'updatedAt': FieldValue.serverTimestamp(),
       });
 
@@ -140,7 +168,9 @@ class _SellerEditShopPageState extends State<SellerEditShopPage> {
       }
       _originalStoreName = name;
       _existingPhotoUrl = photoUrl.isNotEmpty ? photoUrl : _existingPhotoUrl;
+      _existingPaymentQrUrl = paymentQrUrl.isNotEmpty ? paymentQrUrl : _existingPaymentQrUrl;
       _newImageBytes = null;
+      _newPaymentQrBytes = null;
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -308,6 +338,57 @@ class _SellerEditShopPageState extends State<SellerEditShopPage> {
                 hint: 'What you sell, pickup hours...',
                 icon: Icons.edit_note_rounded,
                 maxLines: 3,
+              ),
+              _label('Payment QR (for buyers to pay online)'),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: kWhite,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 15, offset: const Offset(0, 5)),
+                  ],
+                ),
+                child: Column(
+                  children: [
+                    Container(
+                      width: 170,
+                      height: 170,
+                      clipBehavior: Clip.hardEdge,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: Colors.grey.shade300),
+                        color: Colors.grey.shade50,
+                      ),
+                      child: _newPaymentQrBytes != null
+                          ? Image.memory(_newPaymentQrBytes!, fit: BoxFit.cover)
+                          : (_existingPaymentQrUrl != null && _existingPaymentQrUrl!.isNotEmpty)
+                              ? Image.network(
+                                  _existingPaymentQrUrl!,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, __, ___) => const Center(
+                                    child: Icon(Icons.qr_code_2_rounded, size: 90),
+                                  ),
+                                )
+                              : const Center(
+                                  child: Icon(Icons.qr_code_2_rounded, size: 90),
+                                ),
+                    ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: _pickPaymentQrImage,
+                        icon: const Icon(Icons.photo_library_rounded, color: kPrimary),
+                        label: const Text(
+                          'Upload / Replace Payment QR',
+                          style: TextStyle(color: kPrimary, fontWeight: FontWeight.w700),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
               const SizedBox(height: 28),
               SizedBox(

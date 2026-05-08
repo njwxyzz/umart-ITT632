@@ -486,7 +486,7 @@ class _TrackingPageState extends State<TrackingPage> {
   Widget _buildMap({LatLng? sellerLocation}) {
     final tileLayer = TileLayer(
       urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-      userAgentPackageName: 'com.example.app',
+      userAgentPackageName: 'com.example.umart_app', 
     );
 
     if (_isLocating) {

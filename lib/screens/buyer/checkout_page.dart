@@ -1,6 +1,12 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart'; // MESTI ADA!
 import 'package:firebase_auth/firebase_auth.dart'; // MESTI ADA!
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:image_gallery_saver/image_gallery_saver.dart';
+import 'package:image_picker/image_picker.dart';
 import 'tracking_page.dart'; 
 import 'cart_manager.dart'; 
 
@@ -49,9 +55,119 @@ class CheckoutPage extends StatefulWidget {
 class _CheckoutPageState extends State<CheckoutPage> {
   // Track selected payment method ('COD' or 'ONLINE')
   String _selectedPayment = 'COD';
+  String? _sellerPaymentQrUrl;
+  bool _isFetchingSellerPaymentQr = true;
+  Uint8List? _receiptBytes;
+  String? _receiptUrl;
+  bool _isUploadingReceipt = false;
+  bool _isSavingQr = false;
+  final ImagePicker _picker = ImagePicker();
 
   KolejOption _selectedKolej = kUiTMPerlisKolej.first;
   final TextEditingController _deliveryDetailController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSellerPaymentQr();
+  }
+
+  Future<void> _loadSellerPaymentQr() async {
+    if (_items.isEmpty) {
+      setState(() => _isFetchingSellerPaymentQr = false);
+      return;
+    }
+    try {
+      final sellerIdFromItem = _items.first.sellerId;
+      DocumentSnapshot<Map<String, dynamic>>? storeDoc;
+      if (sellerIdFromItem.trim().isNotEmpty) {
+        storeDoc = await FirebaseFirestore.instance.collection('stores').doc(sellerIdFromItem).get();
+      }
+      if (storeDoc == null || !storeDoc.exists) {
+        final byName = await FirebaseFirestore.instance
+            .collection('stores')
+            .where('storeName', isEqualTo: _items.first.sellerName)
+            .limit(1)
+            .get();
+        if (byName.docs.isNotEmpty) {
+          storeDoc = byName.docs.first;
+        }
+      }
+      if (!mounted) return;
+      setState(() {
+        _sellerPaymentQrUrl = storeDoc?.data()?['paymentQrUrl'] as String?;
+      });
+    } catch (_) {
+      // Silent fail and keep empty state.
+    } finally {
+      if (mounted) setState(() => _isFetchingSellerPaymentQr = false);
+    }
+  }
+
+  Future<void> _saveQrToPhone() async {
+    if (_sellerPaymentQrUrl == null || _sellerPaymentQrUrl!.isEmpty) return;
+    setState(() => _isSavingQr = true);
+    try {
+      final byteData = await NetworkAssetBundle(Uri.parse(_sellerPaymentQrUrl!)).load(_sellerPaymentQrUrl!);
+      final bytes = byteData.buffer.asUint8List();
+      final result = await ImageGallerySaver.saveImage(
+        bytes,
+        quality: 100,
+        name: 'umart_seller_qr_${DateTime.now().millisecondsSinceEpoch}',
+      );
+      final success = result['isSuccess'] == true || result['isSuccess'] == 1;
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(success ? 'QR saved to gallery.' : 'Could not save QR to gallery.'),
+          backgroundColor: success ? kPrimary : Colors.red,
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Failed to save QR image.'), backgroundColor: Colors.red),
+      );
+    } finally {
+      if (mounted) setState(() => _isSavingQr = false);
+    }
+  }
+
+  Future<void> _uploadReceipt() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    try {
+      final picked = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
+      if (picked == null) return;
+      final bytes = await picked.readAsBytes();
+      setState(() {
+        _receiptBytes = bytes;
+        _isUploadingReceipt = true;
+      });
+
+      final ref = FirebaseStorage.instance.ref().child(
+        'payment_receipts/${user.uid}/${DateTime.now().millisecondsSinceEpoch}.jpg',
+      );
+      final snap = await ref.putData(
+        bytes,
+        SettableMetadata(contentType: 'image/jpeg'),
+      );
+      final url = await snap.ref.getDownloadURL();
+
+      if (!mounted) return;
+      setState(() => _receiptUrl = url);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Receipt uploaded successfully.')),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Receipt upload failed.'), backgroundColor: Colors.red),
+      );
+    } finally {
+      if (mounted) setState(() => _isUploadingReceipt = false);
+    }
+  }
 
   @override
   void dispose() {
@@ -79,6 +195,18 @@ class _CheckoutPageState extends State<CheckoutPage> {
     if (detail.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please add room number or drop-off detail (e.g. At lobby).')),
+      );
+      return;
+    }
+    if (_selectedPayment == 'ONLINE' && (_sellerPaymentQrUrl == null || _sellerPaymentQrUrl!.isEmpty)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Seller has not uploaded a payment QR yet.')),
+      );
+      return;
+    }
+    if (_selectedPayment == 'ONLINE' && (_receiptUrl == null || _receiptUrl!.isEmpty)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please upload payment receipt before placing order.')),
       );
       return;
     }
@@ -149,6 +277,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
         'status': 'Pending',
         'note': widget.note, // Nota tak nak taugeh
         'paymentMethod': _selectedPayment,
+        'sellerPaymentQrUrl': _selectedPayment == 'ONLINE' ? _sellerPaymentQrUrl : null,
+        'paymentReceiptUrl': _selectedPayment == 'ONLINE' ? _receiptUrl : null,
         'createdAt': FieldValue.serverTimestamp(),
       });
 
@@ -267,7 +397,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
               const SizedBox(height: 12),
               _buildPaymentOption(
                 title: 'Online Transfer / QR Pay',
-                subtitle: 'Scan seller\'s QR code & upload receipt',
+                subtitle: 'Scan seller QR, save QR, then upload receipt',
                 icon: Icons.qr_code_scanner_rounded,
                 value: 'ONLINE',
               ),
@@ -495,7 +625,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
       child: Column(
         children: [
           const Text(
-            'Please scan the seller\'s DuitNow QR:',
+            'Seller payment QR:',
             style: TextStyle(fontSize: 13, color: Colors.black87, fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 16),
@@ -508,22 +638,90 @@ class _CheckoutPageState extends State<CheckoutPage> {
               border: Border.all(color: Colors.grey.shade200),
               boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 15)],
             ),
-            child: const Icon(Icons.qr_code_2_rounded, size: 120, color: Color(0xFF1A1A2E)),
+            clipBehavior: Clip.hardEdge,
+            child: _isFetchingSellerPaymentQr
+                ? const Center(child: CircularProgressIndicator(color: kPrimary))
+                : (_sellerPaymentQrUrl != null && _sellerPaymentQrUrl!.isNotEmpty)
+                    ? Image.network(
+                        _sellerPaymentQrUrl!,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => const Icon(Icons.qr_code_2_rounded, size: 120, color: Color(0xFF1A1A2E)),
+                      )
+                    : const Icon(Icons.qr_code_2_rounded, size: 120, color: Color(0xFF1A1A2E)),
           ),
-          const SizedBox(height: 20),
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton.icon(
-              onPressed: () {},
-              icon: const Icon(Icons.upload_file_rounded, color: kPrimary),
-              label: const Text('Upload Receipt', style: TextStyle(color: kPrimary, fontWeight: FontWeight.bold)),
-              style: OutlinedButton.styleFrom(
-                side: const BorderSide(color: kPrimary, width: 1.5),
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          if (_receiptBytes != null) ...[
+            const SizedBox(height: 14),
+            Container(
+              width: 110,
+              height: 110,
+              clipBehavior: Clip.hardEdge,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.grey.shade300),
               ),
+              child: Image.memory(_receiptBytes!, fit: BoxFit.cover),
             ),
+          ],
+          const SizedBox(height: 20),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: (_sellerPaymentQrUrl == null || _sellerPaymentQrUrl!.isEmpty || _isSavingQr)
+                      ? null
+                      : _saveQrToPhone,
+                  icon: _isSavingQr
+                      ? const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: kPrimary),
+                        )
+                      : const Icon(Icons.download_rounded, color: kPrimary),
+                  label: const Text('Save QR', style: TextStyle(color: kPrimary, fontWeight: FontWeight.bold)),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: kPrimary, width: 1.5),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _isUploadingReceipt ? null : _uploadReceipt,
+                  icon: _isUploadingReceipt
+                      ? const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: kPrimary),
+                        )
+                      : const Icon(Icons.upload_file_rounded, color: kPrimary),
+                  label: const Text('Upload Receipt', style: TextStyle(color: kPrimary, fontWeight: FontWeight.bold)),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: kPrimary, width: 1.5),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+              ),
+            ],
           ),
+          if (!_isFetchingSellerPaymentQr && (_sellerPaymentQrUrl == null || _sellerPaymentQrUrl!.isEmpty)) ...[
+            const SizedBox(height: 10),
+            Text(
+              'Seller QR is not available yet. Please choose COD or contact seller.',
+              style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+              textAlign: TextAlign.center,
+            ),
+          ],
+          if (_sellerPaymentQrUrl != null && _sellerPaymentQrUrl!.isNotEmpty && (_receiptUrl == null || _receiptUrl!.isEmpty)) ...[
+            const SizedBox(height: 8),
+            Text(
+              'Upload payment receipt to continue placing order.',
+              style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+              textAlign: TextAlign.center,
+            ),
+          ],
         ],
       ),
     );

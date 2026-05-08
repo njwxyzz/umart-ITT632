@@ -267,6 +267,28 @@ class _SellerOrderDetailsPageState extends State<SellerOrderDetailsPage> {
         .showSnackBar(SnackBar(content: Text(msg), backgroundColor: Colors.red));
   }
 
+  void _openReceiptPreview(String imageUrl) {
+    showDialog(
+      context: context,
+      builder: (_) => Dialog(
+        insetPadding: const EdgeInsets.all(20),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: InteractiveViewer(
+            child: Image.network(
+              imageUrl,
+              fit: BoxFit.contain,
+              errorBuilder: (_, __, ___) => const Padding(
+                padding: EdgeInsets.all(24),
+                child: Text('Unable to load receipt image.'),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> _startDemoMovement() async {
     // Stop real GPS stream so demo coordinates are not overridden.
     await _positionStream?.cancel();
@@ -370,7 +392,7 @@ class _SellerOrderDetailsPageState extends State<SellerOrderDetailsPage> {
                 children: [
                   TileLayer(
                     urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                    userAgentPackageName: 'com.example.app',
+                    userAgentPackageName: 'com.example.umart_app',
                   ),
 
                   // Line from seller to buyer (only when seller is sharing)
@@ -623,6 +645,8 @@ class _SellerOrderDetailsPageState extends State<SellerOrderDetailsPage> {
                       final productName = (data['productName'] ?? 'Item').toString().trim();
                       final totalPrice = (data['totalPrice'] as num?)?.toDouble() ?? 0.0;
                       final cartNote = (data['note'] ?? '').toString().trim();
+                      final paymentMethod = (data['paymentMethod'] ?? 'COD').toString();
+                      final receiptUrl = (data['paymentReceiptUrl'] ?? '').toString().trim();
 
                       return Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -659,6 +683,77 @@ class _SellerOrderDetailsPageState extends State<SellerOrderDetailsPage> {
                               ),
                             ),
                           ],
+                          const SizedBox(height: 12),
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Colors.grey.shade50,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Colors.grey.shade200),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Payment method: $paymentMethod',
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                    color: Color(0xFF1A1A2E),
+                                  ),
+                                ),
+                                if (paymentMethod.toUpperCase() == 'ONLINE') ...[
+                                  const SizedBox(height: 8),
+                                  if (receiptUrl.isEmpty)
+                                    Text(
+                                      'Receipt proof not uploaded yet.',
+                                      style: TextStyle(
+                                        color: Colors.red.shade400,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    )
+                                  else
+                                    InkWell(
+                                      onTap: () => _openReceiptPreview(receiptUrl),
+                                      borderRadius: BorderRadius.circular(10),
+                                      child: Row(
+                                        children: [
+                                          ClipRRect(
+                                            borderRadius: BorderRadius.circular(8),
+                                            child: Image.network(
+                                              receiptUrl,
+                                              width: 56,
+                                              height: 56,
+                                              fit: BoxFit.cover,
+                                              errorBuilder: (_, __, ___) => Container(
+                                                width: 56,
+                                                height: 56,
+                                                color: Colors.grey.shade200,
+                                                alignment: Alignment.center,
+                                                child: const Icon(Icons.broken_image_outlined),
+                                              ),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 10),
+                                          Expanded(
+                                            child: Text(
+                                              'Receipt uploaded. Tap to inspect before accepting.',
+                                              style: TextStyle(
+                                                color: Colors.green.shade700,
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                ],
+                              ],
+                            ),
+                          ),
                         ],
                       );
                     },
