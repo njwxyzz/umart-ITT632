@@ -18,6 +18,60 @@ class InboxPage extends StatefulWidget {
 class _InboxPageState extends State<InboxPage> {
   bool _isSearching = false;
   String _searchQuery = '';
+  final Map<String, Future<Map<String, String>>> _identityFutureCache = {};
+
+  Future<Map<String, String>> _loadChatIdentity(String otherUid, String fallbackName) async {
+    final fallback = <String, String>{
+      'name': fallbackName,
+      'photoUrl': '',
+    };
+
+    try {
+      final storeDoc = await FirebaseFirestore.instance.collection('stores').doc(otherUid).get();
+      if (storeDoc.exists) {
+        final storeData = storeDoc.data() ?? <String, dynamic>{};
+        final storeName = (storeData['storeName'] ?? fallbackName).toString().trim();
+        final storePhoto = (storeData['storePhotoUrl'] ??
+                storeData['storePhoto'] ??
+                storeData['logoUrl'] ??
+                storeData['profileImage'] ??
+                storeData['imageUrl'] ??
+                '')
+            .toString()
+            .trim();
+        return <String, String>{
+          'name': storeName.isEmpty ? fallbackName : storeName,
+          'photoUrl': storePhoto,
+        };
+      }
+
+      final userDoc = await FirebaseFirestore.instance.collection('users').doc(otherUid).get();
+      if (userDoc.exists) {
+        final userData = userDoc.data() ?? <String, dynamic>{};
+        final fullName = (userData['fullName'] ?? userData['name'] ?? fallbackName).toString().trim();
+        final photoUrl = (userData['photoUrl'] ??
+                userData['profilePic'] ??
+                userData['profileImage'] ??
+                userData['imageUrl'] ??
+                '')
+            .toString()
+            .trim();
+        return <String, String>{
+          'name': fullName.isEmpty ? fallbackName : fullName,
+          'photoUrl': photoUrl,
+        };
+      }
+    } catch (_) {}
+
+    return fallback;
+  }
+
+  Future<Map<String, String>> _getChatIdentityFuture(String otherUid, String fallbackName) {
+    return _identityFutureCache.putIfAbsent(
+      otherUid,
+      () => _loadChatIdentity(otherUid, fallbackName),
+    );
+  }
 
   String _formatMessageTime(Timestamp? ts) {
     if (ts == null) return '';
@@ -266,21 +320,12 @@ class _InboxPageState extends State<InboxPage> {
                       final unread = chat['unread'] as int;
                       final hasUnread = unread > 0;
 
-                      // 🚨 KITA GUNA FUTURE BUILDER UNTUK TARIK NAMA SEBENAR DARI FIRESTORE USERS!
-                      return FutureBuilder<DocumentSnapshot>(
-                        future: FirebaseFirestore.instance.collection('users').doc(otherUid).get(),
-                        builder: (context, userSnap) {
-                          
-                          // Default guna nama dari chat laci (yg tulis 'Buyer' tu)
-                          String finalDisplayName = chat['fallbackName'] as String;
-                          
-                          // Kalau dia jumpa data user dalam laci 'users', kita guna nama tu!
-                          if (userSnap.hasData && userSnap.data!.exists) {
-                            final userData = userSnap.data!.data() as Map<String, dynamic>?;
-                            if (userData != null && userData['fullName'] != null && userData['fullName'].toString().isNotEmpty) {
-                              finalDisplayName = userData['fullName'];
-                            }
-                          }
+                      return FutureBuilder<Map<String, String>>(
+                        future: _getChatIdentityFuture(otherUid, chat['fallbackName'] as String),
+                        builder: (context, identitySnap) {
+                          final identity = identitySnap.data ?? const <String, String>{};
+                          final finalDisplayName = (identity['name'] ?? (chat['fallbackName'] as String)).trim();
+                          final profileUrl = (identity['photoUrl'] ?? '').trim();
 
                           return GestureDetector(
                             onTap: () {
@@ -323,17 +368,34 @@ class _InboxPageState extends State<InboxPage> {
                                       shape: BoxShape.circle,
                                       color: Color(0xFFE6ECD9),
                                     ),
-                                    child: Center(
-                                      child: Text(
-                                        finalDisplayName.isNotEmpty
-                                            ? finalDisplayName[0].toUpperCase()
-                                            : '?',
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          color: Color(0xFF1A1A2E),
-                                        ),
-                                      ),
-                                    ),
+                                    clipBehavior: Clip.hardEdge,
+                                    child: profileUrl.isNotEmpty
+                                        ? Image.network(
+                                            profileUrl,
+                                            fit: BoxFit.cover,
+                                            errorBuilder: (_, __, ___) => Center(
+                                              child: Text(
+                                                finalDisplayName.isNotEmpty
+                                                    ? finalDisplayName[0].toUpperCase()
+                                                    : '?',
+                                                style: const TextStyle(
+                                                  fontWeight: FontWeight.bold,
+                                                  color: Color(0xFF1A1A2E),
+                                                ),
+                                              ),
+                                            ),
+                                          )
+                                        : Center(
+                                            child: Text(
+                                              finalDisplayName.isNotEmpty
+                                                  ? finalDisplayName[0].toUpperCase()
+                                                  : '?',
+                                              style: const TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                                color: Color(0xFF1A1A2E),
+                                              ),
+                                            ),
+                                          ),
                                   ),
                                   const SizedBox(width: 14),
                                   Expanded(
@@ -341,7 +403,9 @@ class _InboxPageState extends State<InboxPage> {
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
                                         Text(
-                                          finalDisplayName,
+                                          finalDisplayName.isEmpty
+                                              ? (chat['fallbackName'] as String)
+                                              : finalDisplayName,
                                           style: TextStyle(
                                             fontWeight: hasUnread
                                                 ? FontWeight.w800

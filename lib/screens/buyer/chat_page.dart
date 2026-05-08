@@ -26,10 +26,76 @@ class ChatPage extends StatefulWidget {
 class _ChatPageState extends State<ChatPage> {
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
+  late final Future<Map<String, String>> _otherUserMetaFuture;
+
+  Future<Map<String, String>> _loadOtherUserMeta() async {
+    final fallback = <String, String>{
+      'name': widget.runnerName,
+      'photoUrl': '',
+    };
+
+    try {
+      String? otherId = widget.otherUserId;
+
+      if ((otherId == null || otherId.isEmpty) && widget.chatId != null) {
+        final currentUid = FirebaseAuth.instance.currentUser?.uid;
+        final chatDoc = await FirebaseFirestore.instance.collection('chats').doc(widget.chatId).get();
+        final chatData = chatDoc.data() ?? <String, dynamic>{};
+        final participantsRaw = (chatData['participants'] as List?) ?? [];
+        final participants = participantsRaw.whereType<String>().toList();
+        if (currentUid != null && participants.isNotEmpty) {
+          for (final id in participants) {
+            if (id != currentUid) {
+              otherId = id;
+              break;
+            }
+          }
+        }
+      }
+
+      if (otherId == null || otherId.isEmpty) return fallback;
+
+      final storeDoc = await FirebaseFirestore.instance.collection('stores').doc(otherId).get();
+      if (storeDoc.exists) {
+        final storeData = storeDoc.data() ?? <String, dynamic>{};
+        final storeName = (storeData['storeName'] ?? widget.runnerName).toString();
+        final storePhoto = (storeData['storePhotoUrl'] ??
+                storeData['storePhoto'] ??
+                storeData['logoUrl'] ??
+                storeData['profileImage'] ??
+                storeData['imageUrl'] ??
+                '')
+            .toString();
+        return <String, String>{
+          'name': storeName,
+          'photoUrl': storePhoto,
+        };
+      }
+
+      final userDoc = await FirebaseFirestore.instance.collection('users').doc(otherId).get();
+      if (userDoc.exists) {
+        final userData = userDoc.data() ?? <String, dynamic>{};
+        final userName = (userData['fullName'] ?? userData['name'] ?? widget.runnerName).toString();
+        final userPhoto = (userData['photoUrl'] ??
+                userData['profilePic'] ??
+                userData['profileImage'] ??
+                userData['imageUrl'] ??
+                '')
+            .toString();
+        return <String, String>{
+          'name': userName,
+          'photoUrl': userPhoto,
+        };
+      }
+    } catch (_) {}
+
+    return fallback;
+  }
 
   @override
   void initState() {
     super.initState();
+    _otherUserMetaFuture = _loadOtherUserMeta();
     _markCurrentUserAsRead();
   }
 
@@ -120,7 +186,6 @@ class _ChatPageState extends State<ChatPage> {
   @override
   Widget build(BuildContext context) {
     final currentUserId = FirebaseAuth.instance.currentUser?.uid;
-    final hasText = _messageController.text.trim().isNotEmpty;
 
     return Scaffold(
       backgroundColor: kBg,
@@ -172,69 +237,88 @@ class _ChatPageState extends State<ChatPage> {
                   ),
                 ],
               ),
-              child: Row(
-                children: [
-                  Container(
-                    width: 42,
-                    height: 42,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      image: const DecorationImage(
-                        image: NetworkImage('https://images.unsplash.com/photo-1599566150163-29194dcaad36?w=100'),
-                        fit: BoxFit.cover,
-                      ),
-                      border: Border.all(color: kPrimary.withOpacity(0.18), width: 1.5),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          widget.runnerName,
-                          style: const TextStyle(
-                            color: Color(0xFF1A1A2E),
-                            fontWeight: FontWeight.w700,
-                            fontSize: 15,
-                          ),
+              child: FutureBuilder<Map<String, String>>(
+                future: _otherUserMetaFuture,
+                builder: (context, snapshot) {
+                  final info = snapshot.data ?? const <String, String>{};
+                  final displayName = (info['name'] ?? widget.runnerName).trim();
+                  final photoUrl = (info['photoUrl'] ?? '').trim();
+
+                  return Row(
+                    children: [
+                      Container(
+                        width: 42,
+                        height: 42,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(color: kPrimary.withOpacity(0.18), width: 1.5),
                         ),
-                        const SizedBox(height: 2),
-                        Row(
+                        clipBehavior: Clip.hardEdge,
+                        child: photoUrl.isNotEmpty
+                            ? Image.network(
+                                photoUrl,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) => Container(
+                                  color: kPrimary.withOpacity(0.1),
+                                  child: const Icon(Icons.person_rounded, color: kPrimary, size: 22),
+                                ),
+                              )
+                            : Container(
+                                color: kPrimary.withOpacity(0.1),
+                                child: const Icon(Icons.person_rounded, color: kPrimary, size: 22),
+                              ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Container(
-                              width: 6,
-                              height: 6,
-                              decoration: const BoxDecoration(
-                                color: Colors.green,
-                                shape: BoxShape.circle,
+                            Text(
+                              displayName.isEmpty ? widget.runnerName : displayName,
+                              style: const TextStyle(
+                                color: Color(0xFF1A1A2E),
+                                fontWeight: FontWeight.w700,
+                                fontSize: 15,
                               ),
                             ),
-                            const SizedBox(width: 4),
-                            Text(
-                              'Online',
-                              style: TextStyle(
-                                color: Colors.grey.shade500,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w500,
-                              ),
+                            const SizedBox(height: 2),
+                            Row(
+                              children: [
+                                Container(
+                                  width: 6,
+                                  height: 6,
+                                  decoration: const BoxDecoration(
+                                    color: Colors.green,
+                                    shape: BoxShape.circle,
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  'Online',
+                                  style: TextStyle(
+                                    color: Colors.grey.shade500,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
                             ),
                           ],
                         ),
-                      ],
-                    ),
-                  ),
-                  Container(
-                    decoration: BoxDecoration(
-                      color: kPrimary.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: IconButton(
-                      icon: const Icon(Icons.call_rounded, color: kPrimary, size: 19),
-                      onPressed: () {},
-                    ),
-                  ),
-                ],
+                      ),
+                      Container(
+                        decoration: BoxDecoration(
+                          color: kPrimary.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: IconButton(
+                          icon: const Icon(Icons.call_rounded, color: kPrimary, size: 19),
+                          onPressed: () {},
+                        ),
+                      ),
+                    ],
+                  );
+                },
               ),
             ),
             Expanded(
@@ -356,7 +440,6 @@ class _ChatPageState extends State<ChatPage> {
                               controller: _messageController,
                               minLines: 1,
                               maxLines: 5,
-                              onChanged: (_) => setState(() {}),
                               decoration: const InputDecoration(
                                 hintText: 'Type your message...',
                                 hintStyle: TextStyle(color: Colors.grey, fontSize: 15),
@@ -378,28 +461,34 @@ class _ChatPageState extends State<ChatPage> {
                     ),
                   ),
                   const SizedBox(width: 6),
-                  GestureDetector(
-                    onTap: hasText ? _sendMessage : () {},
-                    child: Container(
-                      width: 48,
-                      height: 48,
-                      decoration: BoxDecoration(
-                        color: hasText ? kAccent : Colors.grey.shade400,
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.12),
-                            blurRadius: 6,
-                            offset: const Offset(0, 2),
+                  ValueListenableBuilder<TextEditingValue>(
+                    valueListenable: _messageController,
+                    builder: (context, value, _) {
+                      final hasText = value.text.trim().isNotEmpty;
+                      return GestureDetector(
+                        onTap: hasText ? _sendMessage : () {},
+                        child: Container(
+                          width: 48,
+                          height: 48,
+                          decoration: BoxDecoration(
+                            color: hasText ? kAccent : Colors.grey.shade400,
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.12),
+                                blurRadius: 6,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
                           ),
-                        ],
-                      ),
-                      child: Icon(
-                        hasText ? Icons.send_rounded : Icons.mic_rounded,
-                        color: kWhite,
-                        size: 22,
-                      ),
-                    ),
+                          child: Icon(
+                            hasText ? Icons.send_rounded : Icons.mic_rounded,
+                            color: kWhite,
+                            size: 22,
+                          ),
+                        ),
+                      );
+                    },
                   ),
                 ],
               ),

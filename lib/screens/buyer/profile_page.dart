@@ -44,7 +44,10 @@ class _ProfilePageState extends State<ProfilePage> {
   Future<void> _fetchProfileData() async {
     try {
       User? currentUser = FirebaseAuth.instance.currentUser;
-      if (currentUser == null) return;
+      if (currentUser == null) {
+        if (mounted) setState(() => _isLoading = false);
+        return;
+      }
 
       String uid = currentUser.uid;
 
@@ -58,12 +61,21 @@ class _ProfilePageState extends State<ProfilePage> {
         _initial = _fullName.isNotEmpty ? _fullName[0].toUpperCase() : 'S';
       } else {
         _fullName = currentUser.email?.split('@')[0].toUpperCase() ?? 'Student';
-        _initial = _fullName[0];
+        _initial = _fullName.isNotEmpty ? _fullName[0].toUpperCase() : 'S';
       }
 
       // 2. Check dia Seller ke Buyer?
       var storeDoc = await FirebaseFirestore.instance.collection('stores').doc(uid).get();
-      _isSeller = storeDoc.exists;
+      if (storeDoc.exists) {
+        _isSeller = true;
+      } else {
+        final storeByOwner = await FirebaseFirestore.instance
+            .collection('stores')
+            .where('ownerId', isEqualTo: uid)
+            .limit(1)
+            .get();
+        _isSeller = storeByOwner.docs.isNotEmpty;
+      }
 
       // 3. Kira Semua Stats
       var ordersQuery = await FirebaseFirestore.instance.collection('orders').where('buyerId', isEqualTo: uid).get();
@@ -109,12 +121,19 @@ class _ProfilePageState extends State<ProfilePage> {
             }
           }
 
-          String sName = data['sellerName'] ?? 'Unknown Store';
-          if (!sellerStats.containsKey(sName)) {
-            sellerStats[sName] = {'orders': 0, 'totalSpent': 0.0};
+          final String sName = (data['sellerName'] ?? 'Unknown Store').toString();
+          final String sId = (data['sellerId'] ?? '').toString();
+          final String sellerKey = sId.isNotEmpty ? sId : sName;
+          if (!sellerStats.containsKey(sellerKey)) {
+            sellerStats[sellerKey] = {
+              'name': sName,
+              'sellerId': sId,
+              'orders': 0,
+              'totalSpent': 0.0,
+            };
           }
-          sellerStats[sName]!['orders'] += 1;
-          sellerStats[sName]!['totalSpent'] += price;
+          sellerStats[sellerKey]!['orders'] += 1;
+          sellerStats[sellerKey]!['totalSpent'] += price;
         }
       }
 
@@ -141,12 +160,20 @@ class _ProfilePageState extends State<ProfilePage> {
       List<_FavRestaurant> tempFavs = [];
       for (int i = 0; i < sortedSellers.length && i < 3; i++) {
         var s = sortedSellers[i];
+        final sellerData = s.value;
+        final sellerId = (sellerData['sellerId'] ?? '').toString();
+        final sellerName = (sellerData['name'] ?? s.key).toString();
+        final sellerPhoto = await _resolveStorePhoto(
+          sellerId: sellerId,
+          sellerName: sellerName,
+        );
+
         tempFavs.add(_FavRestaurant(
-          name: s.key,
+          name: sellerName,
           category: 'Campus Store', 
           orders: s.value['orders'],
           totalSpent: s.value['totalSpent'],
-          photo: 'https://images.unsplash.com/photo-1555507036-ab1f4038808a?w=300', 
+          photo: sellerPhoto,
         ));
       }
       _favouritesData = tempFavs;
@@ -161,6 +188,71 @@ class _ProfilePageState extends State<ProfilePage> {
       print("Error fetching profile: $e");
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  Future<String> _resolveStorePhoto({
+    required String sellerId,
+    required String sellerName,
+  }) async {
+    const fallbackPhoto = 'https://images.unsplash.com/photo-1555507036-ab1f4038808a?w=300';
+
+    try {
+      if (sellerId.isNotEmpty) {
+        final storeByDoc = await FirebaseFirestore.instance.collection('stores').doc(sellerId).get();
+        if (storeByDoc.exists) {
+          final data = storeByDoc.data() ?? <String, dynamic>{};
+          final photo = (data['storePhotoUrl'] ??
+                  data['storePhoto'] ??
+                  data['logoUrl'] ??
+                  data['profileImage'] ??
+                  data['imageUrl'] ??
+                  '')
+              .toString()
+              .trim();
+          if (photo.isNotEmpty) return photo;
+        }
+
+        final storeByOwner = await FirebaseFirestore.instance
+            .collection('stores')
+            .where('ownerId', isEqualTo: sellerId)
+            .limit(1)
+            .get();
+        if (storeByOwner.docs.isNotEmpty) {
+          final data = storeByOwner.docs.first.data();
+          final photo = (data['storePhotoUrl'] ??
+                  data['storePhoto'] ??
+                  data['logoUrl'] ??
+                  data['profileImage'] ??
+                  data['imageUrl'] ??
+                  '')
+              .toString()
+              .trim();
+          if (photo.isNotEmpty) return photo;
+        }
+      }
+
+      if (sellerName.isNotEmpty) {
+        final byName = await FirebaseFirestore.instance
+            .collection('stores')
+            .where('storeName', isEqualTo: sellerName)
+            .limit(1)
+            .get();
+        if (byName.docs.isNotEmpty) {
+          final data = byName.docs.first.data();
+          final photo = (data['storePhotoUrl'] ??
+                  data['storePhoto'] ??
+                  data['logoUrl'] ??
+                  data['profileImage'] ??
+                  data['imageUrl'] ??
+                  '')
+              .toString()
+              .trim();
+          if (photo.isNotEmpty) return photo;
+        }
+      }
+    } catch (_) {}
+
+    return fallbackPhoto;
   }
 
   @override
