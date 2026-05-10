@@ -3,6 +3,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'edit_profile_page.dart';
 import 'settings_page.dart';
+import '../auth/login_page.dart';
+import '../../utils/store_status.dart';
 
 // ─── Color Constants (TEMA HIJAU BARU) ───────────────────────────────────────
 const kPrimary      = Color(0xFF4C6B3F); 
@@ -10,6 +12,8 @@ const kPrimaryLight = Color(0xFF799B61);
 const kAccent       = Color(0xFFF27B35); 
 const kBg           = Color(0xFFF5F7F2); 
 const kWhite        = Colors.white;
+
+enum _SellerBadgeKind { buyer, verified, pending, rejected }
 
 // ─── Profile Page ─────────────────────────────────────────────────────────────
 
@@ -26,7 +30,7 @@ class _ProfilePageState extends State<ProfilePage> {
   String _matricNo = "No Matric ID";
   String _initial = "S";
   String _college = "UiTM Campus"; // TAMBAH VARIABLE KOLEJ SINI
-  bool _isSeller = false;
+  _SellerBadgeKind _sellerBadge = _SellerBadgeKind.buyer;
   
   double _totalSpent = 0.0;
   int _totalOrders = 0;
@@ -64,17 +68,30 @@ class _ProfilePageState extends State<ProfilePage> {
         _initial = _fullName.isNotEmpty ? _fullName[0].toUpperCase() : 'S';
       }
 
-      // 2. Check dia Seller ke Buyer?
+      // 2. Seller badge (approved / pending / rejected)
+      _sellerBadge = _SellerBadgeKind.buyer;
       var storeDoc = await FirebaseFirestore.instance.collection('stores').doc(uid).get();
+      void applyStoreData(Map<String, dynamic> d) {
+        if (storeIsApproved(d)) {
+          _sellerBadge = _SellerBadgeKind.verified;
+        } else if (storeIsPending(d)) {
+          _sellerBadge = _SellerBadgeKind.pending;
+        } else if (storeIsRejected(d)) {
+          _sellerBadge = _SellerBadgeKind.rejected;
+        }
+      }
+
       if (storeDoc.exists) {
-        _isSeller = true;
+        applyStoreData(storeDoc.data()!);
       } else {
         final storeByOwner = await FirebaseFirestore.instance
             .collection('stores')
             .where('ownerId', isEqualTo: uid)
             .limit(1)
             .get();
-        _isSeller = storeByOwner.docs.isNotEmpty;
+        if (storeByOwner.docs.isNotEmpty) {
+          applyStoreData(storeByOwner.docs.first.data());
+        }
       }
 
       // 3. Kira Semua Stats
@@ -302,7 +319,7 @@ class _ProfilePageState extends State<ProfilePage> {
                   matricNo: _matricNo, 
                   initial: _initial, 
                   college: _college, // PASS DATA KOLEJ
-                  isSeller: _isSeller,
+                  sellerBadge: _sellerBadge,
                   onEditTap: () async {
                     await Navigator.push(context, MaterialPageRoute(builder: (_) => const EditProfilePage()));
                     setState(() => _isLoading = true);
@@ -356,6 +373,50 @@ class _ProfilePageState extends State<ProfilePage> {
                       padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
                       child: _FavouriteCard(restaurant: e.value, rank: e.key + 1),
                     )),
+
+              const SizedBox(height: 28),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Material(
+                  color: kWhite,
+                  borderRadius: BorderRadius.circular(16),
+                  elevation: 2,
+                  shadowColor: Colors.black.withOpacity(0.08),
+                  child: ListTile(
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    leading: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.red.shade50,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Icon(Icons.logout_rounded, color: Colors.red.shade700, size: 22),
+                    ),
+                    title: Text(
+                      'Log out',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w800,
+                        color: Colors.red.shade700,
+                        fontSize: 16,
+                      ),
+                    ),
+                    subtitle: Text(
+                      'Sign out of your account',
+                      style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+                    ),
+                    onTap: () async {
+                      await FirebaseAuth.instance.signOut();
+                      if (!context.mounted) return;
+                      Navigator.of(context).pushAndRemoveUntil(
+                        MaterialPageRoute(builder: (context) => const LoginPage()),
+                        (Route<dynamic> route) => false,
+                      );
+                    },
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
             ],
           ),
         ),
@@ -371,7 +432,7 @@ class _ProfileCard extends StatelessWidget {
   final String matricNo;
   final String initial;
   final String college;
-  final bool isSeller;
+  final _SellerBadgeKind sellerBadge;
   final VoidCallback onEditTap;
 
   const _ProfileCard({
@@ -379,7 +440,7 @@ class _ProfileCard extends StatelessWidget {
     required this.matricNo, 
     required this.initial, 
     required this.college,
-    required this.isSeller,
+    required this.sellerBadge,
     required this.onEditTap,
   });
 
@@ -437,24 +498,63 @@ class _ProfileCard extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: isSeller ? kAccent.withOpacity(0.2) : kPrimaryLight.withOpacity(0.3),
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: isSeller ? kAccent : kPrimaryLight, width: 1)
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(isSeller ? Icons.verified_rounded : Icons.person_rounded, size: 12, color: isSeller ? kAccent : kWhite),
-                          const SizedBox(width: 4),
-                          Text(
-                            isSeller ? 'Verified Seller' : 'Student Buyer',
-                            style: TextStyle(color: isSeller ? kAccent : kWhite, fontSize: 11, fontWeight: FontWeight.bold)
-                          )
-                        ],
-                      ),
+                    Builder(
+                      builder: (context) {
+                        late final String label;
+                        late final IconData icon;
+                        late final Color fg;
+                        late final Color bg;
+                        late final Color border;
+                        switch (sellerBadge) {
+                          case _SellerBadgeKind.verified:
+                            label = 'Verified Seller';
+                            icon = Icons.verified_rounded;
+                            fg = kAccent;
+                            bg = kAccent.withOpacity(0.2);
+                            border = kAccent;
+                            break;
+                          case _SellerBadgeKind.pending:
+                            label = 'Seller application pending';
+                            icon = Icons.hourglass_top_rounded;
+                            fg = const Color(0xFFE6A23C);
+                            bg = const Color(0xFFE6A23C).withOpacity(0.2);
+                            border = const Color(0xFFE6A23C);
+                            break;
+                          case _SellerBadgeKind.rejected:
+                            label = 'Seller application not approved';
+                            icon = Icons.info_outline_rounded;
+                            fg = Colors.red.shade300;
+                            bg = Colors.red.withOpacity(0.15);
+                            border = Colors.red.shade200;
+                            break;
+                          case _SellerBadgeKind.buyer:
+                            label = 'Student Buyer';
+                            icon = Icons.person_rounded;
+                            fg = kWhite;
+                            bg = kPrimaryLight.withOpacity(0.3);
+                            border = kPrimaryLight;
+                            break;
+                        }
+                        return Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: bg,
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: border, width: 1),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(icon, size: 12, color: fg),
+                              const SizedBox(width: 4),
+                              Text(
+                                label,
+                                style: TextStyle(color: fg, fontSize: 11, fontWeight: FontWeight.bold),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
                     ),
                   ],
                 ),

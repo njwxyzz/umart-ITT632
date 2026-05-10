@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 
 import '../../theme/app_theme.dart';
+import '../../utils/store_status.dart';
 import 'add_product_page.dart';
 import 'seller_orders_page.dart';
 import 'seller_edit_shop_page.dart';
@@ -92,6 +93,33 @@ class SellerDashboard extends StatelessWidget {
         }
 
         final storeData = storeSnap.data?.data();
+        if (storeData != null && !storeIsApproved(storeData)) {
+          final pending = storeIsPending(storeData);
+          return Scaffold(
+            backgroundColor: AppColors.background,
+            appBar: AppBar(
+              backgroundColor: AppColors.background,
+              leading: IconButton(
+                icon: const Icon(Icons.arrow_back_ios_new_rounded),
+                onPressed: () => Navigator.pop(context),
+              ),
+              title: const Text('Seller Dashboard'),
+            ),
+            body: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Center(
+                child: Text(
+                  pending
+                      ? 'Your store application is waiting for admin approval. You will receive a notification when it is reviewed.'
+                      : 'Your seller application was not approved. Check Notifications in your profile for details.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.grey.shade800, fontSize: 15, height: 1.4),
+                ),
+              ),
+            ),
+          );
+        }
+
         final resolvedStore = _trimmedOrNull(storeData?['storeName']) ?? storeName;
         final resolvedLoc = _trimmedOrNull(storeData?['storeLocation']) ?? storeLocation;
         final storePhotoUrl = _trimmedOrNull(storeData?['storePhotoUrl']);

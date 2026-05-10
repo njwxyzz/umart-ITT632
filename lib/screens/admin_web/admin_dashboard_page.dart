@@ -1383,10 +1383,34 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
   // --- WIDGET HELPER: Update Store Status Function ---
   Future<void> _updateStoreStatus(String docId, String storeName, String newStatus) async {
     try {
-      // Assuming your Firebase collection for stores is named 'stores'
-      await FirebaseFirestore.instance.collection('stores').doc(docId).update({
+      final storeRef = FirebaseFirestore.instance.collection('stores').doc(docId);
+      final storeSnap = await storeRef.get();
+      final storeData = storeSnap.data() ?? <String, dynamic>{};
+      final ownerId = (storeData['ownerId'] ?? docId).toString();
+
+      await storeRef.update({
         'status': newStatus,
       });
+
+      final notif = FirebaseFirestore.instance.collection('users').doc(ownerId).collection('notifications');
+      if (newStatus == 'Approved') {
+        await notif.add({
+          'title': 'Seller application approved',
+          'body': 'Your store "$storeName" is approved. Open the app and tap Sell to manage your shop.',
+          'type': 'seller_approved',
+          'read': false,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+      } else if (newStatus == 'Rejected') {
+        await notif.add({
+          'title': 'Seller application update',
+          'body': 'Your store "$storeName" was not approved. You can update your details and contact support if you need help.',
+          'type': 'seller_rejected',
+          'read': false,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+      }
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -1400,6 +1424,68 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error updating status: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _deleteStore(String docId, String storeName, String? ownerId) async {
+    final confirmDelete = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          backgroundColor: Colors.white,
+          title: const Text('Delete store', style: TextStyle(fontWeight: FontWeight.bold)),
+          content: Text(
+            'Permanently delete "$storeName"? This cannot be undone. Products linked to this store may break if your app expects the document to exist.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Delete', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        );
+      },
+    ) ??
+        false;
+
+    if (!confirmDelete) return;
+
+    try {
+      await FirebaseFirestore.instance.collection('stores').doc(docId).delete();
+
+      final oid = ownerId?.trim();
+      if (oid != null && oid.isNotEmpty) {
+        await FirebaseFirestore.instance.collection('users').doc(oid).collection('notifications').add({
+          'title': 'Store removed',
+          'body': 'Your store "$storeName" was removed by an administrator.',
+          'type': 'store_removed',
+          'read': false,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Store "$storeName" has been deleted.'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error deleting store: $e'),
             backgroundColor: Colors.red,
           ),
         );
@@ -1557,23 +1643,38 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                             )
                           ),
                           DataCell(
-                            status == 'Pending' ? Row(
+                            Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
+                                if (status == 'Pending') ...[
+                                  IconButton(
+                                    icon: const Icon(Icons.check_circle_outline_rounded, color: Colors.green),
+                                    tooltip: 'Approve Store',
+                                    onPressed: () => _updateStoreStatus(docId, storeName, 'Approved'),
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.cancel_outlined, color: Colors.red),
+                                    tooltip: 'Reject Store',
+                                    onPressed: () => _updateStoreStatus(docId, storeName, 'Rejected'),
+                                  ),
+                                ] else
+                                  Padding(
+                                    padding: const EdgeInsets.only(right: 4),
+                                    child: Text(
+                                      status == 'Approved' ? 'Done' : 'Closed',
+                                      style: TextStyle(color: Colors.grey.shade400, fontStyle: FontStyle.italic),
+                                    ),
+                                  ),
                                 IconButton(
-                                  icon: const Icon(Icons.check_circle_outline_rounded, color: Colors.green),
-                                  tooltip: 'Approve Store',
-                                  onPressed: () => _updateStoreStatus(docId, storeName, 'Approved'),
-                                ),
-                                IconButton(
-                                  icon: const Icon(Icons.cancel_outlined, color: Colors.red),
-                                  tooltip: 'Reject Store',
-                                  onPressed: () => _updateStoreStatus(docId, storeName, 'Rejected'),
+                                  icon: const Icon(Icons.delete_outline_rounded, color: Colors.red),
+                                  tooltip: 'Delete store',
+                                  onPressed: () => _deleteStore(
+                                    docId,
+                                    storeName,
+                                    storeData['ownerId']?.toString(),
+                                  ),
                                 ),
                               ],
-                            ) : Text(
-                              status == 'Approved' ? 'Done' : 'Closed', 
-                              style: TextStyle(color: Colors.grey.shade400, fontStyle: FontStyle.italic)
                             ),
                           ),
                         ]

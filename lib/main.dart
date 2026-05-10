@@ -27,7 +27,9 @@ import 'screens/auth/onboarding_screen.dart';
 import 'screens/seller/seller_registration_page.dart';
 import 'screens/buyer/store_profile_page.dart';
 import 'screens/buyer/cart_manager.dart';
+import 'screens/buyer/notifications_page.dart';
 import 'screens/seller/seller_dashboard.dart'; 
+import 'utils/store_status.dart';
 
 
 
@@ -38,6 +40,17 @@ void main() async {
     options: DefaultFirebaseOptions.currentPlatform,
   );
 
+  await CartManager.instance.restore();
+
+  var firstAuthEvent = true;
+  FirebaseAuth.instance.authStateChanges().listen((user) async {
+    if (firstAuthEvent) {
+      firstAuthEvent = false;
+      await CartManager.instance.onAuthEvent(user, isInitial: true);
+    } else {
+      await CartManager.instance.onAuthEvent(user, isInitial: false);
+    }
+  });
 
   runApp(const UMartApp()); 
 }
@@ -492,6 +505,73 @@ class _GradientHeaderState extends State<_GradientHeader> {
     }
   }
 
+  Widget _buildHomeNotificationButton(BuildContext context) {
+    final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
+    if (uid.isEmpty) {
+      return GestureDetector(
+        onTap: () => Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const NotificationsPage()),
+        ),
+        child: Container(
+          width: 42,
+          height: 42,
+          decoration: BoxDecoration(color: kWhite.withOpacity(0.2), shape: BoxShape.circle),
+          child: const Icon(Icons.notifications_outlined, color: kWhite, size: 20),
+        ),
+      );
+    }
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .collection('notifications')
+          .snapshots(),
+      builder: (context, snapshot) {
+        var unread = 0;
+        if (snapshot.hasData) {
+          for (final d in snapshot.data!.docs) {
+            if (d.data()['read'] != true) unread++;
+          }
+        }
+        return GestureDetector(
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const NotificationsPage()),
+          ),
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(color: kWhite.withOpacity(0.2), shape: BoxShape.circle),
+                child: const Icon(Icons.notifications_outlined, color: kWhite, size: 20),
+              ),
+              if (unread > 0)
+                Positioned(
+                  top: -2,
+                  right: -2,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: kAccent,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: kPrimary, width: 2),
+                    ),
+                    constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
+                    child: Text(
+                      unread > 99 ? '99+' : '$unread',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(color: kWhite, fontSize: 9, fontWeight: FontWeight.bold, height: 1),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -519,17 +599,7 @@ class _GradientHeaderState extends State<_GradientHeader> {
               ),
               Row(
                 children: [
-                  GestureDetector(
-                    onTap: () async {
-                      await FirebaseAuth.instance.signOut();
-                      Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => const OnboardingScreen())); 
-                    },
-                    child: Container(
-                      width: 42, height: 42,
-                      decoration: BoxDecoration(color: kWhite.withOpacity(0.2), shape: BoxShape.circle),
-                      child: const Icon(Icons.logout_rounded, color: kWhite, size: 20),
-                    ),
-                  ),
+                  _buildHomeNotificationButton(context),
                   const SizedBox(width: 12),
                   GestureDetector(
                     onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const CartPage())),
@@ -1489,16 +1559,51 @@ class _BottomNav extends StatelessWidget {
                   if (context.mounted) Navigator.pop(context);
 
                   if (storeDoc.exists) {
-                    if (context.mounted) {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => SellerDashboard(
-                            storeName: storeDoc['storeName'],
-                            storeLocation: storeDoc['storeLocation'],
+                    final storeData = storeDoc.data();
+                    if (storeIsPending(storeData)) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              'Your seller application is pending. You will get a notification when an admin approves it.',
+                            ),
                           ),
-                        ),
-                      );
+                        );
+                      }
+                    } else if (storeIsRejected(storeData)) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              'Your seller application was not approved. Check Notifications for details.',
+                            ),
+                          ),
+                        );
+                      }
+                    } else if (storeIsApproved(storeData)) {
+                      if (context.mounted) {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => SellerDashboard(
+                              storeName: storeDoc['storeName'],
+                              storeLocation: storeDoc['storeLocation'],
+                            ),
+                          ),
+                        );
+                      }
+                    } else {
+                      if (context.mounted) {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => SellerDashboard(
+                              storeName: storeDoc['storeName'],
+                              storeLocation: storeDoc['storeLocation'],
+                            ),
+                          ),
+                        );
+                      }
                     }
                   } else {
                     if (context.mounted) {

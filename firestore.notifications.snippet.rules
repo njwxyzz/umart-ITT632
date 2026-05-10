@@ -1,0 +1,54 @@
+// =============================================================================
+// UMART — Firestore Rules SNIPPET for in-app notifications
+// =============================================================================
+// This file is NOT a complete rules file. Do not deploy it as your only
+// firestore.rules, or every path you omit will be denied by default.
+//
+// WHERE TO PUT THIS
+// -----------------
+// Option A — Firebase Console (fastest)
+//   1. Open https://console.firebase.google.com → your project (umart-app-3bd8a)
+//   2. Firestore Database → Rules
+//   3. Paste the helper functions + match block below into your existing rules
+//      (inside `match /databases/{database}/documents { ... }`)
+//   4. Publish
+//
+// Option B — Firebase CLI
+//   1. Put the same snippet into your main `firestore.rules` next to your other
+//      `match` blocks, then:
+//        firebase deploy --only firestore:rules
+//
+// ADMIN EMAIL must match what Firebase Auth stores (normally lowercase):
+//   admin@umart.com   ← same as lib/main.dart and lib/screens/auth/login_page.dart
+// =============================================================================
+
+// --- Add these functions once (skip if you already defined them) -----------
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isSignedIn()
+        && request.auth.token.email == 'admin@umart.com';
+    }
+
+// --- Notifications subcollection under users ----------------------------------
+
+    match /users/{userId}/notifications/{notificationId} {
+      // Student reads only their own inbox
+      allow read: if isOwner(userId) || isAdmin();
+
+      // Admin dashboard creates approval/rejection notifications for any userId
+      allow create: if isAdmin();
+
+      // App marks notifications read when user opens them (notifications_page.dart)
+      allow update: if isOwner(userId);
+
+      // Optional: allow users to delete their own notifications later
+      allow delete: if isOwner(userId);
+    }

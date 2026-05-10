@@ -318,7 +318,7 @@ class _SellerEditShopPageState extends State<SellerEditShopPage> {
                   ],
                 ),
                 child: DropdownButtonFormField<String>(
-                  value: _category,
+                  initialValue: _category,
                   decoration: InputDecoration(
                     prefixIcon: Icon(Icons.category_rounded, color: Colors.grey.shade400, size: 22),
                     border: InputBorder.none,

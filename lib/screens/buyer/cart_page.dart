@@ -161,9 +161,13 @@ class _CartPageState extends State<CartPage> {
                                   onDecrement: () {
                                     if (item.quantity > 1) {
                                       setState(() => item.quantity--);
+                                      CartManager.instance.persistCart();
                                     }
                                   },
-                                  onIncrement: () => setState(() => item.quantity++),
+                                  onIncrement: () {
+                                    setState(() => item.quantity++);
+                                    CartManager.instance.persistCart();
+                                  },
                                 ),
                               ),
                             )),

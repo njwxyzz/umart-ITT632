@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'edit_profile_page.dart'; // To link Manage Profile
 import '../auth/login_page.dart'; // To link Logout
+import 'notifications_page.dart';
 
 // --- Color Constants ---
 const kPrimary      = Color(0xFF4C6B3F); 
@@ -235,7 +236,10 @@ class _SettingsPageState extends State<SettingsPage> {
                     _buildSettingsTile(
                       icon: Icons.notifications_none_rounded,
                       title: 'Notifications',
-                      onTap: () {},
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const NotificationsPage()),
+                      ),
                     ),
                   ],
                 ),

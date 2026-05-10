@@ -26,6 +26,8 @@ class _LoginPageState extends State<LoginPage> {
   bool _obscurePassword = true;
   bool _rememberMe = false; // For checkbox
   bool _isLoading = false; // For button loading state
+  /// Shown after user tries to log in but email is not verified yet.
+  bool _showResendVerification = false;
 
   Future<void> _syncFirestoreEmailVerified(User user) async {
     try {
@@ -136,8 +138,11 @@ class _LoginPageState extends State<LoginPage> {
       if (!isAdmin && user != null && !user.emailVerified) {
         await user.sendEmailVerification();
         await FirebaseAuth.instance.signOut();
-        setState(() => _isLoading = false);
         if (mounted) {
+          setState(() {
+            _isLoading = false;
+            _showResendVerification = true;
+          });
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Please verify your UiTM email first. New verification link sent.'),
@@ -153,7 +158,12 @@ class _LoginPageState extends State<LoginPage> {
       }
 
       // Stop loading
-      setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _showResendVerification = false;
+        });
+      }
 
       // 4. If success, navigate to HomeScreen
       if (mounted) {
@@ -315,24 +325,26 @@ class _LoginPageState extends State<LoginPage> {
                     ),
                   ),
 
-                  const SizedBox(height: 10),
-                  Center(
-                    child: TextButton(
-                      onPressed: _isLoading ? null : _resendVerificationEmail,
-                      child: const Text(
-                        'Resend verification email',
-                        style: TextStyle(color: kPrimary, fontWeight: FontWeight.w700),
+                  if (_showResendVerification) ...[
+                    const SizedBox(height: 10),
+                    Center(
+                      child: TextButton(
+                        onPressed: _isLoading ? null : _resendVerificationEmail,
+                        child: const Text(
+                          'Resend verification email',
+                          style: TextStyle(color: kPrimary, fontWeight: FontWeight.w700),
+                        ),
                       ),
                     ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    child: Text(
-                      'If email is not received, check your Spam/Junk folder.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      child: Text(
+                        'If email is not received, check your Spam/Junk folder.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                      ),
                     ),
-                  ),
+                  ],
 
                   const SizedBox(height: 30),
 

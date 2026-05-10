@@ -533,7 +533,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
                     const Text('Deliver to', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.black54)),
                     const SizedBox(height: 6),
                     DropdownButtonFormField<KolejOption>(
-                      value: _selectedKolej,
+                      initialValue: _selectedKolej,
                       isExpanded: true,
                       decoration: InputDecoration(
                         filled: true,

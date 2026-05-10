@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'seller_dashboard.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 // --- Color Constants ---
@@ -85,7 +84,7 @@ class _SellerRegistrationPageState extends State<SellerRegistrationPage> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Tell us a bit about what you are selling. You can always change this later.',
+                  'Tell us about your store. An admin will review your application—you will get an in-app notification when it is approved.',
                   style: TextStyle(fontSize: 14, color: Colors.grey.shade600, height: 1.5),
                 ),
                 const SizedBox(height: 40),
@@ -154,30 +153,40 @@ class _SellerRegistrationPageState extends State<SellerRegistrationPage> {
                             ? "UiTM Campus" 
                             : _locationController.text.trim();
 
-                        // Simpan data kedai dalam Firebase
+                        String ownerName = currentUser.email?.split('@')[0] ?? 'Student';
+                        final userDoc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+                        if (userDoc.exists) {
+                          final u = userDoc.data();
+                          final fn = u?['fullName']?.toString().trim();
+                          if (fn != null && fn.isNotEmpty) ownerName = fn;
+                        }
+
+                        // Simpan data kedai dalam Firebase — tunggu kelulusan admin
                         await FirebaseFirestore.instance.collection('stores').doc(uid).set({
                           'storeName': finalStoreName,
                           'storeLocation': finalLocation,
                           'category': _selectedCategory ?? 'Others',
                           'description': _descController.text.trim(),
                           'ownerId': uid,
+                          'ownerName': ownerName,
+                          'status': 'Pending',
                           'createdAt': FieldValue.serverTimestamp(),
                         });
 
                         if (context.mounted) Navigator.pop(context); // Tutup loading indicator
 
                         if (context.mounted) {
-                          // Bawa ke Dashboard!
-                          Navigator.pushReplacement(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => SellerDashboard(
-                                storeName: finalStoreName, 
-                                storeLocation: finalLocation,
+                          final messenger = ScaffoldMessenger.of(context);
+                          Navigator.of(context).pop(); // Leave registration page
+                          Navigator.of(context).maybePop(); // Close "Start Selling" bottom sheet if still open
+                          messenger.showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                'Application submitted. You will be notified when an admin approves your store.',
                               ),
+                              backgroundColor: kPrimary,
                             ),
                           );
-                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Store created successfully! 🎉'), backgroundColor: kPrimary));
                         }
 
                       } catch (e) {
@@ -194,7 +203,7 @@ class _SellerRegistrationPageState extends State<SellerRegistrationPage> {
                       elevation: 5,
                       shadowColor: kPrimary.withOpacity(0.4), 
                     ),
-                    child: const Text('Create My Store', style: TextStyle(color: kWhite, fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+                    child: const Text('Submit application', style: TextStyle(color: kWhite, fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
                   ),
                 ),
                 const SizedBox(height: 30),

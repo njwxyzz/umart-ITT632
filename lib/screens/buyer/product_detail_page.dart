@@ -653,6 +653,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                         } else {
                           // Update walkie-talkie (badge) kalau kita just update kuantiti
                           CartManager.instance.cartItemCount.value = CartManager.instance.items.length;
+                          CartManager.instance.persistCart();
                         }
 
                         // 3. Tunjuk mesej berjaya kat bawah!
