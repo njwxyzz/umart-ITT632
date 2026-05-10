@@ -57,6 +57,19 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
   bool _orderSortAsc = true;
   final Random _random = Random();
 
+  /// Real-time pending counts for sidebar badges (one Firestore listener each).
+  final Stream<int> _pendingStoresCountStream = FirebaseFirestore.instance
+      .collection('stores')
+      .where('status', isEqualTo: 'Pending')
+      .snapshots()
+      .map((s) => s.docs.length);
+
+  final Stream<int> _pendingProductsCountStream = FirebaseFirestore.instance
+      .collection('products')
+      .where('status', isEqualTo: 'Pending')
+      .snapshots()
+      .map((s) => s.docs.length);
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -145,8 +158,18 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                 
                 _buildNavItem(Icons.dashboard_rounded, 'Dashboard', _AdminSection.dashboard),
                 _buildNavItem(Icons.people_alt_rounded, 'Manage Users', _AdminSection.users),
-                _buildNavItem(Icons.storefront_rounded, 'Manage Stores', _AdminSection.stores),
-                _buildNavItem(Icons.inventory_2_rounded, 'Manage Products', _AdminSection.products),
+                _buildNavItem(
+                  Icons.storefront_rounded,
+                  'Manage Stores',
+                  _AdminSection.stores,
+                  pendingCountStream: _pendingStoresCountStream,
+                ),
+                _buildNavItem(
+                  Icons.inventory_2_rounded,
+                  'Manage Products',
+                  _AdminSection.products,
+                  pendingCountStream: _pendingProductsCountStream,
+                ),
                 _buildNavItem(Icons.receipt_long_rounded, 'All Orders', _AdminSection.orders),
                 
                 const Spacer(),
@@ -513,7 +536,12 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
     return true;
   }
 
-  Widget _buildNavItem(IconData icon, String title, _AdminSection section) {
+  Widget _buildNavItem(
+    IconData icon,
+    String title,
+    _AdminSection section, {
+    Stream<int>? pendingCountStream,
+  }) {
     bool isSelected = _selectedSection == section;
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -526,10 +554,24 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
       child: ListTile(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         leading: Icon(icon, color: isSelected ? kPrimary : Colors.grey.shade600),
-        title: Text(title, style: TextStyle(
-          color: isSelected ? kPrimary : Colors.grey.shade700,
-          fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-        )),
+        title: Row(
+          children: [
+            Expanded(
+              child: Text(
+                title,
+                style: TextStyle(
+                  color: isSelected ? kPrimary : Colors.grey.shade700,
+                  fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            if (pendingCountStream != null) ...[
+              const SizedBox(width: 8),
+              _buildSidebarPendingBadge(pendingCountStream),
+            ],
+          ],
+        ),
         trailing: isSelected
             ? Container(
                 width: 6,
@@ -550,6 +592,45 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
           });
         },
       ),
+    );
+  }
+
+  Widget _buildSidebarPendingBadge(Stream<int> countStream) {
+    return StreamBuilder<int>(
+      stream: countStream,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
+          return const SizedBox(width: 22, height: 22);
+        }
+        final n = snapshot.data ?? 0;
+        if (n <= 0) return const SizedBox.shrink();
+        final label = n > 99 ? '99+' : '$n';
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+          decoration: BoxDecoration(
+            color: Colors.red.shade600,
+            borderRadius: BorderRadius.circular(10),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.red.withOpacity(0.35),
+                blurRadius: 4,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          constraints: const BoxConstraints(minWidth: 22),
+          alignment: Alignment.center,
+          child: Text(
+            label,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+              height: 1.1,
+            ),
+          ),
+        );
+      },
     );
   }
 

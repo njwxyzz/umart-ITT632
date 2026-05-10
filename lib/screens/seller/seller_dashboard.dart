@@ -709,7 +709,13 @@ class SellerDashboard extends StatelessWidget {
   Widget _buildProductCard(BuildContext context, QueryDocumentSnapshot doc) {
     var item = doc.data() as Map<String, dynamic>;
     double price = item['price'] is num ? (item['price'] as num).toDouble() : double.tryParse(item['price'].toString()) ?? 0.0;
-    double rating = item['rating'] is num ? (item['rating'] as num).toDouble() : double.tryParse(item['rating'].toString()) ?? 0.0;
+    int soldCount = 0;
+    final soldRaw = item['sold'] ?? item['soldCount'] ?? item['totalSold'];
+    if (soldRaw is num) {
+      soldCount = soldRaw.toInt();
+    } else {
+      soldCount = int.tryParse(soldRaw?.toString() ?? '0') ?? 0;
+    }
     Color statusBg;
     Color statusFg;
     String statusShort;
@@ -781,9 +787,12 @@ class SellerDashboard extends StatelessWidget {
                       Text('RM ${price.toStringAsFixed(2)}', style: const TextStyle(color: AppColors.accent, fontWeight: FontWeight.w900, fontSize: 14)),
                       Row(
                         children: [
-                          const Icon(Icons.star_rounded, color: Colors.amber, size: 12),
+                          Icon(Icons.inventory_2_outlined, color: Colors.grey.shade600, size: 12),
                           const SizedBox(width: 2),
-                          Text(rating.toStringAsFixed(1), style: TextStyle(color: Colors.grey.shade600, fontSize: 11, fontWeight: FontWeight.bold)),
+                          Text(
+                            '$soldCount sold',
+                            style: TextStyle(color: Colors.grey.shade600, fontSize: 11, fontWeight: FontWeight.bold),
+                          ),
                         ],
                       )
                     ],
