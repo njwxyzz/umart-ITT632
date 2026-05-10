@@ -759,12 +759,12 @@ class _BentoGrid extends StatelessWidget {
                   children: [
                     _BentoCard(
                       bgColor: Colors.orange.shade50,
-                      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => AllProductPage(title: 'Parcel', items: otherItems))), 
+                      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => AllProductPage(title: 'Parcel & more', items: otherItems))),
                       child: Row(
                         children: [
                           Container(width: 48, height: 48, decoration: BoxDecoration(color: kWhite, borderRadius: BorderRadius.circular(12)), child: _iconAsset('assets/icons/parcel_icons.png', radius: 12)),
                           const SizedBox(width: 10),
-                          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const Text('Parcel', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)), Text('Send & receive', style: TextStyle(color: Colors.grey[600], fontSize: 11))])),
+                          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const Text('Parcel & more', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)), Text('Books, gadgets & more', style: TextStyle(color: Colors.grey[600], fontSize: 11))])),
                         ],
                       ),
                     ),

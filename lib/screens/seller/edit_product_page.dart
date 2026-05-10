@@ -46,6 +46,7 @@ class _EditProductPageState extends State<EditProductPage> {
     'Preloved Items',
     'Books & Notes',
     'Gadgets & Accessories',
+    'Printing Services',
     'Others',
   ];
 

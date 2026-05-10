@@ -9,7 +9,7 @@ void main() {
 
     // Verify key UI elements are present.
     expect(find.text('Food'), findsOneWidget);
-    expect(find.text('Parcel'), findsOneWidget);
+    expect(find.text('Parcel & more'), findsOneWidget);
     expect(find.text('Preloved'), findsOneWidget);
   });
 }

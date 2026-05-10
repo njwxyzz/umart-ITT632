@@ -15,6 +15,18 @@ const kSecondaryAccent = Color(0xFF6D8BEA);
 
 enum _AdminSection { dashboard, users, stores, products, orders }
 
+class _ActivityFeedItem {
+  const _ActivityFeedItem({
+    required this.when,
+    required this.text,
+    required this.dotColor,
+  });
+
+  final DateTime? when;
+  final String text;
+  final Color dotColor;
+}
+
 class AdminDashboardPage extends StatefulWidget {
   const AdminDashboardPage({super.key});
 
@@ -848,39 +860,67 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
           const SizedBox(height: 14),
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance.collection('orders').limit(8).snapshots(),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator(color: kPrimary));
-                }
-                if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                  return const Center(child: Text('No recent activities yet.', style: TextStyle(color: Colors.grey)));
-                }
+              stream: FirebaseFirestore.instance.collection('orders').limit(24).snapshots(),
+              builder: (context, orderSnap) {
+                return StreamBuilder<QuerySnapshot>(
+                  stream: FirebaseFirestore.instance.collection('stores').limit(250).snapshots(),
+                  builder: (context, storeSnap) {
+                    return StreamBuilder<QuerySnapshot>(
+                      stream: FirebaseFirestore.instance
+                          .collection('products')
+                          .where('status', isEqualTo: 'Pending')
+                          .limit(30)
+                          .snapshots(),
+                      builder: (context, productSnap) {
+                        final allWaiting = orderSnap.connectionState == ConnectionState.waiting &&
+                            storeSnap.connectionState == ConnectionState.waiting &&
+                            productSnap.connectionState == ConnectionState.waiting &&
+                            !orderSnap.hasData &&
+                            !storeSnap.hasData &&
+                            !productSnap.hasData;
 
-                return ListView.separated(
-                  itemCount: snapshot.data!.docs.length,
-                  separatorBuilder: (_, __) => const Divider(height: 16),
-                  itemBuilder: (context, index) {
-                    final data = snapshot.data!.docs[index].data() as Map<String, dynamic>;
-                    final status = (data['status'] ?? 'Pending').toString();
-                    final buyerName = (data['buyerName'] ?? 'Unknown Buyer').toString();
-                    return Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Container(
-                          width: 10,
-                          height: 10,
-                          margin: const EdgeInsets.only(top: 5),
-                          decoration: BoxDecoration(color: _statusColor(status), shape: BoxShape.circle),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            'Order from $buyerName is currently $status.',
-                            style: const TextStyle(fontSize: 13.5, height: 1.35, color: kCardText),
-                          ),
-                        ),
-                      ],
+                        if (allWaiting) {
+                          return const Center(child: CircularProgressIndicator(color: kPrimary));
+                        }
+
+                        final items = _compileAdminActivityFeed(
+                          orders: orderSnap.data,
+                          stores: storeSnap.data,
+                          pendingProducts: productSnap.data,
+                        );
+
+                        if (items.isEmpty) {
+                          return const Center(
+                            child: Text('No recent activities yet.', style: TextStyle(color: Colors.grey)),
+                          );
+                        }
+
+                        return ListView.separated(
+                          itemCount: items.length,
+                          separatorBuilder: (_, __) => const Divider(height: 16),
+                          itemBuilder: (context, index) {
+                            final item = items[index];
+                            return Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Container(
+                                  width: 10,
+                                  height: 10,
+                                  margin: const EdgeInsets.only(top: 5),
+                                  decoration: BoxDecoration(color: item.dotColor, shape: BoxShape.circle),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    item.text,
+                                    style: const TextStyle(fontSize: 13.5, height: 1.35, color: kCardText),
+                                  ),
+                                ),
+                              ],
+                            );
+                          },
+                        );
+                      },
                     );
                   },
                 );
@@ -890,6 +930,112 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
         ],
       ),
     );
+  }
+
+  DateTime? _activityTimestamp(Map<String, dynamic> data, [List<String> keys = const ['createdAt', 'timestamp', 'orderDate', 'approvedAt']]) {
+    for (final k in keys) {
+      final v = data[k];
+      if (v is Timestamp) return v.toDate();
+    }
+    return null;
+  }
+
+  List<_ActivityFeedItem> _compileAdminActivityFeed({
+    QuerySnapshot? orders,
+    QuerySnapshot? stores,
+    QuerySnapshot? pendingProducts,
+  }) {
+    final out = <_ActivityFeedItem>[];
+    final approvedSellerIds = <String>{};
+
+    if (stores != null) {
+      for (final d in stores.docs) {
+        final data = d.data() as Map<String, dynamic>;
+        final st = (data['status'] ?? '').toString();
+        if (st == 'Approved') {
+          approvedSellerIds.add(d.id);
+          final oid = data['ownerId']?.toString();
+          if (oid != null && oid.isNotEmpty) approvedSellerIds.add(oid);
+        }
+      }
+
+      for (final d in stores.docs) {
+        final data = d.data() as Map<String, dynamic>;
+        final st = (data['status'] ?? '').toString();
+        final name = (data['storeName'] ?? 'Store').toString();
+        final owner = (data['ownerName'] ?? 'Seller').toString();
+
+        if (st == 'Pending') {
+          out.add(
+            _ActivityFeedItem(
+              when: _activityTimestamp(data),
+              dotColor: Colors.deepOrange,
+              text: 'New seller application: "$name" ($owner) — awaiting your approval.',
+            ),
+          );
+        } else if (st == 'Approved') {
+          final approvedAt = data['approvedAt'];
+          if (approvedAt is Timestamp) {
+            out.add(
+              _ActivityFeedItem(
+                when: approvedAt.toDate(),
+                dotColor: Colors.green,
+                text: 'Store "$name" is approved — seller can add products.',
+              ),
+            );
+          }
+        }
+      }
+    }
+
+    if (pendingProducts != null) {
+      for (final d in pendingProducts.docs) {
+        final data = d.data() as Map<String, dynamic>;
+        final name = (data['name'] ?? 'Product').toString();
+        final sellerName = (data['sellerName'] ?? 'Seller').toString();
+        final sellerId = (data['sellerId'] ?? '').toString();
+        final sellerApproved = sellerId.isNotEmpty && approvedSellerIds.contains(sellerId);
+
+        out.add(
+          _ActivityFeedItem(
+            when: _activityTimestamp(data),
+            dotColor: sellerApproved ? const Color(0xFF6B4FB7) : Colors.amber.shade800,
+            text: sellerApproved
+                ? 'Approved seller "$sellerName" submitted product "$name" for review.'
+                : 'Product "$name" from "$sellerName" is pending review (approve the store first if needed).',
+          ),
+        );
+      }
+    }
+
+    if (orders != null && orders.docs.isNotEmpty) {
+      final docs = List<QueryDocumentSnapshot>.from(orders.docs);
+      docs.sort((a, b) {
+        final ta = _activityTimestamp(a.data() as Map<String, dynamic>) ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final tb = _activityTimestamp(b.data() as Map<String, dynamic>) ?? DateTime.fromMillisecondsSinceEpoch(0);
+        return tb.compareTo(ta);
+      });
+      for (final d in docs.take(8)) {
+        final data = d.data() as Map<String, dynamic>;
+        final status = (data['status'] ?? 'Pending').toString();
+        final buyerName = (data['buyerName'] ?? 'Unknown Buyer').toString();
+        out.add(
+          _ActivityFeedItem(
+            when: _activityTimestamp(data),
+            dotColor: _statusColor(status),
+            text: 'Order from $buyerName is $status.',
+          ),
+        );
+      }
+    }
+
+    out.sort((a, b) {
+      final ta = a.when ?? DateTime.fromMillisecondsSinceEpoch(0);
+      final tb = b.when ?? DateTime.fromMillisecondsSinceEpoch(0);
+      return tb.compareTo(ta);
+    });
+
+    return out.take(14).toList();
   }
 
   Widget _buildPaginationControls({
@@ -1412,9 +1558,11 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
       final storeData = storeSnap.data() ?? <String, dynamic>{};
       final ownerId = (storeData['ownerId'] ?? docId).toString();
 
-      await storeRef.update({
-        'status': newStatus,
-      });
+      final update = <String, dynamic>{'status': newStatus};
+      if (newStatus == 'Approved') {
+        update['approvedAt'] = FieldValue.serverTimestamp();
+      }
+      await storeRef.update(update);
 
       final notif = FirebaseFirestore.instance.collection('users').doc(ownerId).collection('notifications');
       if (newStatus == 'Approved') {

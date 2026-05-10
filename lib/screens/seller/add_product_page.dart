@@ -57,11 +57,12 @@ class _AddProductPageState extends State<AddProductPage> {
 
   String? _selectedCategory;
   final List<String> _categories = [
-    'Food & Beverages', 
-    'Preloved Items', 
-    'Books & Notes', 
+    'Food & Beverages',
+    'Preloved Items',
+    'Books & Notes',
     'Gadgets & Accessories',
-    'Others'
+    'Printing Services',
+    'Others',
   ];
 
   final List<String> _variations = [];
