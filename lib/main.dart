@@ -30,6 +30,7 @@ import 'screens/buyer/cart_manager.dart';
 import 'screens/buyer/notifications_page.dart';
 import 'screens/seller/seller_dashboard.dart'; 
 import 'utils/store_status.dart';
+import 'utils/product_status.dart';
 
 
 
@@ -167,6 +168,7 @@ class _HomeScreenState extends State<HomeScreen> {
       
       for (var doc in snapshot.docs) {
         var data = doc.data() as Map<String, dynamic>;
+        if (!productIsApproved(data)) continue;
 
         double harga = data['price'] is num ? (data['price'] as num).toDouble() : double.tryParse(data['price'].toString()) ?? 0.0;
         int soldCount = 0;

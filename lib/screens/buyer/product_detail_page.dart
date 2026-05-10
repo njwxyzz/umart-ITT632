@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'cart_page.dart'; 
 import 'cart_manager.dart'; // 🚨 IMPORT OTAK TROLI KAT SINI
 import 'store_profile_page.dart';
+import '../../utils/product_status.dart';
 
 const kPrimary      = Color(0xFF4C6B3F);
 const kAccent       = Color(0xFFF27B35);
@@ -47,6 +48,8 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
   Map<String, double> variationPriceMap = {};
   String _resolvedProductId = '';
   double _productDeliveryFee = 0.0;
+  bool _firebaseMetaApplied = false;
+  bool _buyersCanPurchaseThisListing = true;
 
   bool get _isOwnStoreProduct {
     final currentUserId = FirebaseAuth.instance.currentUser?.uid ?? '';
@@ -94,11 +97,27 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
             .where('name', isEqualTo: widget.name)
             .limit(1)
             .get();
-        if (query.docs.isEmpty) return;
+        if (query.docs.isEmpty) {
+          if (mounted) {
+            setState(() {
+              _firebaseMetaApplied = true;
+              _buyersCanPurchaseThisListing = true;
+            });
+          }
+          return;
+        }
         data = query.docs.first.data();
         resolvedId = query.docs.first.id;
       }
-      if (data == null) return;
+      if (data == null) {
+        if (mounted) {
+          setState(() {
+            _firebaseMetaApplied = true;
+            _buyersCanPurchaseThisListing = true;
+          });
+        }
+        return;
+      }
       final rawSoldCount = data['soldCount'] ?? data['sold'] ?? data['totalSold'];
       final rawVariations = data['variations'];
       final rawVariationPrices = data['variationPrices'];
@@ -147,7 +166,15 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
       }
 
       if (!mounted) return;
+      final listingSeller =
+          (data['sellerId'] ?? data['ownerId'] ?? widget.sellerId).toString();
+      final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
+      final isOwner = uid.isNotEmpty && uid == listingSeller;
+      final canShop = productIsApproved(data) || isOwner;
+
       setState(() {
+        _firebaseMetaApplied = true;
+        _buyersCanPurchaseThisListing = canShop;
         _resolvedProductId = resolvedId;
         soldCount = fetchedSoldCount;
         displayVariations = fetchedVariations.isNotEmpty
@@ -170,6 +197,8 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     } catch (_) {
       if (!mounted) return;
       setState(() {
+        _firebaseMetaApplied = true;
+        _buyersCanPurchaseThisListing = true;
         _resolvedProductId = widget.productId ?? '';
         soldCount = 0;
         displayVariations = widget.variations ?? [];
@@ -186,13 +215,15 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
   Widget build(BuildContext context) {
     final unitPrice = _selectedUnitPrice;
     final totalPrice = unitPrice * quantity;
+    final showUnavailable =
+        _firebaseMetaApplied && !_buyersCanPurchaseThisListing;
 
     return Scaffold(
       backgroundColor: kBg,
       body: Stack(
         children: [
           SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 130),
+            padding: EdgeInsets.fromLTRB(16, 12, 16, showUnavailable ? 24 : 130),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -225,6 +256,34 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                   ),
                 ),
                 const SizedBox(height: 18),
+                if (showUnavailable) ...[
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.shade50,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: Colors.orange.shade200),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.info_outline_rounded, color: Colors.orange.shade800, size: 28),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Text(
+                            'This product is not available for purchase yet. It may be waiting for admin approval.',
+                            style: TextStyle(
+                              color: Colors.orange.shade900,
+                              fontWeight: FontWeight.w600,
+                              height: 1.35,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                ],
                 Container(
                   padding: const EdgeInsets.fromLTRB(12, 16, 12, 12),
                   decoration: BoxDecoration(
@@ -553,6 +612,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
           ),
 
           // ─── BOTTOM BAR (ADD TO CART) ───
+          if (!showUnavailable)
           Positioned(
             left: 0,
             right: 0,
@@ -605,6 +665,15 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
                               content: Text('You cannot buy from your own shop.'),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                          return;
+                        }
+                        if (!_buyersCanPurchaseThisListing) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('This product is not available for purchase.'),
                               backgroundColor: Colors.red,
                             ),
                           );

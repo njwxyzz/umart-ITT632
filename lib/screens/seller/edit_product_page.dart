@@ -190,6 +190,7 @@ class _EditProductPageState extends State<EditProductPage> {
         'category': _selectedCategory,
         'variations': _variations,
         'variationPrices': variationPrices,
+        'status': 'Pending',
       };
 
       // 3. Decide imageUrl:
@@ -214,10 +215,14 @@ class _EditProductPageState extends State<EditProductPage> {
           const SnackBar(
             content: Row(
               children: [
-                Icon(Icons.check_circle_rounded, color: kWhite),
+                Icon(Icons.hourglass_top_rounded, color: kWhite),
                 SizedBox(width: 10),
-                Text('Product updated successfully!',
-                    style: TextStyle(fontWeight: FontWeight.bold)),
+                Expanded(
+                  child: Text(
+                    'Changes saved. Your product is pending admin review again before buyers can see it.',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
               ],
             ),
             backgroundColor: kPrimary,

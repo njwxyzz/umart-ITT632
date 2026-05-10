@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'dart:math';
 
 import '../auth/login_page.dart';
+import '../../utils/product_status.dart';
 // --- Color Constants ---
 const kPrimary = Color(0xFF4C6B3F); 
 const kBg = Color(0xFFF5F7F2); 
@@ -12,7 +13,7 @@ const kCardText = Color(0xFF1A1A2E);
 const kAccent = Color(0xFF8AAF63);
 const kSecondaryAccent = Color(0xFF6D8BEA);
 
-enum _AdminSection { dashboard, users, stores, orders }
+enum _AdminSection { dashboard, users, stores, products, orders }
 
 class AdminDashboardPage extends StatefulWidget {
   const AdminDashboardPage({super.key});
@@ -30,14 +31,17 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
 
   int _userPage = 0;
   int _storePage = 0;
+  int _productPage = 0;
   int _orderPage = 0;
   static const int _pageSize = 10;
 
   String _userSortBy = 'name';
   String _storeSortBy = 'store';
+  String _productSortBy = 'name';
   String _orderSortBy = 'id';
   bool _userSortAsc = true;
   bool _storeSortAsc = true;
+  bool _productSortAsc = true;
   bool _orderSortAsc = true;
   final Random _random = Random();
 
@@ -130,6 +134,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                 _buildNavItem(Icons.dashboard_rounded, 'Dashboard', _AdminSection.dashboard),
                 _buildNavItem(Icons.people_alt_rounded, 'Manage Users', _AdminSection.users),
                 _buildNavItem(Icons.storefront_rounded, 'Manage Stores', _AdminSection.stores),
+                _buildNavItem(Icons.inventory_2_rounded, 'Manage Products', _AdminSection.products),
                 _buildNavItem(Icons.receipt_long_rounded, 'All Orders', _AdminSection.orders),
                 
                 const Spacer(),
@@ -316,7 +321,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
             child: TextField(
               onChanged: (value) => setState(() => _searchQuery = value.trim().toLowerCase()),
               decoration: const InputDecoration(
-                hintText: 'Search users, stores or orders...',
+                hintText: 'Search users, stores, products or orders...',
                 prefixIcon: Icon(Icons.search_rounded),
                 border: InputBorder.none,
                 contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 13),
@@ -441,6 +446,9 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
     if (_selectedSection == _AdminSection.stores) {
       return const ['All', 'Pending', 'Approved', 'Rejected'];
     }
+    if (_selectedSection == _AdminSection.products) {
+      return const ['All', 'Pending', 'Approved', 'Rejected'];
+    }
     if (_selectedSection == _AdminSection.orders) {
       return const ['All', 'Pending', 'Processing', 'Delivered', 'Rejected'];
     }
@@ -450,6 +458,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
   void _resetPagination() {
     _userPage = 0;
     _storePage = 0;
+    _productPage = 0;
     _orderPage = 0;
   }
 
@@ -622,9 +631,11 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
           ? _buildUsersTable()
           : _selectedSection == _AdminSection.stores
               ? _buildStoresTable()
-              : _selectedSection == _AdminSection.orders
-                  ? _buildOrdersTable()
-                  : _buildDashboardOverviewPanel(),
+              : _selectedSection == _AdminSection.products
+                  ? _buildProductsTable()
+                  : _selectedSection == _AdminSection.orders
+                      ? _buildOrdersTable()
+                      : _buildDashboardOverviewPanel(),
     );
   }
 
@@ -662,7 +673,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                       SizedBox(width: 10),
                       Expanded(
                         child: Text(
-                          'Daily command center: review activity, approve stores, and manage user operations.',
+                          'Daily command center: review activity, approve stores and product listings, and manage user operations.',
                           style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600, height: 1.35),
                         ),
                       ),
@@ -678,6 +689,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                   children: [
                     _buildQuickActionButton(Icons.people_alt_rounded, 'Review Users', _AdminSection.users),
                     _buildQuickActionButton(Icons.storefront_rounded, 'Review Stores', _AdminSection.stores),
+                    _buildQuickActionButton(Icons.inventory_2_rounded, 'Review Products', _AdminSection.products),
                     _buildQuickActionButton(Icons.receipt_long_rounded, 'Monitor Orders', _AdminSection.orders),
                   ],
                 ),
@@ -923,7 +935,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
   Future<void> _exportCurrentSectionAsCsv() async {
     if (_selectedSection == _AdminSection.dashboard) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Switch to Users, Stores or Orders to export CSV.')),
+        const SnackBar(content: Text('Switch to Users, Stores, Products, or Orders to export CSV.')),
       );
       return;
     }
@@ -934,6 +946,8 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
         docs = (await FirebaseFirestore.instance.collection('users').get()).docs;
       } else if (_selectedSection == _AdminSection.stores) {
         docs = (await FirebaseFirestore.instance.collection('stores').get()).docs;
+      } else if (_selectedSection == _AdminSection.products) {
+        docs = (await FirebaseFirestore.instance.collection('products').get()).docs;
       } else {
         docs = (await FirebaseFirestore.instance.collection('orders').get()).docs;
       }
@@ -958,6 +972,8 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
       headers = ['id', 'name', 'email', 'role'];
     } else if (_selectedSection == _AdminSection.stores) {
       headers = ['id', 'storeName', 'ownerId', 'status'];
+    } else if (_selectedSection == _AdminSection.products) {
+      headers = ['id', 'name', 'sellerId', 'sellerName', 'category', 'status'];
     } else {
       headers = ['id', 'buyerName', 'productName', 'totalPrice', 'status'];
     }
@@ -967,7 +983,14 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
       ...docs.map((doc) {
         final data = doc.data() as Map<String, dynamic>;
         return headers.map((header) {
-          final raw = header == 'id' ? doc.id : (data[header] ?? '');
+          dynamic raw;
+          if (header == 'id') {
+            raw = doc.id;
+          } else if (header == 'status' && _selectedSection == _AdminSection.products) {
+            raw = productStatusLabel(data);
+          } else {
+            raw = data[header] ?? '';
+          }
           final value = raw.toString().replaceAll('"', '""');
           return '"$value"';
         }).join(',');
@@ -1085,6 +1108,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
           'imageUrls': imageUrls,
           'createdAt': Timestamp.fromDate(createdAt),
           'isDemo': true,
+          'status': 'Approved',
         });
       }
 
@@ -1431,6 +1455,54 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
     }
   }
 
+  Future<void> _updateProductStatus(String docId, String productName, String sellerId, String newStatus) async {
+    try {
+      await FirebaseFirestore.instance.collection('products').doc(docId).update({
+        'status': newStatus,
+      });
+
+      final sid = sellerId.trim();
+      if (sid.isNotEmpty) {
+        final notif = FirebaseFirestore.instance.collection('users').doc(sid).collection('notifications');
+        if (newStatus == 'Approved') {
+          await notif.add({
+            'title': 'Product approved',
+            'body': 'Your product "$productName" is now visible to buyers in the marketplace.',
+            'type': 'product_approved',
+            'read': false,
+            'createdAt': FieldValue.serverTimestamp(),
+          });
+        } else if (newStatus == 'Rejected') {
+          await notif.add({
+            'title': 'Product not approved',
+            'body': 'Your product "$productName" was not approved. Edit it from your seller dashboard and resubmit.',
+            'type': 'product_rejected',
+            'read': false,
+            'createdAt': FieldValue.serverTimestamp(),
+          });
+        }
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Product "$productName" marked as $newStatus.'),
+            backgroundColor: newStatus == 'Approved' ? Colors.green : Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error updating product: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   Future<void> _deleteStore(String docId, String storeName, String? ownerId) async {
     final confirmDelete = await showDialog<bool>(
       context: context,
@@ -1688,6 +1760,200 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
               currentPage: _storePage,
               totalItems: stores.length,
               onPageChanged: (nextPage) => setState(() => _storePage = nextPage),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // --- WIDGET HELPER: Products (moderation) ---
+  Widget _buildProductsTable() {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance.collection('products').snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator(color: kPrimary));
+        }
+
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          return const Center(child: Text('No products yet.', style: TextStyle(color: Colors.grey)));
+        }
+
+        var products = snapshot.data!.docs.where((doc) {
+          if (_searchQuery.isEmpty) return true;
+          final productData = doc.data() as Map<String, dynamic>;
+          final content = [
+            productData['name'],
+            productData['sellerName'],
+            productData['sellerId'],
+            productData['category'],
+            productStatusLabel(productData),
+          ].join(' ').toLowerCase();
+          return content.contains(_searchQuery);
+        }).where((doc) {
+          final data = doc.data() as Map<String, dynamic>;
+          final status = productStatusLabel(data);
+          if (_statusFilter != 'All' && status != _statusFilter) return false;
+          return _matchesDateFilter(data);
+        }).toList();
+
+        products.sort((a, b) {
+          final dataA = a.data() as Map<String, dynamic>;
+          final dataB = b.data() as Map<String, dynamic>;
+          String left;
+          String right;
+          switch (_productSortBy) {
+            case 'status':
+              left = productStatusLabel(dataA).toLowerCase();
+              right = productStatusLabel(dataB).toLowerCase();
+              break;
+            default:
+              left = (dataA['name'] ?? '').toString().toLowerCase();
+              right = (dataB['name'] ?? '').toString().toLowerCase();
+          }
+          return _productSortAsc ? left.compareTo(right) : right.compareTo(left);
+        });
+
+        if (products.isEmpty) {
+          return const Center(
+            child: Text('No products match your search.', style: TextStyle(color: Colors.grey)),
+          );
+        }
+
+        final maxPage = ((products.length - 1) / _pageSize).floor();
+        if (_productPage > maxPage) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) setState(() => _productPage = 0);
+          });
+        }
+        final paged = _sliceForPage(products, _productPage);
+
+        return Column(
+          children: [
+            Expanded(
+              child: SingleChildScrollView(
+                child: SizedBox(
+                  width: double.infinity,
+                  child: DataTable(
+                    headingRowColor: WidgetStateProperty.all(kBg),
+                    headingRowHeight: 60,
+                    dataRowMinHeight: 52,
+                    dataRowMaxHeight: 58,
+                    columnSpacing: 28,
+                    horizontalMargin: 22,
+                    sortColumnIndex: _productSortBy == 'name' ? 1 : 4,
+                    sortAscending: _productSortAsc,
+                    columns: [
+                      const DataColumn(label: Text('No.', style: TextStyle(fontWeight: FontWeight.bold))),
+                      DataColumn(
+                        label: const Text('Product', style: TextStyle(fontWeight: FontWeight.bold)),
+                        onSort: (_, __) => setState(() {
+                          if (_productSortBy == 'name') _productSortAsc = !_productSortAsc;
+                          _productSortBy = 'name';
+                        }),
+                      ),
+                      const DataColumn(label: Text('Seller', style: TextStyle(fontWeight: FontWeight.bold))),
+                      const DataColumn(label: Text('Category', style: TextStyle(fontWeight: FontWeight.bold))),
+                      DataColumn(
+                        label: const Text('Status', style: TextStyle(fontWeight: FontWeight.bold)),
+                        onSort: (_, __) => setState(() {
+                          if (_productSortBy == 'status') _productSortAsc = !_productSortAsc;
+                          _productSortBy = 'status';
+                        }),
+                      ),
+                      const DataColumn(label: Text('Action', style: TextStyle(fontWeight: FontWeight.bold))),
+                    ],
+                    rows: List.generate(paged.length, (index) {
+                      final productData = paged[index].data() as Map<String, dynamic>;
+                      final docId = paged[index].id;
+                      final displayIndex = (_productPage * _pageSize) + index + 1;
+                      final name = productData['name'] ?? 'Unnamed';
+                      final sellerName = (productData['sellerName'] ?? '').toString();
+                      final sellerId = (productData['sellerId'] ?? productData['ownerId'] ?? '').toString();
+                      final category = (productData['category'] ?? '').toString();
+                      final status = productStatusLabel(productData);
+
+                      return DataRow(
+                        cells: [
+                          DataCell(Text('$displayIndex')),
+                          DataCell(Text(name, style: const TextStyle(fontWeight: FontWeight.w600))),
+                          DataCell(
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(
+                                  sellerName.isNotEmpty ? sellerName : '—',
+                                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                                ),
+                                if (sellerId.isNotEmpty)
+                                  Text(
+                                    sellerId,
+                                    style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                                  ),
+                              ],
+                            ),
+                          ),
+                          DataCell(Text(category.isNotEmpty ? category : '—')),
+                          DataCell(
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: status == 'Approved'
+                                    ? Colors.green.shade50
+                                    : status == 'Rejected'
+                                        ? Colors.red.shade50
+                                        : Colors.orange.shade50,
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Text(
+                                status.toUpperCase(),
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                  color: status == 'Approved'
+                                      ? Colors.green.shade700
+                                      : status == 'Rejected'
+                                          ? Colors.red.shade700
+                                          : Colors.orange.shade700,
+                                ),
+                              ),
+                            ),
+                          ),
+                          DataCell(
+                            status == 'Pending'
+                                ? Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      IconButton(
+                                        icon: const Icon(Icons.check_circle_outline_rounded, color: Colors.green),
+                                        tooltip: 'Approve product',
+                                        onPressed: () => _updateProductStatus(docId, name.toString(), sellerId, 'Approved'),
+                                      ),
+                                      IconButton(
+                                        icon: const Icon(Icons.cancel_outlined, color: Colors.red),
+                                        tooltip: 'Reject product',
+                                        onPressed: () => _updateProductStatus(docId, name.toString(), sellerId, 'Rejected'),
+                                      ),
+                                    ],
+                                  )
+                                : Text(
+                                    status == 'Approved' ? 'Live' : 'Closed',
+                                    style: TextStyle(color: Colors.grey.shade400, fontStyle: FontStyle.italic),
+                                  ),
+                          ),
+                        ],
+                      );
+                    }),
+                  ),
+                ),
+              ),
+            ),
+            _buildPaginationControls(
+              currentPage: _productPage,
+              totalItems: products.length,
+              onPageChanged: (nextPage) => setState(() => _productPage = nextPage),
             ),
           ],
         );

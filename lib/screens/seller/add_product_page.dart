@@ -139,6 +139,7 @@ class _AddProductPageState extends State<AddProductPage> {
         'sellerId': sellerId,
         'imageUrl': imageUrls.first, // Backward compatibility
         'imageUrls': imageUrls,
+        'status': 'Pending',
         'createdAt': FieldValue.serverTimestamp(),
       });
 
@@ -150,9 +151,14 @@ class _AddProductPageState extends State<AddProductPage> {
           const SnackBar(
             content: Row(
               children: [
-                Icon(Icons.check_circle_rounded, color: kWhite),
+                Icon(Icons.hourglass_top_rounded, color: kWhite),
                 SizedBox(width: 10),
-                Text('Product published successfully! 🚀', style: TextStyle(fontWeight: FontWeight.bold)),
+                Expanded(
+                  child: Text(
+                    'Product submitted. It will appear in the marketplace after an admin approves it.',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
               ],
             ),
             backgroundColor: kPrimary,

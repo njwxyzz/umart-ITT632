@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 
 import '../../theme/app_theme.dart';
 import '../../utils/store_status.dart';
+import '../../utils/product_status.dart';
 import 'add_product_page.dart';
 import 'seller_orders_page.dart';
 import 'seller_edit_shop_page.dart';
@@ -709,7 +710,23 @@ class SellerDashboard extends StatelessWidget {
     var item = doc.data() as Map<String, dynamic>;
     double price = item['price'] is num ? (item['price'] as num).toDouble() : double.tryParse(item['price'].toString()) ?? 0.0;
     double rating = item['rating'] is num ? (item['rating'] as num).toDouble() : double.tryParse(item['rating'].toString()) ?? 0.0;
-    
+    Color statusBg;
+    Color statusFg;
+    String statusShort;
+    if (productIsPending(item)) {
+      statusBg = Colors.orange.shade100;
+      statusFg = Colors.orange.shade900;
+      statusShort = 'Pending review';
+    } else if (productIsRejected(item)) {
+      statusBg = Colors.red.shade50;
+      statusFg = Colors.red.shade800;
+      statusShort = 'Rejected';
+    } else {
+      statusBg = Colors.green.shade50;
+      statusFg = Colors.green.shade800;
+      statusShort = 'Live';
+    }
+
     return GestureDetector(
       onTap: () => _showProductOptions(context, doc, item),
       child: Container(
@@ -723,11 +740,32 @@ class SellerDashboard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(
-              child: SizedBox(
-                width: double.infinity,
-                child: (item['imageUrl'] == null || item['imageUrl'].toString().isEmpty)
-                    ? Container(color: AppColors.primary.withOpacity(0.05), child: Icon(Icons.image_outlined, color: AppColors.primary.withOpacity(0.3), size: 40))
-                    : Image.network(item['imageUrl'], fit: BoxFit.cover, errorBuilder: (_, __, ___) => Container(color: AppColors.primary.withOpacity(0.05))),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  SizedBox(
+                    width: double.infinity,
+                    child: (item['imageUrl'] == null || item['imageUrl'].toString().isEmpty)
+                        ? Container(color: AppColors.primary.withOpacity(0.05), child: Icon(Icons.image_outlined, color: AppColors.primary.withOpacity(0.3), size: 40))
+                        : Image.network(item['imageUrl'], fit: BoxFit.cover, errorBuilder: (_, __, ___) => Container(color: AppColors.primary.withOpacity(0.05))),
+                  ),
+                  Positioned(
+                    top: 8,
+                    left: 8,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: statusBg,
+                        borderRadius: BorderRadius.circular(8),
+                        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 4)],
+                      ),
+                      child: Text(
+                        statusShort,
+                        style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: statusFg),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
             Padding(

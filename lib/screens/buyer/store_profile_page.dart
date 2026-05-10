@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../utils/product_status.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/services.dart';
 import 'chat_page.dart';
@@ -460,7 +461,9 @@ class StoreProfilePage extends StatelessWidget {
                 );
               }
 
-              final docs = snapshot.data?.docs ?? [];
+              final docs = (snapshot.data?.docs ?? [])
+                  .where((d) => productIsApproved(d.data()))
+                  .toList();
 
               if (docs.isEmpty) {
                 return const SliverToBoxAdapter(
