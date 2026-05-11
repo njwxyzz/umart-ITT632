@@ -149,6 +149,50 @@ class _HomeScreenState extends State<HomeScreen> {
     _fetchProductsData(); 
   }
 
+  Future<Map<String, String>> _loadStoreLocationsBySellerIds(Set<String> sellerIds) async {
+    final result = <String, String>{};
+    if (sellerIds.isEmpty) return result;
+
+    final ids = sellerIds.where((id) => id.trim().isNotEmpty).toList();
+    for (int i = 0; i < ids.length; i += 10) {
+      final chunk = ids.sublist(i, (i + 10) > ids.length ? ids.length : (i + 10));
+      final storesSnap = await FirebaseFirestore.instance
+          .collection('stores')
+          .where(FieldPath.documentId, whereIn: chunk)
+          .get();
+
+      for (final doc in storesSnap.docs) {
+        final data = doc.data();
+        final loc = (data['storeLocation'] ?? data['location'] ?? data['address'] ?? '').toString().trim();
+        if (loc.isNotEmpty) {
+          result[doc.id] = loc;
+        }
+      }
+    }
+
+    return result;
+  }
+
+  Future<void> _backfillProductLocations(
+    List<MapEntry<DocumentReference<Map<String, dynamic>>, String>> updates,
+  ) async {
+    if (updates.isEmpty) return;
+
+    const batchLimit = 400;
+    for (int i = 0; i < updates.length; i += batchLimit) {
+      final end = (i + batchLimit) > updates.length ? updates.length : (i + batchLimit);
+      final chunk = updates.sublist(i, end);
+      final batch = FirebaseFirestore.instance.batch();
+      for (final entry in chunk) {
+        batch.update(entry.key, {
+          'storeLocation': entry.value,
+          'location': entry.value,
+        });
+      }
+      await batch.commit();
+    }
+  }
+
   Future<void> _fetchProductsData() async {
     if (mounted) {
       setState(() {
@@ -158,16 +202,32 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     try {
-      QuerySnapshot snapshot = await FirebaseFirestore.instance.collection('products').get();
+      final QuerySnapshot<Map<String, dynamic>> snapshot =
+          await FirebaseFirestore.instance.collection('products').get();
       
       List<_FoodItem> tempAll = [];
       List<_FoodItem> tempFood = [];
       List<_FoodItem> tempPreloved = [];
       List<_FoodItem> tempPrinting = [];
       List<_FoodItem> tempOther = [];
+      final missingLocationSellerIds = <String>{};
+
+      for (final doc in snapshot.docs) {
+        final data = doc.data();
+        if (!productIsApproved(data)) continue;
+        final productLocation =
+            (data['storeLocation'] ?? data['sellerLocation'] ?? data['location'] ?? '').toString().trim();
+        final sellerId = (data['sellerId'] ?? data['ownerId'] ?? '').toString().trim();
+        if (productLocation.isEmpty && sellerId.isNotEmpty) {
+          missingLocationSellerIds.add(sellerId);
+        }
+      }
+
+      final storeLocationsBySeller = await _loadStoreLocationsBySellerIds(missingLocationSellerIds);
+      final backfillUpdates = <MapEntry<DocumentReference<Map<String, dynamic>>, String>>[];
       
-      for (var doc in snapshot.docs) {
-        var data = doc.data() as Map<String, dynamic>;
+      for (final doc in snapshot.docs) {
+        final data = doc.data();
         if (!productIsApproved(data)) continue;
 
         double harga = data['price'] is num ? (data['price'] as num).toDouble() : double.tryParse(data['price'].toString()) ?? 0.0;
@@ -181,6 +241,16 @@ class _HomeScreenState extends State<HomeScreen> {
 
         String productCategory = data['category'] ?? 'Others';
 
+        final sellerId = (data['sellerId'] ?? data['ownerId'] ?? '').toString().trim();
+        String storeLocation =
+            (data['storeLocation'] ?? data['sellerLocation'] ?? data['location'] ?? '').toString().trim();
+        if (storeLocation.isEmpty && sellerId.isNotEmpty) {
+          storeLocation = (storeLocationsBySeller[sellerId] ?? '').trim();
+          if (storeLocation.isNotEmpty) {
+            backfillUpdates.add(MapEntry(doc.reference, storeLocation));
+          }
+        }
+
         _FoodItem item = _FoodItem(
           productId: doc.id,
           label: data['name'] ?? 'Unknown Item', 
@@ -190,7 +260,8 @@ class _HomeScreenState extends State<HomeScreen> {
           price: harga,
           soldCount: soldCount,
           sellerName: data['sellerName'] ?? 'Unknown Seller',
-          sellerId: (data['sellerId'] ?? data['ownerId'] ?? '').toString(),
+          sellerId: sellerId,
+          storeLocation: storeLocation,
           category: productCategory, 
           description: data['description'] ?? 'No description available.', 
         );
@@ -218,6 +289,9 @@ class _HomeScreenState extends State<HomeScreen> {
           _isLoadingProducts = false;
           _productsLoadFailed = false;
         });
+      }
+      if (backfillUpdates.isNotEmpty) {
+        _backfillProductLocations(backfillUpdates).catchError((_) {});
       }
     } catch (e) {
       print("🚨 CRITICAL ERROR: Failed to fetch products -> $e");
@@ -1009,6 +1083,7 @@ class _FoodItem {
   final int soldCount;
   final String sellerName;
   final String sellerId;
+  final String storeLocation;
   final String category;
   final String description;
 
@@ -1022,6 +1097,7 @@ class _FoodItem {
     required this.soldCount, 
     required this.sellerName,
     required this.sellerId,
+    required this.storeLocation,
     required this.category, 
     required this.description,
   });
@@ -1201,6 +1277,26 @@ class _FoodCard extends StatelessWidget {
                       fontSize: 13,
                     ),
                   ),
+                  if (item.storeLocation.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Icon(Icons.location_on_rounded, size: 14, color: Colors.grey[600]),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            item.storeLocation,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: Colors.grey[600],
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                   const SizedBox(height: 16),
                   Row(
                     children: [
@@ -1302,7 +1398,7 @@ class _FoodCard extends StatelessWidget {
                         },
                         behavior: HitTestBehavior.opaque, 
                         child: Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 4.0), 
+                          padding: const EdgeInsets.fromLTRB(0, 4, 38, 4), 
                           child: Row(
                             children: [
                               Icon(Icons.storefront_rounded, size: 12, color: Colors.grey[500]), 
@@ -1312,6 +1408,28 @@ class _FoodCard extends StatelessWidget {
                           ),
                         ),
                       ),
+                      if (item.storeLocation.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 2, right: 38),
+                          child: Row(
+                            children: [
+                              Icon(Icons.location_on_rounded, size: 12, color: Colors.grey[500]),
+                              const SizedBox(width: 4),
+                              Expanded(
+                                child: Text(
+                                  item.storeLocation,
+                                  style: TextStyle(
+                                    color: Colors.grey[500],
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       
                     ],
                   ),

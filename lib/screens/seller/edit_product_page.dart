@@ -180,6 +180,21 @@ class _EditProductPageState extends State<EditProductPage> {
       }
 
       final finalImageUrls = [..._existingImageUrls, ...newImageUrls];
+      final sellerId = (widget.productData['sellerId'] ?? widget.productData['ownerId'] ?? '').toString().trim();
+      String storeLocation =
+          (widget.productData['storeLocation'] ?? widget.productData['sellerLocation'] ?? widget.productData['location'] ?? '')
+              .toString()
+              .trim();
+      if (sellerId.isNotEmpty) {
+        final storeDoc = await FirebaseFirestore.instance.collection('stores').doc(sellerId).get();
+        if (storeDoc.exists) {
+          final data = storeDoc.data() ?? {};
+          final latestLocation = (data['storeLocation'] ?? data['location'] ?? data['address'] ?? '').toString().trim();
+          if (latestLocation.isNotEmpty) {
+            storeLocation = latestLocation;
+          }
+        }
+      }
 
       // 2. Build update map
       final Map<String, dynamic> updateData = {
@@ -191,6 +206,8 @@ class _EditProductPageState extends State<EditProductPage> {
         'category': _selectedCategory,
         'variations': _variations,
         'variationPrices': variationPrices,
+        'storeLocation': storeLocation,
+        'location': storeLocation,
         'status': 'Pending',
       };
 

@@ -127,6 +127,7 @@ class _AddProductPageState extends State<AddProductPage> {
 
       // B. HANTAR INFO KE FIRESTORE (Database)
       final sellerId = FirebaseAuth.instance.currentUser?.uid ?? '';
+      final normalizedStoreLocation = widget.storeLocation.trim();
       await FirebaseFirestore.instance.collection('products').add({
         'name': _nameController.text.trim(),
         'price': double.tryParse(_priceController.text.trim()) ?? 0.0,
@@ -138,6 +139,8 @@ class _AddProductPageState extends State<AddProductPage> {
         'variationPrices': variationPrices,
         'sellerName': widget.storeName, 
         'sellerId': sellerId,
+        'storeLocation': normalizedStoreLocation,
+        'location': normalizedStoreLocation,
         'imageUrl': imageUrls.first, // Backward compatibility
         'imageUrls': imageUrls,
         'status': 'Pending',
