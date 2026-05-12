@@ -180,17 +180,17 @@ class _ProfilePageState extends State<ProfilePage> {
         final sellerData = s.value;
         final sellerId = (sellerData['sellerId'] ?? '').toString();
         final sellerName = (sellerData['name'] ?? s.key).toString();
-        final sellerPhoto = await _resolveStorePhoto(
+        final sellerMeta = await _resolveStoreMeta(
           sellerId: sellerId,
           sellerName: sellerName,
         );
 
         tempFavs.add(_FavRestaurant(
-          name: sellerName,
-          category: 'Campus Store', 
+          name: (sellerMeta['storeName'] ?? sellerName).toString(),
+          category: (sellerMeta['category'] ?? 'Store').toString(),
           orders: s.value['orders'],
           totalSpent: s.value['totalSpent'],
-          photo: sellerPhoto,
+          photo: (sellerMeta['photoUrl'] ?? '').toString(),
         ));
       }
       _favouritesData = tempFavs;
@@ -207,26 +207,22 @@ class _ProfilePageState extends State<ProfilePage> {
     }
   }
 
-  Future<String> _resolveStorePhoto({
+  Future<Map<String, String>> _resolveStoreMeta({
     required String sellerId,
     required String sellerName,
   }) async {
-    const fallbackPhoto = 'https://images.unsplash.com/photo-1555507036-ab1f4038808a?w=300';
+    final fallback = <String, String>{
+      'storeName': sellerName,
+      'category': 'Store',
+      'photoUrl': '',
+    };
 
     try {
       if (sellerId.isNotEmpty) {
         final storeByDoc = await FirebaseFirestore.instance.collection('stores').doc(sellerId).get();
         if (storeByDoc.exists) {
           final data = storeByDoc.data() ?? <String, dynamic>{};
-          final photo = (data['storePhotoUrl'] ??
-                  data['storePhoto'] ??
-                  data['logoUrl'] ??
-                  data['profileImage'] ??
-                  data['imageUrl'] ??
-                  '')
-              .toString()
-              .trim();
-          if (photo.isNotEmpty) return photo;
+          return _toStoreMeta(data, fallbackName: sellerName);
         }
 
         final storeByOwner = await FirebaseFirestore.instance
@@ -236,15 +232,7 @@ class _ProfilePageState extends State<ProfilePage> {
             .get();
         if (storeByOwner.docs.isNotEmpty) {
           final data = storeByOwner.docs.first.data();
-          final photo = (data['storePhotoUrl'] ??
-                  data['storePhoto'] ??
-                  data['logoUrl'] ??
-                  data['profileImage'] ??
-                  data['imageUrl'] ??
-                  '')
-              .toString()
-              .trim();
-          if (photo.isNotEmpty) return photo;
+          return _toStoreMeta(data, fallbackName: sellerName);
         }
       }
 
@@ -256,20 +244,34 @@ class _ProfilePageState extends State<ProfilePage> {
             .get();
         if (byName.docs.isNotEmpty) {
           final data = byName.docs.first.data();
-          final photo = (data['storePhotoUrl'] ??
-                  data['storePhoto'] ??
-                  data['logoUrl'] ??
-                  data['profileImage'] ??
-                  data['imageUrl'] ??
-                  '')
-              .toString()
-              .trim();
-          if (photo.isNotEmpty) return photo;
+          return _toStoreMeta(data, fallbackName: sellerName);
         }
       }
     } catch (_) {}
 
-    return fallbackPhoto;
+    return fallback;
+  }
+
+  Map<String, String> _toStoreMeta(
+    Map<String, dynamic> data, {
+    required String fallbackName,
+  }) {
+    final photo = (data['storePhotoUrl'] ??
+            data['storePhoto'] ??
+            data['logoUrl'] ??
+            data['profileImage'] ??
+            data['imageUrl'] ??
+            '')
+        .toString()
+        .trim();
+    final category = (data['category'] ?? 'Store').toString().trim();
+    final storeName = (data['storeName'] ?? fallbackName).toString().trim();
+
+    return <String, String>{
+      'storeName': storeName.isEmpty ? fallbackName : storeName,
+      'category': category.isEmpty ? 'Store' : category,
+      'photoUrl': photo,
+    };
   }
 
   @override

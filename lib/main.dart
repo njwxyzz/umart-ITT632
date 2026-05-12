@@ -2,7 +2,10 @@
 // IMPORTS & MAIN ENTRY POINT
 // ============================================================================
 import 'dart:ui'; 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:geocoding/geocoding.dart';
+import 'package:geolocator/geolocator.dart';
 
 import 'package:firebase_core/firebase_core.dart'; 
 import 'package:firebase_auth/firebase_auth.dart';
@@ -534,13 +537,91 @@ class _GradientHeader extends StatefulWidget {
 }
 
 class _GradientHeaderState extends State<_GradientHeader> {
-  String _userName = "Student"; 
+  String _userName = "Student";
+  String _profileLocation = "UiTM Campus";
+  String? _nearbyLocation;
   bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _fetchProfileData(); 
+    _fetchProfileData();
+    _tryLoadNearbyFromGps();
+  }
+
+  String _resolveProfileLocation(Map<String, dynamic>? data) {
+    if (data == null) return "UiTM Campus";
+    final raw = (data['college'] ?? data['kolej'] ?? data['location'] ?? data['address'] ?? 'UiTM Campus').toString().trim();
+    return raw.isEmpty ? "UiTM Campus" : raw;
+  }
+
+  String _formatPlacemark(Placemark p) {
+    final locality = (p.locality ?? '').trim();
+    final subLocal = (p.subLocality ?? '').trim();
+    final admin = (p.administrativeArea ?? '').trim();
+    final name = (p.name ?? '').trim();
+
+    final city = locality.isNotEmpty
+        ? locality
+        : (subLocal.isNotEmpty
+            ? subLocal
+            : (name.isNotEmpty && name.length < 48 ? name : ''));
+
+    if (city.isNotEmpty && admin.isNotEmpty && !city.toLowerCase().contains(admin.toLowerCase())) {
+      return '$city, $admin';
+    }
+    if (city.isNotEmpty) return city;
+    if (admin.isNotEmpty) return admin;
+    final street = (p.street ?? '').trim();
+    if (street.isNotEmpty) return street;
+    return '';
+  }
+
+  /// Reverse-geocode device GPS when possible; falls back to [_profileLocation] in UI.
+  Future<void> _tryLoadNearbyFromGps() async {
+    if (kIsWeb) return;
+    try {
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) return;
+
+      var perm = await Geolocator.checkPermission();
+      if (perm == LocationPermission.denied) {
+        perm = await Geolocator.requestPermission();
+      }
+      if (perm == LocationPermission.denied || perm == LocationPermission.deniedForever) {
+        return;
+      }
+
+      final pos = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(accuracy: LocationAccuracy.medium),
+      ).timeout(const Duration(seconds: 14));
+
+      final placemarks = await placemarkFromCoordinates(
+        pos.latitude,
+        pos.longitude,
+      ).timeout(const Duration(seconds: 10));
+
+      if (placemarks.isEmpty || !mounted) return;
+      final line = _formatPlacemark(placemarks.first);
+      if (line.isEmpty) return;
+      setState(() => _nearbyLocation = line);
+    } catch (e) {
+      debugPrint('Home header nearby location: $e');
+    }
+  }
+
+  String get _locationLine {
+    if (_isLoading) return 'Loading...';
+    final nearby = _nearbyLocation?.trim();
+    if (nearby != null && nearby.isNotEmpty) return nearby;
+    return _profileLocation;
+  }
+
+  IconData get _locationIcon {
+    if (_isLoading) return Icons.location_on;
+    final nearby = _nearbyLocation?.trim();
+    if (nearby != null && nearby.isNotEmpty) return Icons.near_me;
+    return Icons.location_on;
   }
 
   Future<void> _fetchProfileData() async {
@@ -548,21 +629,24 @@ class _GradientHeaderState extends State<_GradientHeader> {
       User? currentUser = FirebaseAuth.instance.currentUser;
       
       if (currentUser != null) {
-        DocumentSnapshot userDoc = await FirebaseFirestore.instance
+        DocumentSnapshot<Map<String, dynamic>> userDoc = await FirebaseFirestore.instance
             .collection('users')
             .doc(currentUser.uid)
             .get();
 
         if (userDoc.exists && mounted) {
+          final data = userDoc.data();
           setState(() {
-            String fullName = userDoc['fullName'] ?? 'Student';
-            _userName = fullName.split(' ')[0]; 
+            String fullName = data?['fullName'] ?? 'Student';
+            _userName = fullName.split(' ')[0];
+            _profileLocation = _resolveProfileLocation(data);
             _isLoading = false;
           });
         } else {
           if (mounted) {
             setState(() {
-              _userName = "User"; 
+              _userName = "User";
+              _profileLocation = "UiTM Campus";
               _isLoading = false; 
             });
           }
@@ -571,13 +655,19 @@ class _GradientHeaderState extends State<_GradientHeader> {
         if (mounted) {
           setState(() {
             _userName = "Guest";
+            _profileLocation = "UiTM Campus";
             _isLoading = false;
           });
         }
       }
     } catch (e) {
       print("Oops, error fetching data: $e");
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _profileLocation = "UiTM Campus";
+        });
+      }
     }
   }
 
@@ -662,16 +752,33 @@ class _GradientHeaderState extends State<_GradientHeader> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    _isLoading ? 'Loading...' : 'Hi, $_userName! 👋', 
-                    style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)
-                  ),
-                  const SizedBox(height: 4),
-                  const Row(children: [Icon(Icons.location_on, color: kWhite, size: 14), SizedBox(width: 4), Text('UiTM Perlis, Kolej Dahlia', style: TextStyle(color: Colors.white70, fontSize: 12))]),
-                ],
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _isLoading ? 'Loading...' : 'Hi, $_userName! 👋',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Icon(_locationIcon, color: kWhite, size: 14),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            _locationLine,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(color: Colors.white70, fontSize: 12),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
               Row(
                 children: [

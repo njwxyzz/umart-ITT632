@@ -46,6 +46,6 @@
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>We need your location to show delivery tracking.</string>
+	<string>We use your location to show delivery tracking and your current area on the home screen.</string>
 </dict>
 </plist>
