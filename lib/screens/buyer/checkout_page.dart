@@ -5,7 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart'; // MESTI ADA!
 import 'package:firebase_auth/firebase_auth.dart'; // MESTI ADA!
 import 'package:firebase_storage/firebase_storage.dart';
-import 'package:image_gallery_saver/image_gallery_saver.dart';
+import 'package:gal/gal.dart';
 import 'package:image_picker/image_picker.dart';
 import 'tracking_page.dart'; 
 import 'cart_manager.dart'; 
@@ -118,12 +118,29 @@ class _CheckoutPageState extends State<CheckoutPage> {
     try {
       final byteData = await NetworkAssetBundle(Uri.parse(_sellerPaymentQrUrl!)).load(_sellerPaymentQrUrl!);
       final bytes = byteData.buffer.asUint8List();
-      final result = await ImageGallerySaver.saveImage(
-        bytes,
-        quality: 100,
-        name: 'umart_seller_qr_${DateTime.now().millisecondsSinceEpoch}',
-      );
-      final success = result['isSuccess'] == true || result['isSuccess'] == 1;
+      bool success = false;
+      try {
+        if (!await Gal.hasAccess()) {
+          final granted = await Gal.requestAccess();
+          if (!granted) {
+            if (!mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Gallery permission is required to save the QR.'),
+                backgroundColor: Colors.red,
+              ),
+            );
+            return;
+          }
+        }
+        await Gal.putImageBytes(
+          bytes,
+          name: 'umart_seller_qr_${DateTime.now().millisecondsSinceEpoch}',
+        );
+        success = true;
+      } on GalException {
+        success = false;
+      }
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(

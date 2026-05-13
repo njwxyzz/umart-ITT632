@@ -45,7 +45,9 @@ dependencies:
   cloud_firestore: ^6.2.0
   image_picker: ^1.2.1
   firebase_storage: ^13.3.0
-  image_gallery_saver: ^2.0.3
+  gal: ^2.3.2
+  firebase_messaging: ^16.2.1
+  flutter_local_notifications: ^21.0.0
 
 dev_dependencies:
   flutter_test:

@@ -3,6 +3,7 @@
 // ============================================================================
 import 'dart:ui'; 
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
@@ -34,6 +35,7 @@ import 'screens/buyer/notifications_page.dart';
 import 'screens/seller/seller_dashboard.dart'; 
 import 'utils/store_status.dart';
 import 'utils/product_status.dart';
+import 'push_messaging.dart';
 
 
 
@@ -43,6 +45,11 @@ void main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+
+  if (!kIsWeb) {
+    FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+    await PushMessaging.instance.ensureInitialized();
+  }
 
   await CartManager.instance.restore();
 
@@ -54,6 +61,7 @@ void main() async {
     } else {
       await CartManager.instance.onAuthEvent(user, isInitial: false);
     }
+    await PushMessaging.instance.onAuthUserChanged(user);
   });
 
   runApp(const UMartApp()); 

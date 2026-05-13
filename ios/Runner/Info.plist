@@ -47,5 +47,14 @@
 	<true/>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>We use your location to show delivery tracking and your current area on the home screen.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Allow saving payment QR images to your photo library.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Allow access to your photo library when picking a receipt image.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>fetch</string>
+		<string>remote-notification</string>
+	</array>
 </dict>
 </plist>

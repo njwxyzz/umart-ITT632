@@ -52,3 +52,20 @@
       // Optional: allow users to delete their own notifications later
       allow delete: if isOwner(userId);
     }
+
+// --- FCM device tokens (lib/push_messaging.dart + Cloud Function notifySellerNewOrder) ---
+// The app merges `fcmTokens` (array of strings) on the seller's own user document.
+// Merge this with your existing `match /users/{userId}` rules. Example if you already
+// allow owners to update their profile:
+//
+//   match /users/{userId} {
+//     allow read: if ...;
+//     allow create: if ...;
+//     allow update: if isOwner(userId) || isAdmin();
+//     allow delete: if isAdmin();
+//   }
+//
+// If updates are field-restricted, allow `fcmTokens` for the owner, e.g.:
+//
+//   allow update: if isOwner(userId)
+//     && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fcmTokens']);
