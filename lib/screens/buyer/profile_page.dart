@@ -30,6 +30,7 @@ class _ProfilePageState extends State<ProfilePage> {
   String _matricNo = "No Matric ID";
   String _initial = "S";
   String _college = "UiTM Campus"; // TAMBAH VARIABLE KOLEJ SINI
+  String? _profileImageUrl;
   _SellerBadgeKind _sellerBadge = _SellerBadgeKind.buyer;
   
   double _totalSpent = 0.0;
@@ -62,6 +63,10 @@ class _ProfilePageState extends State<ProfilePage> {
         _fullName = data['fullName'] ?? currentUser.email?.split('@')[0] ?? 'Student';
         _matricNo = data['studentId'] ?? 'Unknown Matric';
         _college = data['college'] ?? 'UiTM Campus'; // TARIK DATA KOLEJ DARI FIREBASE
+        final rawImage = (data['profileImage'] ?? data['photoUrl'] ?? data['imageUrl'] ?? '')
+            .toString()
+            .trim();
+        _profileImageUrl = rawImage.isEmpty ? null : rawImage;
         _initial = _fullName.isNotEmpty ? _fullName[0].toUpperCase() : 'S';
       } else {
         _fullName = currentUser.email?.split('@')[0].toUpperCase() ?? 'Student';
@@ -319,7 +324,8 @@ class _ProfilePageState extends State<ProfilePage> {
                 child: _ProfileCard(
                   fullName: _fullName, 
                   matricNo: _matricNo, 
-                  initial: _initial, 
+                  initial: _initial,
+                  profileImageUrl: _profileImageUrl,
                   college: _college, // PASS DATA KOLEJ
                   sellerBadge: _sellerBadge,
                   onEditTap: () async {
@@ -433,6 +439,7 @@ class _ProfileCard extends StatelessWidget {
   final String fullName;
   final String matricNo;
   final String initial;
+  final String? profileImageUrl;
   final String college;
   final _SellerBadgeKind sellerBadge;
   final VoidCallback onEditTap;
@@ -440,7 +447,8 @@ class _ProfileCard extends StatelessWidget {
   const _ProfileCard({
     required this.fullName, 
     required this.matricNo, 
-    required this.initial, 
+    required this.initial,
+    this.profileImageUrl,
     required this.college,
     required this.sellerBadge,
     required this.onEditTap,
@@ -462,9 +470,40 @@ class _ProfileCard extends StatelessWidget {
               Stack(
                 children: [
                   Container(
-                    width: 72, height: 72,
-                    decoration: BoxDecoration(color: kWhite.withOpacity(0.2), shape: BoxShape.circle),
-                    child: Center(child: Text(initial, style: const TextStyle(color: kWhite, fontSize: 32, fontWeight: FontWeight.w800))),
+                    width: 72,
+                    height: 72,
+                    decoration: BoxDecoration(
+                      color: kWhite.withOpacity(0.2),
+                      shape: BoxShape.circle,
+                    ),
+                    clipBehavior: Clip.hardEdge,
+                    child: profileImageUrl != null && profileImageUrl!.isNotEmpty
+                        ? Image.network(
+                            profileImageUrl!,
+                            width: 72,
+                            height: 72,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => Center(
+                              child: Text(
+                                initial,
+                                style: const TextStyle(
+                                  color: kWhite,
+                                  fontSize: 32,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ),
+                          )
+                        : Center(
+                            child: Text(
+                              initial,
+                              style: const TextStyle(
+                                color: kWhite,
+                                fontSize: 32,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
                   ),
                   Positioned(
                     bottom: 2, right: 2,
