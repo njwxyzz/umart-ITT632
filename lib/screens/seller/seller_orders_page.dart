@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 
 import '../../theme/app_theme.dart';
+import '../../utils/order_notifications.dart';
 import 'seller_order_details_page.dart';
 
 String _formatOrderCreatedAt(dynamic raw, BuildContext context) {
@@ -245,6 +246,17 @@ class _SellerOrdersPageState extends State<SellerOrdersPage> {
       await FirebaseFirestore.instance.collection('orders').doc(orderId).update({
         'status': newStatus,
       });
+
+      if (newStatus == 'Processing' || newStatus == 'Rejected') {
+        final buyerId = (orderData['buyerId'] ?? '').toString();
+        final sellerName = (orderData['sellerName'] ?? '').toString();
+        await notifyBuyerOrderStatus(
+          buyerId: buyerId,
+          orderId: orderId,
+          newStatus: newStatus,
+          sellerName: sellerName,
+        );
+      }
 
       if (mounted) {
         // Show a quick success pop-up

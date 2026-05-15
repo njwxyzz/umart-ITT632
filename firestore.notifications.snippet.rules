@@ -43,8 +43,16 @@
       // Student reads only their own inbox
       allow read: if isOwner(userId) || isAdmin();
 
-      // Admin dashboard creates approval/rejection notifications for any userId
-      allow create: if isAdmin();
+      // Admin dashboard creates approval/rejection notifications for any userId.
+      // Sellers notify buyers when accepting/rejecting orders (lib/utils/order_notifications.dart).
+      allow create: if isAdmin()
+        || (isSignedIn()
+            && request.resource.data.orderId is string
+            && request.resource.data.type in ['order_accepted', 'order_rejected']
+            && request.resource.data.read == false
+            && exists(/databases/$(database)/documents/orders/$(request.resource.data.orderId))
+            && get(/databases/$(database)/documents/orders/$(request.resource.data.orderId)).data.buyerId == userId
+            && get(/databases/$(database)/documents/orders/$(request.resource.data.orderId)).data.sellerId == request.auth.uid);
 
       // App marks notifications read when user opens them (notifications_page.dart)
       allow update: if isOwner(userId);

@@ -61,7 +61,7 @@ class NotificationsPage extends StatelessWidget {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            'When your seller application is reviewed, you will see it here.',
+                            'Updates about your orders and seller applications will appear here.',
                             textAlign: TextAlign.center,
                             style: TextStyle(color: Colors.grey.shade500, fontSize: 14),
                           ),
