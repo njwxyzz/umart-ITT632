@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Umart App</string>
+	<string>UMART</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -51,6 +51,8 @@
 	<string>Allow saving payment QR images to your photo library.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Allow access to your photo library when picking a receipt image.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Allow camera access to take photos in chat messages.</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>fetch</string>
