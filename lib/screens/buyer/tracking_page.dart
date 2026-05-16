@@ -1,9 +1,13 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
+
+import 'package:umart_app/utils/map_marker_smoother.dart';
 
 // ─── Colors ───────────────────────────────────────────────────────────────────
 const kPrimary = Color(0xFF4C6B3F);
@@ -20,48 +24,131 @@ class TrackingPage extends StatefulWidget {
   State<TrackingPage> createState() => _TrackingPageState();
 }
 
-class _TrackingPageState extends State<TrackingPage> {
+class _TrackingPageState extends State<TrackingPage> with TickerProviderStateMixin {
   final MapController _mapController = MapController();
+
+  late final MapMarkerSmoother _buyerMarkerSmooth;
+  late final MapMarkerSmoother _sellerMarkerSmooth;
+
+  StreamSubscription<DocumentSnapshot>? _orderSub;
+  StreamSubscription<Position>? _buyerPositionSub;
 
   // Buyer GPS
   LatLng? _buyerLocation;
   bool _isLocating = true;
   String? _locationError;
   bool _isCancellingOrder = false;
+  bool _allowBuyerFirestoreUpdates = true;
+  double? _lastSellerFireLat;
+  double? _lastSellerFireLng;
 
   @override
   void initState() {
     super.initState();
-    _fetchBuyerLocation();
+    _buyerMarkerSmooth = MapMarkerSmoother(this);
+    _sellerMarkerSmooth = MapMarkerSmoother(this);
+    _orderSub = FirebaseFirestore.instance
+        .collection('orders')
+        .doc(widget.orderId)
+        .snapshots()
+        .listen((snap) {
+      if (!snap.exists || !mounted) return;
+      final data = snap.data();
+      if (data == null) return;
+      final st = (data['status'] ?? '').toString();
+      final ok = st != 'Delivered' && st != 'Cancelled';
+      if (ok != _allowBuyerFirestoreUpdates) {
+        setState(() => _allowBuyerFirestoreUpdates = ok);
+      }
+    });
+    _fetchBuyerLocationAndStartLive();
   }
 
-  // ─── Buyer GPS ────────────────────────────────────────────────────────────
-  Future<void> _fetchBuyerLocation() async {
-    setState(() { _isLocating = true; _locationError = null; });
+  @override
+  void dispose() {
+    _orderSub?.cancel();
+    _buyerPositionSub?.cancel();
+    _buyerMarkerSmooth.dispose();
+    _sellerMarkerSmooth.dispose();
+    super.dispose();
+  }
+
+  // ─── Buyer GPS + live Firestore ───────────────────────────────────────────
+  Future<void> _fetchBuyerLocationAndStartLive() async {
+    setState(() {
+      _isLocating = true;
+      _locationError = null;
+    });
     try {
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
-        setState(() { _isLocating = false; _locationError = 'Please enable GPS.'; });
+        setState(() {
+          _isLocating = false;
+          _locationError = 'Please enable GPS.';
+        });
         return;
       }
       LocationPermission perm = await Geolocator.checkPermission();
       if (perm == LocationPermission.denied) perm = await Geolocator.requestPermission();
       if (perm == LocationPermission.denied || perm == LocationPermission.deniedForever) {
-        setState(() { _isLocating = false; _locationError = 'Location permission denied.'; });
+        setState(() {
+          _isLocating = false;
+          _locationError = 'Location permission denied.';
+        });
         return;
       }
       final pos = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
-      setState(() { _buyerLocation = LatLng(pos.latitude, pos.longitude); _isLocating = false; });
+      final first = LatLng(pos.latitude, pos.longitude);
+      if (!mounted) return;
+      setState(() {
+        _buyerLocation = first;
+        _isLocating = false;
+      });
+      _buyerMarkerSmooth.setTarget(first, () {
+        if (mounted) setState(() {});
+      });
+      if (_allowBuyerFirestoreUpdates) {
+        unawaited(
+          FirebaseFirestore.instance.collection('orders').doc(widget.orderId).update({
+            'buyerLat': pos.latitude,
+            'buyerLng': pos.longitude,
+          }),
+        );
+      }
+      await _buyerPositionSub?.cancel();
+      _buyerPositionSub = Geolocator.getPositionStream(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          distanceFilter: 8,
+        ),
+      ).listen((Position p) async {
+        final here = LatLng(p.latitude, p.longitude);
+        if (!mounted) return;
+        _buyerLocation = here;
+        _buyerMarkerSmooth.setTarget(here, () {
+          if (mounted) setState(() {});
+        });
+        if (_allowBuyerFirestoreUpdates) {
+          try {
+            await FirebaseFirestore.instance.collection('orders').doc(widget.orderId).update({
+              'buyerLat': p.latitude,
+              'buyerLng': p.longitude,
+            });
+          } catch (_) {}
+        }
+      });
     } catch (e) {
-      setState(() { _isLocating = false; _locationError = 'Could not get location: $e'; });
+      setState(() {
+        _isLocating = false;
+        _locationError = 'Could not get location: $e';
+      });
     }
   }
 
-  void _fitBothMarkers(LatLng seller) {
-    if (_buyerLocation == null) return;
-    final buyer = _buyerLocation!;
+  LatLng? get _buyerPin => _buyerMarkerSmooth.current ?? _buyerLocation;
+  LatLng? get _sellerPin => _sellerMarkerSmooth.current;
 
-    // Guard against invalid coordinates that can crash flutter_map on web.
+  void _fitBothMarkers(LatLng seller, LatLng buyer) {
     if (!_isValidLatLng(buyer) || !_isValidLatLng(seller)) return;
 
     // If both points are essentially the same, avoid bounds fit (can yield NaN).
@@ -72,8 +159,8 @@ class _TrackingPageState extends State<TrackingPage> {
       return;
     }
 
-    final minLat = buyer.latitude  < seller.latitude  ? buyer.latitude  : seller.latitude;
-    final maxLat = buyer.latitude  > seller.latitude  ? buyer.latitude  : seller.latitude;
+    final minLat = buyer.latitude < seller.latitude ? buyer.latitude : seller.latitude;
+    final maxLat = buyer.latitude > seller.latitude ? buyer.latitude : seller.latitude;
     final minLng = buyer.longitude < seller.longitude ? buyer.longitude : seller.longitude;
     final maxLng = buyer.longitude > seller.longitude ? buyer.longitude : seller.longitude;
 
@@ -268,15 +355,46 @@ class _TrackingPageState extends State<TrackingPage> {
           if (sharing && lat != null && lng != null) {
             sellerSharing = true;
             sellerLocation = LatLng(lat, lng);
-            if (_buyerLocation != null && _isValidLatLng(_buyerLocation!) && _isValidLatLng(sellerLocation)) {
-              etaText = _calculateEta(sellerLocation, _buyerLocation!);
+            var sellerMoved = false;
+            if (_lastSellerFireLat != lat || _lastSellerFireLng != lng) {
+              sellerMoved = true;
+              _lastSellerFireLat = lat;
+              _lastSellerFireLng = lng;
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (!mounted) return;
+                _sellerMarkerSmooth.setTarget(LatLng(lat, lng), () {
+                  if (mounted) setState(() {});
+                });
+              });
+            }
+            final buyerPin = _buyerPin;
+            final sellerPin = _sellerPin ?? sellerLocation;
+            if (buyerPin != null &&
+                _isValidLatLng(buyerPin) &&
+                _isValidLatLng(sellerPin)) {
+              etaText = _calculateEta(sellerPin, buyerPin);
             } else {
               etaText = 'Seller is on the way!';
             }
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (!mounted || sellerLocation == null) return;
-              _fitBothMarkers(sellerLocation);
-            });
+            if (sellerMoved) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (!mounted) return;
+                final b = _buyerPin;
+                final s = _sellerPin ?? sellerLocation;
+                if (b != null && s != null) _fitBothMarkers(s, b);
+              });
+            }
+          } else {
+            if (_lastSellerFireLat != null || _lastSellerFireLng != null) {
+              _lastSellerFireLat = null;
+              _lastSellerFireLng = null;
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (!mounted) return;
+                _sellerMarkerSmooth.setTarget(null, () {
+                  if (mounted) setState(() {});
+                });
+              });
+            }
           }
 
           return SingleChildScrollView(
@@ -627,7 +745,7 @@ class _TrackingPageState extends State<TrackingPage> {
                   const SizedBox(width: 8),
                   Expanded(child: Text(_locationError!, style: const TextStyle(color: kWhite, fontSize: 12))),
                   TextButton(
-                    onPressed: _fetchBuyerLocation,
+                    onPressed: _fetchBuyerLocationAndStartLive,
                     child: const Text('Retry', style: TextStyle(color: kGreen, fontWeight: FontWeight.bold)),
                   ),
                 ],
@@ -638,17 +756,20 @@ class _TrackingPageState extends State<TrackingPage> {
       );
     }
 
-    final center = sellerLocation ?? _buyerLocation ?? const LatLng(6.4497, 100.2704);
+    final LatLng? buyerShow = _buyerPin;
+    final LatLng? sellerShow = _sellerPin ?? sellerLocation;
+    final center =
+        sellerShow ?? buyerShow ?? _buyerLocation ?? const LatLng(6.4497, 100.2704);
     return FlutterMap(
       mapController: _mapController,
       options: MapOptions(initialCenter: center, initialZoom: 15),
       children: [
         tileLayer,
-        if (sellerLocation != null && _buyerLocation != null)
+        if (sellerShow != null && buyerShow != null)
           PolylineLayer(
             polylines: [
               Polyline(
-                points: [sellerLocation, _buyerLocation!],
+                points: [sellerShow, buyerShow],
                 strokeWidth: 3,
                 color: kPrimary.withOpacity(0.6),
               ),
@@ -656,15 +777,15 @@ class _TrackingPageState extends State<TrackingPage> {
           ),
         MarkerLayer(
           markers: [
-            if (_buyerLocation != null)
+            if (buyerShow != null)
               Marker(
-                point: _buyerLocation!,
+                point: buyerShow,
                 width: 56, height: 56,
                 child: _pinWidget(kAccent, Icons.person_pin_circle_rounded, 'You'),
               ),
-            if (sellerLocation != null)
+            if (sellerShow != null)
               Marker(
-                point: sellerLocation,
+                point: sellerShow,
                 width: 56, height: 56,
                 child: _pinWidget(kPrimary, Icons.delivery_dining_rounded, 'Seller'),
               ),

@@ -5,6 +5,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import 'package:umart_app/utils/map_marker_smoother.dart';
 // ─── Colors ───────────────────────────────────────────────────────────────────
 const kPrimary = Color(0xFF4C6B3F);
 const kAccent  = Color(0xFFF27B35);
@@ -34,17 +35,40 @@ class SellerOrderDetailsPage extends StatefulWidget {
   State<SellerOrderDetailsPage> createState() => _SellerOrderDetailsPageState();
 }
 
-class _SellerOrderDetailsPageState extends State<SellerOrderDetailsPage> {
+class _SellerOrderDetailsPageState extends State<SellerOrderDetailsPage>
+    with TickerProviderStateMixin {
   final MapController _mapController = MapController();
 
-  LatLng? _sellerLocation;           // seller's live GPS
-  StreamSubscription<Position>? _positionStream; // GPS stream
-  bool _isSharing = false;           // true while seller is actively sharing
-  bool _isStarting = false;          // loading spinner for start button
-  Timer? _demoMoveTimer;             // demo movement timer
-  bool _isDemoMoving = false;        // demo mode flag
+  late LatLng _buyerRawLatLng;
 
-  late LatLng _buyerLatLng;
+  StreamSubscription<Position>? _positionStream; // GPS stream
+  bool _isSharing = false; // true while seller is actively sharing
+  bool _isStarting = false; // loading spinner for start button
+  Timer? _demoMoveTimer; // demo movement timer
+  bool _isDemoMoving = false; // demo mode flag
+
+  late MapMarkerSmoother _buyerPinSmooth;
+  late MapMarkerSmoother _sellerPinSmooth;
+  double? _lastFirestoreBuyerLat;
+  double? _lastFirestoreBuyerLng;
+
+  LatLng get _buyerMapPin =>
+      _buyerPinSmooth.current ?? _buyerRawLatLng;
+  LatLng? get _sellerMapPin => _sellerPinSmooth.current;
+
+  void _syncBuyerFromFirestore(double lat, double lng) {
+    if (!_coordFinite(lat, lng)) return;
+    if (_lastFirestoreBuyerLat == lat && _lastFirestoreBuyerLng == lng) return;
+    _lastFirestoreBuyerLat = lat;
+    _lastFirestoreBuyerLng = lng;
+    _buyerRawLatLng = LatLng(lat, lng);
+    _buyerPinSmooth.setTarget(_buyerRawLatLng, () {
+      if (mounted) setState(() {});
+    });
+  }
+
+  bool _coordFinite(double lat, double lng) =>
+      lat.isFinite && lng.isFinite && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180;
 
   List<MapEntry<String, int>> _parseOrderItems(String rawItems) {
     final parsed = <MapEntry<String, int>>[];
@@ -136,7 +160,10 @@ class _SellerOrderDetailsPageState extends State<SellerOrderDetailsPage> {
   @override
   void initState() {
     super.initState();
-    _buyerLatLng = LatLng(widget.buyerLat, widget.buyerLng);
+    _buyerPinSmooth = MapMarkerSmoother(this);
+    _sellerPinSmooth = MapMarkerSmoother(this);
+    _buyerRawLatLng = LatLng(widget.buyerLat, widget.buyerLng);
+    _buyerPinSmooth.setTarget(_buyerRawLatLng, () {});
     _restoreSharingState();
   }
 
@@ -145,6 +172,8 @@ class _SellerOrderDetailsPageState extends State<SellerOrderDetailsPage> {
     // Cancel local GPS stream only. Keep Firestore sharing flag as-is so
     // seller can auto-resume next time this page opens.
     _stopSharing(clearRemote: false);
+    _buyerPinSmooth.dispose();
+    _sellerPinSmooth.dispose();
     super.dispose();
   }
 
@@ -204,8 +233,8 @@ class _SellerOrderDetailsPageState extends State<SellerOrderDetailsPage> {
       final metresToBuyer = Geolocator.distanceBetween(
         pos.latitude,
         pos.longitude,
-        _buyerLatLng.latitude,
-        _buyerLatLng.longitude,
+        _buyerRawLatLng.latitude,
+        _buyerRawLatLng.longitude,
       );
       final arrived = metresToBuyer <= 25;
 
@@ -222,13 +251,13 @@ class _SellerOrderDetailsPageState extends State<SellerOrderDetailsPage> {
       });
 
       if (mounted) {
-        setState(() {
-          _sellerLocation = latLng;
-          _isSharing = true;
-          _isStarting = false;
+        _sellerPinSmooth.setTarget(latLng, () {
+          if (!mounted) return;
+          setState(() {
+            _isSharing = true;
+            _isStarting = false;
+          });
         });
-
-        // Move map camera to keep seller in view
         _mapController.move(latLng, _mapController.camera.zoom);
       }
     });
@@ -255,9 +284,11 @@ class _SellerOrderDetailsPageState extends State<SellerOrderDetailsPage> {
     }
 
     if (mounted) {
+      _sellerPinSmooth.setTarget(null, () {
+        if (mounted) setState(() {});
+      });
       setState(() {
         _isSharing = false;
-        _sellerLocation = null;
       });
     }
   }
@@ -302,13 +333,13 @@ class _SellerOrderDetailsPageState extends State<SellerOrderDetailsPage> {
 
     // Small loop around buyer location for testing live movement.
     final path = <LatLng>[
-      LatLng(_buyerLatLng.latitude + 0.0009, _buyerLatLng.longitude - 0.0007),
-      LatLng(_buyerLatLng.latitude + 0.0005, _buyerLatLng.longitude - 0.0002),
-      LatLng(_buyerLatLng.latitude + 0.0002, _buyerLatLng.longitude + 0.0002),
-      LatLng(_buyerLatLng.latitude - 0.0001, _buyerLatLng.longitude + 0.0004),
-      LatLng(_buyerLatLng.latitude + 0.0003, _buyerLatLng.longitude + 0.0001),
-      LatLng(_buyerLatLng.latitude + 0.0007, _buyerLatLng.longitude - 0.0004),
-      LatLng(_buyerLatLng.latitude, _buyerLatLng.longitude), // simulate arrival
+      LatLng(_buyerRawLatLng.latitude + 0.0009, _buyerRawLatLng.longitude - 0.0007),
+      LatLng(_buyerRawLatLng.latitude + 0.0005, _buyerRawLatLng.longitude - 0.0002),
+      LatLng(_buyerRawLatLng.latitude + 0.0002, _buyerRawLatLng.longitude + 0.0002),
+      LatLng(_buyerRawLatLng.latitude - 0.0001, _buyerRawLatLng.longitude + 0.0004),
+      LatLng(_buyerRawLatLng.latitude + 0.0003, _buyerRawLatLng.longitude + 0.0001),
+      LatLng(_buyerRawLatLng.latitude + 0.0007, _buyerRawLatLng.longitude - 0.0004),
+      LatLng(_buyerRawLatLng.latitude, _buyerRawLatLng.longitude), // simulate arrival
     ];
     int i = 0;
 
@@ -316,8 +347,8 @@ class _SellerOrderDetailsPageState extends State<SellerOrderDetailsPage> {
       final metresToBuyer = Geolocator.distanceBetween(
         p.latitude,
         p.longitude,
-        _buyerLatLng.latitude,
-        _buyerLatLng.longitude,
+        _buyerRawLatLng.latitude,
+        _buyerRawLatLng.longitude,
       );
       final arrived = metresToBuyer <= 25;
       await FirebaseFirestore.instance
@@ -331,8 +362,8 @@ class _SellerOrderDetailsPageState extends State<SellerOrderDetailsPage> {
         if (arrived) 'sellerArrivedAt': FieldValue.serverTimestamp(),
       });
       if (!mounted) return;
-      setState(() {
-        _sellerLocation = p;
+      _sellerPinSmooth.setTarget(p, () {
+        if (mounted) setState(() {});
       });
       _mapController.move(p, _mapController.camera.zoom);
     }
@@ -383,50 +414,72 @@ class _SellerOrderDetailsPageState extends State<SellerOrderDetailsPage> {
                 boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 10, offset: const Offset(0, 4))],
               ),
               clipBehavior: Clip.antiAlias,
-              child: FlutterMap(
-                mapController: _mapController,
-                options: MapOptions(
-                  initialCenter: _buyerLatLng,
-                  initialZoom: 15,
-                ),
-                children: [
-                  TileLayer(
-                    urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                    userAgentPackageName: 'com.example.umart_app',
-                  ),
-
-                  // Line from seller to buyer (only when seller is sharing)
-                  if (_sellerLocation != null)
-                    PolylineLayer(
-                      polylines: [
-                        Polyline(
-                          points: [_sellerLocation!, _buyerLatLng],
-                          strokeWidth: 3,
-                          color: kPrimary.withOpacity(0.6),
-                        ),
-                      ],
+              child: StreamBuilder<DocumentSnapshot>(
+                stream: FirebaseFirestore.instance
+                    .collection('orders')
+                    .doc(widget.orderId)
+                    .snapshots(),
+                builder: (context, snapshot) {
+                  if (snapshot.hasData && snapshot.data!.exists) {
+                    final raw = snapshot.data!.data();
+                    if (raw is Map<String, dynamic>) {
+                      final bl = (raw['buyerLat'] as num?)?.toDouble();
+                      final bn = (raw['buyerLng'] as num?)?.toDouble();
+                      if (bl != null && bn != null) {
+                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                          if (!mounted) return;
+                          _syncBuyerFromFirestore(bl, bn);
+                        });
+                      }
+                    }
+                  }
+                  final buyerPin = _buyerMapPin;
+                  final sellerPin = _sellerMapPin;
+                  return FlutterMap(
+                    mapController: _mapController,
+                    options: MapOptions(
+                      initialCenter: buyerPin,
+                      initialZoom: 15,
                     ),
-
-                  MarkerLayer(
-                    markers: [
-                      // Buyer pin (fixed)
-                      Marker(
-                        point: _buyerLatLng,
-                        width: 56,
-                        height: 56,
-                        child: _pinWidget(kAccent, Icons.person_pin_circle_rounded, 'Buyer'),
+                    children: [
+                      TileLayer(
+                        urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                        userAgentPackageName: 'com.example.umart_app',
                       ),
-                      // Seller pin (live, only when sharing)
-                      if (_sellerLocation != null)
-                        Marker(
-                          point: _sellerLocation!,
-                          width: 56,
-                          height: 56,
-                          child: _pinWidget(kPrimary, Icons.delivery_dining_rounded, 'You'),
+
+                      if (sellerPin != null)
+                        PolylineLayer(
+                          polylines: [
+                            Polyline(
+                              points: [sellerPin, buyerPin],
+                              strokeWidth: 3,
+                              color: kPrimary.withOpacity(0.6),
+                            ),
+                          ],
                         ),
+
+                      MarkerLayer(
+                        markers: [
+                          Marker(
+                            point: buyerPin,
+                            width: 56,
+                            height: 56,
+                            child:
+                                _pinWidget(kAccent, Icons.person_pin_circle_rounded, 'Buyer'),
+                          ),
+                          if (sellerPin != null)
+                            Marker(
+                              point: sellerPin,
+                              width: 56,
+                              height: 56,
+                              child:
+                                  _pinWidget(kPrimary, Icons.delivery_dining_rounded, 'You'),
+                            ),
+                        ],
+                      ),
                     ],
-                  ),
-                ],
+                  );
+                },
               ),
             ),
 
