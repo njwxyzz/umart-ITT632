@@ -5,6 +5,7 @@ import 'cart_page.dart';
 import 'cart_manager.dart'; // 🚨 IMPORT OTAK TROLI KAT SINI
 import 'store_profile_page.dart';
 import '../../utils/product_status.dart';
+import '../../widgets/report_product_sheet.dart';
 
 const kPrimary      = Color(0xFF4C6B3F);
 const kAccent       = Color(0xFFF27B35);
@@ -247,7 +248,21 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                           ),
                         ),
                       ),
-                      const SizedBox(width: 10),
+                      if (!_isOwnStoreProduct) ...[
+                        const SizedBox(width: 8),
+                        _buildCircleButton(
+                          icon: Icons.flag_outlined,
+                          onTap: () => showReportProductSheet(
+                            context,
+                            productId: _resolvedProductId.isNotEmpty
+                                ? _resolvedProductId
+                                : (widget.productId ?? ''),
+                            reportedSellerId: widget.sellerId,
+                            productName: widget.name,
+                          ),
+                        ),
+                      ],
+                      const SizedBox(width: 8),
                       _buildCircleButton(
                         icon: Icons.shopping_cart_outlined,
                         onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CartPage())),

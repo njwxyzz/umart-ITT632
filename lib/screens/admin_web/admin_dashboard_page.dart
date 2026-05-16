@@ -13,7 +13,7 @@ const kCardText = Color(0xFF1A1A2E);
 const kAccent = Color(0xFF8AAF63);
 const kSecondaryAccent = Color(0xFF6D8BEA);
 
-enum _AdminSection { dashboard, users, stores, products, orders }
+enum _AdminSection { dashboard, users, stores, products, orders, reports }
 
 class _ActivityFeedItem {
   const _ActivityFeedItem({
@@ -45,6 +45,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
   int _storePage = 0;
   int _productPage = 0;
   int _orderPage = 0;
+  int _reportPage = 0;
   static const int _pageSize = 10;
 
   String _userSortBy = 'name';
@@ -67,6 +68,12 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
   final Stream<int> _pendingProductsCountStream = FirebaseFirestore.instance
       .collection('products')
       .where('status', isEqualTo: 'Pending')
+      .snapshots()
+      .map((s) => s.docs.length);
+
+  final Stream<int> _pendingReportsCountStream = FirebaseFirestore.instance
+      .collection('reports')
+      .where('status', isEqualTo: 'pending')
       .snapshots()
       .map((s) => s.docs.length);
 
@@ -171,6 +178,12 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                   pendingCountStream: _pendingProductsCountStream,
                 ),
                 _buildNavItem(Icons.receipt_long_rounded, 'All Orders', _AdminSection.orders),
+                _buildNavItem(
+                  Icons.flag_rounded,
+                  'Reported Cases',
+                  _AdminSection.reports,
+                  pendingCountStream: _pendingReportsCountStream,
+                ),
                 
                 const Spacer(),
                 const Divider(),
@@ -495,6 +508,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
     _storePage = 0;
     _productPage = 0;
     _orderPage = 0;
+    _reportPage = 0;
   }
 
   Future<void> _pickDate({required bool isFrom}) async {
@@ -728,7 +742,9 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                   ? _buildProductsTable()
                   : _selectedSection == _AdminSection.orders
                       ? _buildOrdersTable()
-                      : _buildDashboardOverviewPanel(),
+                      : _selectedSection == _AdminSection.reports
+                          ? _buildReportedCasesPanel()
+                          : _buildDashboardOverviewPanel(),
     );
   }
 
@@ -784,6 +800,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                     _buildQuickActionButton(Icons.storefront_rounded, 'Review Stores', _AdminSection.stores),
                     _buildQuickActionButton(Icons.inventory_2_rounded, 'Review Products', _AdminSection.products),
                     _buildQuickActionButton(Icons.receipt_long_rounded, 'Monitor Orders', _AdminSection.orders),
+                    _buildQuickActionButton(Icons.flag_rounded, 'Reported Cases', _AdminSection.reports),
                   ],
                 ),
                 const SizedBox(height: 14),
@@ -1162,7 +1179,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
   Future<void> _exportCurrentSectionAsCsv() async {
     if (_selectedSection == _AdminSection.dashboard) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Switch to Users, Stores, Products, or Orders to export CSV.')),
+        const SnackBar(content: Text('Switch to Users, Stores, Products, Orders, or Reports to export CSV.')),
       );
       return;
     }
@@ -1175,6 +1192,11 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
         docs = (await FirebaseFirestore.instance.collection('stores').get()).docs;
       } else if (_selectedSection == _AdminSection.products) {
         docs = (await FirebaseFirestore.instance.collection('products').get()).docs;
+      } else if (_selectedSection == _AdminSection.reports) {
+        docs = (await FirebaseFirestore.instance
+            .collection('reports')
+            .where('status', isEqualTo: 'pending')
+            .get()).docs;
       } else {
         docs = (await FirebaseFirestore.instance.collection('orders').get()).docs;
       }
@@ -1201,6 +1223,8 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
       headers = ['id', 'storeName', 'ownerId', 'status'];
     } else if (_selectedSection == _AdminSection.products) {
       headers = ['id', 'name', 'sellerId', 'sellerName', 'category', 'status'];
+    } else if (_selectedSection == _AdminSection.reports) {
+      headers = ['id', 'reason', 'productId', 'reportedSellerId', 'reporterId', 'status'];
     } else {
       headers = ['id', 'buyerName', 'productName', 'totalPrice', 'status'];
     }
@@ -1730,6 +1754,394 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
         );
       }
     }
+  }
+
+  Future<void> _resolveReport(String reportId, {required String resolution}) async {
+    await FirebaseFirestore.instance.collection('reports').doc(reportId).update({
+      'status': 'resolved',
+      'resolution': resolution,
+      'resolvedAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  Future<void> _banSellerFromReport(
+    String reportId,
+    String sellerId, {
+    String? productId,
+    String? productName,
+  }) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Ban seller?'),
+        content: const Text(
+          'This will set the seller account status to banned. They will not be able to use the app until an admin reverses it.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Ban seller', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+
+    try {
+      await FirebaseFirestore.instance.collection('users').doc(sellerId).set(
+        {
+          'status': 'banned',
+          'bannedAt': FieldValue.serverTimestamp(),
+        },
+        SetOptions(merge: true),
+      );
+
+      await FirebaseFirestore.instance.collection('users').doc(sellerId).collection('notifications').add({
+        'title': 'Account suspended',
+        'body': 'Your account has been suspended following a community report. Contact support if you believe this is a mistake.',
+        'type': 'account_banned',
+        'read': false,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+
+      await _resolveReport(reportId, resolution: 'seller_banned');
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Seller has been banned.'), backgroundColor: Colors.red),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error banning seller: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  Future<void> _takeDownProductFromReport(
+    String reportId,
+    String productId,
+    String sellerId, {
+    String? productName,
+  }) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Take down product?'),
+        content: const Text(
+          'This will mark the product as Rejected and hide it from buyers.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Take down', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+
+    try {
+      final name = productName ?? 'Product';
+      await _updateProductStatus(productId, name, sellerId, 'Rejected');
+      await _resolveReport(reportId, resolution: 'product_rejected');
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error taking down product: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  Future<void> _dismissReport(String reportId) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Dismiss report?'),
+        content: const Text('No action will be taken against the seller or product.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Dismiss')),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+
+    try {
+      await _resolveReport(reportId, resolution: 'dismissed');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Report dismissed with no action taken.'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error dismissing report: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  String _formatReportTimestamp(dynamic value) {
+    DateTime? date;
+    if (value is Timestamp) {
+      date = value.toDate();
+    } else if (value is DateTime) {
+      date = value;
+    }
+    if (date == null) return '—';
+    final day = date.day.toString().padLeft(2, '0');
+    final month = date.month.toString().padLeft(2, '0');
+    final hour = date.hour.toString().padLeft(2, '0');
+    final minute = date.minute.toString().padLeft(2, '0');
+    return '$day/$month/${date.year} $hour:$minute';
+  }
+
+  Widget _buildReportedCasesPanel() {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('reports')
+          .where('status', isEqualTo: 'pending')
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator(color: kPrimary));
+        }
+
+        if (snapshot.hasError) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Text(
+                'Could not load reports: ${snapshot.error}',
+                style: const TextStyle(color: Colors.red),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          );
+        }
+
+        var reports = snapshot.data?.docs ?? [];
+        reports = reports.where((doc) {
+          if (_searchQuery.isEmpty) return true;
+          final data = doc.data() as Map<String, dynamic>;
+          final blob = [
+            data['reason'],
+            data['description'],
+            data['productId'],
+            data['productName'],
+            data['reportedSellerId'],
+            data['reporterId'],
+          ].join(' ').toLowerCase();
+          return blob.contains(_searchQuery);
+        }).toList();
+
+        reports.sort((a, b) {
+          final aData = a.data() as Map<String, dynamic>;
+          final bData = b.data() as Map<String, dynamic>;
+          final aTime = aData['createdAt'];
+          final bTime = bData['createdAt'];
+          if (aTime is Timestamp && bTime is Timestamp) {
+            return bTime.compareTo(aTime);
+          }
+          return 0;
+        });
+
+        if (reports.isEmpty) {
+          return const Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.verified_user_outlined, size: 48, color: Colors.grey),
+                SizedBox(height: 12),
+                Text('No pending reports.', style: TextStyle(color: Colors.grey, fontSize: 16)),
+              ],
+            ),
+          );
+        }
+
+        final maxPage = ((reports.length - 1) / _pageSize).floor();
+        if (_reportPage > maxPage) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) setState(() => _reportPage = 0);
+          });
+        }
+        final paged = _sliceForPage(reports, _reportPage);
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 20, 24, 8),
+              child: Row(
+                children: [
+                  const Icon(Icons.flag_rounded, color: kPrimary),
+                  const SizedBox(width: 10),
+                  Text(
+                    'Reported Cases (${reports.length} pending)',
+                    style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: kCardText),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: ListView.separated(
+                padding: const EdgeInsets.fromLTRB(24, 8, 24, 16),
+                itemCount: paged.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 14),
+                itemBuilder: (context, index) {
+                  final doc = paged[index];
+                  final data = doc.data() as Map<String, dynamic>;
+                  final reportId = doc.id;
+                  final reason = (data['reason'] ?? '—').toString();
+                  final description = (data['description'] ?? '').toString();
+                  final productId = (data['productId'] ?? '').toString();
+                  final productName = (data['productName'] ?? '').toString();
+                  final sellerId = (data['reportedSellerId'] ?? '').toString();
+                  final reporterId = (data['reporterId'] ?? '').toString();
+                  final createdLabel = _formatReportTimestamp(data['createdAt']);
+
+                  return Container(
+                    padding: const EdgeInsets.all(18),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: Colors.orange.shade100),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.04),
+                          blurRadius: 12,
+                          offset: const Offset(0, 6),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                              decoration: BoxDecoration(
+                                color: Colors.orange.shade50,
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Text(
+                                reason.toUpperCase(),
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.orange.shade800,
+                                ),
+                              ),
+                            ),
+                            const Spacer(),
+                            Text(createdLabel, style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        if (productName.isNotEmpty)
+                          Text(
+                            productName,
+                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: kCardText),
+                          ),
+                        const SizedBox(height: 6),
+                        Text(description, style: TextStyle(color: Colors.grey.shade800, height: 1.4)),
+                        const SizedBox(height: 12),
+                        _buildReportMetaRow('Product ID', productId),
+                        _buildReportMetaRow('Seller ID', sellerId),
+                        _buildReportMetaRow('Reporter ID', reporterId),
+                        const SizedBox(height: 14),
+                        Wrap(
+                          spacing: 10,
+                          runSpacing: 10,
+                          children: [
+                            OutlinedButton.icon(
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: Colors.red.shade700,
+                                side: BorderSide(color: Colors.red.shade200),
+                              ),
+                              onPressed: sellerId.isEmpty
+                                  ? null
+                                  : () => _banSellerFromReport(
+                                        reportId,
+                                        sellerId,
+                                        productId: productId.isEmpty ? null : productId,
+                                        productName: productName.isEmpty ? null : productName,
+                                      ),
+                              icon: const Icon(Icons.block_rounded, size: 18),
+                              label: const Text('Ban Seller'),
+                            ),
+                            OutlinedButton.icon(
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: Colors.orange.shade800,
+                                side: BorderSide(color: Colors.orange.shade200),
+                              ),
+                              onPressed: productId.isEmpty
+                                  ? null
+                                  : () => _takeDownProductFromReport(
+                                        reportId,
+                                        productId,
+                                        sellerId,
+                                        productName: productName.isEmpty ? null : productName,
+                                      ),
+                              icon: const Icon(Icons.visibility_off_outlined, size: 18),
+                              label: const Text('Take Down Product'),
+                            ),
+                            OutlinedButton.icon(
+                              onPressed: () => _dismissReport(reportId),
+                              icon: const Icon(Icons.check_circle_outline_rounded, size: 18),
+                              label: const Text('Dismiss / Resolve'),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ),
+            _buildPaginationControls(
+              currentPage: _reportPage,
+              totalItems: reports.length,
+              onPageChanged: (nextPage) => setState(() => _reportPage = nextPage),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildReportMetaRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 100,
+            child: Text(label, style: TextStyle(fontSize: 12, color: Colors.grey.shade600, fontWeight: FontWeight.w600)),
+          ),
+          Expanded(
+            child: Text(
+              value.isNotEmpty ? value : '—',
+              style: const TextStyle(fontSize: 12, color: kCardText),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _deleteStore(String docId, String storeName, String? ownerId) async {

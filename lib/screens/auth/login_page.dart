@@ -157,6 +157,24 @@ class _LoginPageState extends State<LoginPage> {
         _syncFirestoreEmailVerified(user);
       }
 
+      if (!isAdmin && user != null) {
+        final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+        final accountStatus = (userDoc.data()?['status'] ?? '').toString().toLowerCase();
+        if (accountStatus == 'banned') {
+          await FirebaseAuth.instance.signOut();
+          if (mounted) {
+            setState(() => _isLoading = false);
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Your account has been suspended. Contact support for help.'),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+          return;
+        }
+      }
+
       // Stop loading
       if (mounted) {
         setState(() {
