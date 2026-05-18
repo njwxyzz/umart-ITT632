@@ -221,7 +221,7 @@ class _ReportProductSheetState extends State<_ReportProductSheet> {
                 ),
                 const SizedBox(height: 8),
                 DropdownButtonFormField<String>(
-                  value: _selectedReason,
+                  initialValue: _selectedReason,
                   decoration: InputDecoration(
                     filled: true,
                     fillColor: const Color(0xFFF5F7F2),

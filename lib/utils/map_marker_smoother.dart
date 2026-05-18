@@ -15,6 +15,10 @@ class MapMarkerSmoother {
 
   LatLng? get current => _current;
 
+  /// Drives [AnimatedBuilder] for marker layers without rebuilding the whole map.
+  Listenable get repaintListenable =>
+      _anim ?? const _AlwaysIdleListenable();
+
   void dispose() {
     _stopAnim();
     _current = null;
@@ -71,4 +75,12 @@ class MapMarkerSmoother {
       })
       ..forward();
   }
+}
+
+class _AlwaysIdleListenable implements Listenable {
+  const _AlwaysIdleListenable();
+  @override
+  void addListener(VoidCallback listener) {}
+  @override
+  void removeListener(VoidCallback listener) {}
 }
