@@ -1965,6 +1965,8 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
             data['description'],
             data['productId'],
             data['productName'],
+            data['storeName'],
+            data['reportType'],
             data['reportedSellerId'],
             data['reporterId'],
           ].join(' ').toLowerCase();
@@ -2045,11 +2047,17 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
     final reportId = doc.id;
     final reason = (data['reason'] ?? '—').toString();
     final description = (data['description'] ?? '').toString();
+    final reportType = (data['reportType'] ?? 'product').toString().toLowerCase();
+    final isStoreReport = reportType == 'store';
     final productId = (data['productId'] ?? '').toString();
     final productName = (data['productName'] ?? '').toString();
+    final storeName = (data['storeName'] ?? '').toString();
     final sellerId = (data['reportedSellerId'] ?? '').toString();
     final reporterId = (data['reporterId'] ?? '').toString();
     final createdLabel = _formatReportTimestamp(data['createdAt']);
+    final title = isStoreReport
+        ? (storeName.isNotEmpty ? storeName : 'Store report')
+        : productName;
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -2086,14 +2094,30 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                   ),
                 ),
               ),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: isStoreReport ? Colors.blue.shade50 : Colors.green.shade50,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  isStoreReport ? 'STORE' : 'PRODUCT',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: isStoreReport ? Colors.blue.shade800 : Colors.green.shade800,
+                  ),
+                ),
+              ),
               const Spacer(),
               Text(createdLabel, style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
             ],
           ),
           const SizedBox(height: 12),
-          if (productName.isNotEmpty)
+          if (title.isNotEmpty)
             Text(
-              productName,
+              title,
               style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: kCardText),
             ),
           if (description.isNotEmpty) ...[
@@ -2101,7 +2125,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
             Text(description, style: TextStyle(color: Colors.grey.shade800, height: 1.45, fontSize: 14)),
           ],
           const SizedBox(height: 14),
-          _buildReportMetaRow('Product ID', productId),
+          if (productId.isNotEmpty) _buildReportMetaRow('Product ID', productId),
           _buildReportMetaRow('Seller ID', sellerId),
           _buildReportMetaRow('Reporter ID', reporterId),
           const SizedBox(height: 16),

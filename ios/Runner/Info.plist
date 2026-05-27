@@ -58,5 +58,18 @@
 		<string>fetch</string>
 		<string>remote-notification</string>
 	</array>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>com.umart.store</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>umart</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>

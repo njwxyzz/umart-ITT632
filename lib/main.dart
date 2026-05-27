@@ -36,6 +36,7 @@ import 'screens/seller/seller_dashboard.dart';
 import 'utils/store_status.dart';
 import 'utils/product_status.dart';
 import 'push_messaging.dart';
+import 'utils/store_deep_link.dart';
 
 
 
@@ -67,49 +68,50 @@ void main() async {
   runApp(const UMartApp()); 
 }
 
+/// Auth routing — wrapped by [StoreDeepLinkListener] for `umart://store/...` links.
+class _AuthGate extends StatelessWidget {
+  const _AuthGate();
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<User?>(
+      stream: FirebaseAuth.instance.authStateChanges(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Scaffold(
+            backgroundColor: AppColors.background,
+            body: Center(
+              child: CircularProgressIndicator(color: AppColors.primary),
+            ),
+          );
+        }
+
+        if (snapshot.hasData) {
+          final user = snapshot.data!;
+          if (user.email?.trim().toLowerCase() == 'admin@umart.com') {
+            return const AdminDashboardPage();
+          }
+          return const HomeScreen();
+        }
+
+        return const OnboardingScreen();
+      },
+    );
+  }
+}
+
 class UMartApp extends StatelessWidget { 
   const UMartApp({super.key});
 
   @override 
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: rootNavigatorKey,
       title: 'UMART',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
-      // CCTV PINTU PAGAR (Auth Gate)
-      home: StreamBuilder<User?>(
-        stream: FirebaseAuth.instance.authStateChanges(),
-        builder: (context, snapshot) {
-          // 1. Tengah loading tunggu jawapan dari Firebase
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Scaffold(
-              backgroundColor: AppColors.background,
-              body: Center(child: CircularProgressIndicator(color: AppColors.primary)),
-            );
-          }
-          
-          // 2. Kalau user DAH LOGIN
-          if (snapshot.hasData) {
-            final user = snapshot.data!;
-
-            // debug
-            print("🚀 User logged in: ${user.email} (UID: ${user.uid})");
-
-
-            
-            // LOGIK VIP: Check kalau yang login tu e-mel admin
-            if (user.email?.trim().toLowerCase() == 'admin@umart.com') {
-              return const AdminDashboardPage(); 
-            } 
-            // Kalau e-mel budak student atau seller biasa
-            else {
-              return const HomeScreen(); 
-            }
-          }
-          
-          // 3. Kalau user BELUM LOGIN (atau baru je tekan Logout)
-          return const OnboardingScreen(); 
-        },
+      home: const StoreDeepLinkListener(
+        child: _AuthGate(),
       ),
     );
   }

@@ -4,6 +4,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/services.dart';
 import '../../utils/product_status.dart';
 import '../../utils/store_status.dart';
+import '../../widgets/report_store_sheet.dart';
+import '../../utils/store_deep_link.dart';
 import 'chat_page.dart';
 import 'product_detail_page.dart';
 
@@ -247,11 +249,15 @@ class StoreProfilePage extends StatelessWidget {
   }
 
   Future<void> _copyStoreLink(BuildContext context, String storeName) async {
-    final storeLink = 'umart://store/$sellerId';
+    final storeLink = buildStoreShareLink(sellerId);
     await Clipboard.setData(ClipboardData(text: storeLink));
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Store link copied for $storeName')),
+      SnackBar(
+        content: Text(
+          'Link copied for $storeName. Open it in UMART to visit this store.',
+        ),
+      ),
     );
   }
 
@@ -287,12 +293,10 @@ class StoreProfilePage extends StatelessWidget {
                   subtitle: const Text('Tell us if something looks wrong'),
                   onTap: () {
                     Navigator.pop(sheetContext);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text(
-                          'Thanks. Reporting tools will be available soon.',
-                        ),
-                      ),
+                    showReportStoreSheet(
+                      context,
+                      sellerId: sellerId,
+                      storeName: storeName,
                     );
                   },
                 ),
