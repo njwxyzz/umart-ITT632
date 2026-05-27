@@ -252,14 +252,26 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                         const SizedBox(width: 8),
                         _buildCircleButton(
                           icon: Icons.flag_outlined,
-                          onTap: () => showReportProductSheet(
-                            context,
-                            productId: _resolvedProductId.isNotEmpty
+                          onTap: () {
+                            final id = _resolvedProductId.isNotEmpty
                                 ? _resolvedProductId
-                                : (widget.productId ?? ''),
-                            reportedSellerId: widget.sellerId,
-                            productName: widget.name,
-                          ),
+                                : (widget.productId ?? '').trim();
+                            if (id.isEmpty && !_firebaseMetaApplied) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Loading product details… try again in a moment.'),
+                                  backgroundColor: Colors.orange,
+                                ),
+                              );
+                              return;
+                            }
+                            showReportProductSheet(
+                              context,
+                              productId: id,
+                              reportedSellerId: widget.sellerId,
+                              productName: widget.name,
+                            );
+                          },
                         ),
                       ],
                       const SizedBox(width: 8),

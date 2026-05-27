@@ -1,0 +1,27 @@
+// =============================================================================
+// UMART — Firestore Rules SNIPPET for user reports (reports collection)
+// =============================================================================
+// Paste inside `match /databases/{database}/documents { ... }` in Firebase Console
+// or your main firestore.rules, then Publish / deploy.
+//
+// Requires the same `isSignedIn()` and `isAdmin()` helpers as
+// firestore.notifications.snippet.rules (admin@umart.com).
+// =============================================================================
+
+    match /reports/{reportId} {
+      // Logged-in buyers create reports about other sellers' products
+      allow create: if isSignedIn()
+        && request.resource.data.reporterId == request.auth.uid
+        && request.resource.data.reportedSellerId is string
+        && request.resource.data.reportedSellerId != request.auth.uid
+        && request.resource.data.productId is string
+        && request.resource.data.productId.size() > 0
+        && request.resource.data.reason is string
+        && request.resource.data.description is string
+        && request.resource.data.status == 'pending';
+
+      // Admin moderation panel reads and resolves reports
+      allow read, update: if isAdmin();
+
+      allow delete: if isAdmin();
+    }

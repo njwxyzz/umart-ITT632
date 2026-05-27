@@ -490,8 +490,8 @@ class StoreProfilePage extends StatelessWidget {
                   ),
                   delegate: SliverChildBuilderDelegate(
                     (context, index) {
-                      final product = docs[index].data();
-                      return _buildProductCard(context, product);
+                      final doc = docs[index];
+                      return _buildProductCard(context, doc.data(), productId: doc.id);
                     },
                     childCount: docs.length,
                   ),
@@ -531,7 +531,7 @@ class StoreProfilePage extends StatelessWidget {
     );
   }
 
-  Widget _buildProductCard(BuildContext context, Map<String, dynamic> product) {
+  Widget _buildProductCard(BuildContext context, Map<String, dynamic> product, {required String productId}) {
     final productName = (product['name'] ?? 'Unnamed Product').toString();
     final productPrice = product['price'] is num
         ? (product['price'] as num).toDouble()
@@ -547,6 +547,7 @@ class StoreProfilePage extends StatelessWidget {
       onTap: () {
         // --- BAWA DATA BARANG MASUK KE BILIK DETAIL ---
         Navigator.push(context, MaterialPageRoute(builder: (_) => ProductDetailPage(
+          productId: productId,
           name: productName,
           price: productPrice,
           imageUrl: productImage,

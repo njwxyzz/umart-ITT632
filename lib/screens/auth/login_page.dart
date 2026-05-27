@@ -258,8 +258,6 @@ class _LoginPageState extends State<LoginPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const SizedBox(height: 20),
-              
                   const SizedBox(height: 40),
 
                   // Header Texts
@@ -364,42 +362,7 @@ class _LoginPageState extends State<LoginPage> {
                     ),
                   ],
 
-                  const SizedBox(height: 30),
-
-                  // "Or" Divider
-                  Row(
-                    children: [
-                      Expanded(child: Divider(color: Colors.grey.shade300)),
-                      Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: Text('Or', style: TextStyle(color: Colors.grey.shade500, fontSize: 12))),
-                      Expanded(child: Divider(color: Colors.grey.shade300)),
-                    ],
-                  ),
-
-                  const SizedBox(height: 30),
-
-                  // Continue with Google Button
-                  _buildSocialButton(
-                    text: 'Continue with Google',
-                    icon: Icons.g_mobiledata_rounded,
-                    iconColor: Colors.red,
-                    onTap: () {
-                      // TODO: Implement Google Sign-In later
-                    },
-                  ),
-
-                  const SizedBox(height: 16),
-
-                  // Continue with Facebook Button
-                  _buildSocialButton(
-                    text: 'Continue with Facebook',
-                    icon: Icons.facebook_rounded,
-                    iconColor: Colors.blue,
-                    onTap: () {
-                      // TODO: Implement Facebook Sign-In later
-                    },
-                  ),
-
-                  const SizedBox(height: 40),
+                  const SizedBox(height: 48),
 
                   // Sign Up Link at the bottom
                   Row(
@@ -448,32 +411,6 @@ class _LoginPageState extends State<LoginPage> {
               : null,
           border: InputBorder.none,
           contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
-        ),
-      ),
-    );
-  }
-
-  // HELPER WIDGET: Full Width Social Button
-  Widget _buildSocialButton({required String text, required IconData icon, required Color iconColor, required VoidCallback onTap}) {
-    return SizedBox(
-      width: double.infinity,
-      height: 56,
-      child: OutlinedButton(
-        onPressed: onTap,
-        style: OutlinedButton.styleFrom(
-          backgroundColor: kWhite,
-          side: const BorderSide(color: Colors.transparent),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          elevation: 1, 
-          shadowColor: Colors.black12,
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, color: iconColor, size: 28),
-            const SizedBox(width: 12),
-            Text(text, style: const TextStyle(color: Colors.black87, fontSize: 15, fontWeight: FontWeight.bold)),
-          ],
         ),
       ),
     );

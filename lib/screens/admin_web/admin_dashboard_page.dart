@@ -77,6 +77,25 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
       .snapshots()
       .map((s) => s.docs.length);
 
+  bool get _isDashboardHome => _selectedSection == _AdminSection.dashboard;
+
+  String get _mainHeaderTitle {
+    switch (_selectedSection) {
+      case _AdminSection.dashboard:
+        return 'Dashboard Overview';
+      case _AdminSection.users:
+        return 'Manage Users';
+      case _AdminSection.stores:
+        return 'Manage Stores';
+      case _AdminSection.products:
+        return 'Manage Products';
+      case _AdminSection.orders:
+        return 'All Orders';
+      case _AdminSection.reports:
+        return 'Reported Cases';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -247,84 +266,84 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _buildTopBar(),
-                  const SizedBox(height: 24),
-                  const Text('Dashboard Overview', style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: kCardText)),
-                  const SizedBox(height: 8),
-                  const Text('Welcome back, Super Admin!', style: TextStyle(fontSize: 16, color: Colors.grey)),
-                  const SizedBox(height: 32),
-                  
-                  // ─── STATISTIC CARDS (LIVE FIREBASE) ───
-                  Row(
-                    children: [
-                      // 1. CALCULATE TOTAL USERS
-                      StreamBuilder<QuerySnapshot>(
-                        stream: FirebaseFirestore.instance.collection('users').snapshots(),
-                        builder: (context, snapshot) {
-                          String userCount = "0";
-                          if (snapshot.hasData) {
-                            userCount = snapshot.data!.docs.length.toString();
-                          }
-                          return _buildStatCard(
-                            'Total Users',
-                            userCount,
-                            Icons.people_outline_rounded,
-                            Colors.blue,
-                            trendLabel: '+8% this month',
-                          );
-                        },
-                      ),
-                      const SizedBox(width: 20),
-                      
-                      // 2. CALCULATE ACTIVE ORDERS (E.g., Pending or Processing)
-                      StreamBuilder<QuerySnapshot>(
-                        stream: FirebaseFirestore.instance.collection('orders')
-                            .where('status', whereIn: ['Pending', 'Processing']).snapshots(),
-                        builder: (context, snapshot) {
-                          String activeOrders = "0";
-                          if (snapshot.hasData) {
-                            activeOrders = snapshot.data!.docs.length.toString();
-                          }
-                          return _buildStatCard(
-                            'Active Orders',
-                            activeOrders,
-                            Icons.shopping_bag_outlined,
-                            Colors.orange,
-                            trendLabel: 'Needs attention',
-                            trendPositive: false,
-                          );
-                        },
-                      ),
-                      const SizedBox(width: 20),
-                      
-                      // 3. CALCULATE TOTAL REVENUE (All Delivered orders)
-                      StreamBuilder<QuerySnapshot>(
-                        stream: FirebaseFirestore.instance.collection('orders')
-                            .where('status', isEqualTo: 'Delivered').snapshots(),
-                        builder: (context, snapshot) {
-                          double totalRevenue = 0.0;
-                          if (snapshot.hasData) {
-                            for (var doc in snapshot.data!.docs) {
-                              var data = doc.data() as Map<String, dynamic>;
-                              // Check if totalPrice field exists and sum them up
-                              if (data.containsKey('totalPrice') && data['totalPrice'] != null) {
-                                totalRevenue += (data['totalPrice'] as num).toDouble();
+                  const SizedBox(height: 20),
+                  Text(
+                    _mainHeaderTitle,
+                    style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: kCardText),
+                  ),
+                  if (_isDashboardHome) ...[
+                    const SizedBox(height: 8),
+                    const Text('Welcome back, Super Admin!', style: TextStyle(fontSize: 16, color: Colors.grey)),
+                    const SizedBox(height: 28),
+                    Row(
+                      children: [
+                        StreamBuilder<QuerySnapshot>(
+                          stream: FirebaseFirestore.instance.collection('users').snapshots(),
+                          builder: (context, snapshot) {
+                            String userCount = '0';
+                            if (snapshot.hasData) {
+                              userCount = snapshot.data!.docs.length.toString();
+                            }
+                            return _buildStatCard(
+                              'Total Users',
+                              userCount,
+                              Icons.people_outline_rounded,
+                              Colors.blue,
+                              trendLabel: '+8% this month',
+                            );
+                          },
+                        ),
+                        const SizedBox(width: 20),
+                        StreamBuilder<QuerySnapshot>(
+                          stream: FirebaseFirestore.instance
+                              .collection('orders')
+                              .where('status', whereIn: ['Pending', 'Processing'])
+                              .snapshots(),
+                          builder: (context, snapshot) {
+                            String activeOrders = '0';
+                            if (snapshot.hasData) {
+                              activeOrders = snapshot.data!.docs.length.toString();
+                            }
+                            return _buildStatCard(
+                              'Active Orders',
+                              activeOrders,
+                              Icons.shopping_bag_outlined,
+                              Colors.orange,
+                              trendLabel: 'Needs attention',
+                              trendPositive: false,
+                            );
+                          },
+                        ),
+                        const SizedBox(width: 20),
+                        StreamBuilder<QuerySnapshot>(
+                          stream: FirebaseFirestore.instance
+                              .collection('orders')
+                              .where('status', isEqualTo: 'Delivered')
+                              .snapshots(),
+                          builder: (context, snapshot) {
+                            double totalRevenue = 0.0;
+                            if (snapshot.hasData) {
+                              for (var doc in snapshot.data!.docs) {
+                                var data = doc.data() as Map<String, dynamic>;
+                                if (data.containsKey('totalPrice') && data['totalPrice'] != null) {
+                                  totalRevenue += (data['totalPrice'] as num).toDouble();
+                                }
                               }
                             }
-                          }
-                          return _buildStatCard(
-                            'Total Revenue',
-                            'RM ${totalRevenue.toStringAsFixed(2)}',
-                            Icons.account_balance_wallet_outlined,
-                            kPrimary,
-                            trendLabel: '+12% vs last week',
-                          );
-                        },
-                      ),
-                    ],
-                  ),
-                  
-                  const SizedBox(height: 40),
-                  
+                            return _buildStatCard(
+                              'Total Revenue',
+                              'RM ${totalRevenue.toStringAsFixed(2)}',
+                              Icons.account_balance_wallet_outlined,
+                              kPrimary,
+                              trendLabel: '+12% vs last week',
+                            );
+                          },
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 32),
+                  ] else
+                    const SizedBox(height: 16),
                   Expanded(
                     child: _selectedSection == _AdminSection.dashboard
                         ? Row(
@@ -721,20 +740,23 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
   }
 
   Widget _buildMainPanel() {
-    return Container(
-      width: double.infinity,
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [Colors.white, Color(0xFFFCFEFB)],
-        ),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white, width: 1.3),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 20, offset: const Offset(0, 10))],
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: _selectedSection == _AdminSection.users
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return Container(
+          width: double.infinity,
+          constraints: BoxConstraints(minHeight: constraints.maxHeight),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [Colors.white, Color(0xFFFCFEFB)],
+            ),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: Colors.white, width: 1.3),
+            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 20, offset: const Offset(0, 10))],
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: _selectedSection == _AdminSection.users
           ? _buildUsersTable()
           : _selectedSection == _AdminSection.stores
               ? _buildStoresTable()
@@ -745,6 +767,8 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                       : _selectedSection == _AdminSection.reports
                           ? _buildReportedCasesPanel()
                           : _buildDashboardOverviewPanel(),
+        );
+      },
     );
   }
 
@@ -1983,132 +2007,25 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(24, 20, 24, 8),
+              padding: const EdgeInsets.fromLTRB(24, 16, 24, 4),
               child: Row(
                 children: [
                   const Icon(Icons.flag_rounded, color: kPrimary),
                   const SizedBox(width: 10),
                   Text(
-                    'Reported Cases (${reports.length} pending)',
-                    style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: kCardText),
+                    '${reports.length} pending case${reports.length == 1 ? '' : 's'}',
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.grey.shade700),
                   ),
                 ],
               ),
             ),
             Expanded(
               child: ListView.separated(
-                padding: const EdgeInsets.fromLTRB(24, 8, 24, 16),
+                padding: const EdgeInsets.fromLTRB(24, 8, 24, 20),
                 itemCount: paged.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 14),
+                separatorBuilder: (_, __) => const SizedBox(height: 16),
                 itemBuilder: (context, index) {
-                  final doc = paged[index];
-                  final data = doc.data() as Map<String, dynamic>;
-                  final reportId = doc.id;
-                  final reason = (data['reason'] ?? '—').toString();
-                  final description = (data['description'] ?? '').toString();
-                  final productId = (data['productId'] ?? '').toString();
-                  final productName = (data['productName'] ?? '').toString();
-                  final sellerId = (data['reportedSellerId'] ?? '').toString();
-                  final reporterId = (data['reporterId'] ?? '').toString();
-                  final createdLabel = _formatReportTimestamp(data['createdAt']);
-
-                  return Container(
-                    padding: const EdgeInsets.all(18),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: Colors.orange.shade100),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.04),
-                          blurRadius: 12,
-                          offset: const Offset(0, 6),
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                              decoration: BoxDecoration(
-                                color: Colors.orange.shade50,
-                                borderRadius: BorderRadius.circular(20),
-                              ),
-                              child: Text(
-                                reason.toUpperCase(),
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.orange.shade800,
-                                ),
-                              ),
-                            ),
-                            const Spacer(),
-                            Text(createdLabel, style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
-                          ],
-                        ),
-                        const SizedBox(height: 10),
-                        if (productName.isNotEmpty)
-                          Text(
-                            productName,
-                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: kCardText),
-                          ),
-                        const SizedBox(height: 6),
-                        Text(description, style: TextStyle(color: Colors.grey.shade800, height: 1.4)),
-                        const SizedBox(height: 12),
-                        _buildReportMetaRow('Product ID', productId),
-                        _buildReportMetaRow('Seller ID', sellerId),
-                        _buildReportMetaRow('Reporter ID', reporterId),
-                        const SizedBox(height: 14),
-                        Wrap(
-                          spacing: 10,
-                          runSpacing: 10,
-                          children: [
-                            OutlinedButton.icon(
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: Colors.red.shade700,
-                                side: BorderSide(color: Colors.red.shade200),
-                              ),
-                              onPressed: sellerId.isEmpty
-                                  ? null
-                                  : () => _banSellerFromReport(
-                                        reportId,
-                                        sellerId,
-                                        productId: productId.isEmpty ? null : productId,
-                                        productName: productName.isEmpty ? null : productName,
-                                      ),
-                              icon: const Icon(Icons.block_rounded, size: 18),
-                              label: const Text('Ban Seller'),
-                            ),
-                            OutlinedButton.icon(
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: Colors.orange.shade800,
-                                side: BorderSide(color: Colors.orange.shade200),
-                              ),
-                              onPressed: productId.isEmpty
-                                  ? null
-                                  : () => _takeDownProductFromReport(
-                                        reportId,
-                                        productId,
-                                        sellerId,
-                                        productName: productName.isEmpty ? null : productName,
-                                      ),
-                              icon: const Icon(Icons.visibility_off_outlined, size: 18),
-                              label: const Text('Take Down Product'),
-                            ),
-                            OutlinedButton.icon(
-                              onPressed: () => _dismissReport(reportId),
-                              icon: const Icon(Icons.check_circle_outline_rounded, size: 18),
-                              label: const Text('Dismiss / Resolve'),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  );
+                  return _buildReportCaseCard(paged[index]);
                 },
               ),
             ),
@@ -2123,9 +2040,122 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
     );
   }
 
+  Widget _buildReportCaseCard(QueryDocumentSnapshot doc) {
+    final data = doc.data() as Map<String, dynamic>;
+    final reportId = doc.id;
+    final reason = (data['reason'] ?? '—').toString();
+    final description = (data['description'] ?? '').toString();
+    final productId = (data['productId'] ?? '').toString();
+    final productName = (data['productName'] ?? '').toString();
+    final sellerId = (data['reportedSellerId'] ?? '').toString();
+    final reporterId = (data['reporterId'] ?? '').toString();
+    final createdLabel = _formatReportTimestamp(data['createdAt']);
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.orange.shade100),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: Colors.orange.shade50,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  reason.toUpperCase(),
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.orange.shade800,
+                  ),
+                ),
+              ),
+              const Spacer(),
+              Text(createdLabel, style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+            ],
+          ),
+          const SizedBox(height: 12),
+          if (productName.isNotEmpty)
+            Text(
+              productName,
+              style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: kCardText),
+            ),
+          if (description.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(description, style: TextStyle(color: Colors.grey.shade800, height: 1.45, fontSize: 14)),
+          ],
+          const SizedBox(height: 14),
+          _buildReportMetaRow('Product ID', productId),
+          _buildReportMetaRow('Seller ID', sellerId),
+          _buildReportMetaRow('Reporter ID', reporterId),
+          const SizedBox(height: 16),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.red.shade700,
+                  side: BorderSide(color: Colors.red.shade200),
+                ),
+                onPressed: sellerId.isEmpty
+                    ? null
+                    : () => _banSellerFromReport(
+                          reportId,
+                          sellerId,
+                          productId: productId.isEmpty ? null : productId,
+                          productName: productName.isEmpty ? null : productName,
+                        ),
+                icon: const Icon(Icons.block_rounded, size: 18),
+                label: const Text('Ban Seller'),
+              ),
+              OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.orange.shade800,
+                  side: BorderSide(color: Colors.orange.shade200),
+                ),
+                onPressed: productId.isEmpty
+                    ? null
+                    : () => _takeDownProductFromReport(
+                          reportId,
+                          productId,
+                          sellerId,
+                          productName: productName.isEmpty ? null : productName,
+                        ),
+                icon: const Icon(Icons.visibility_off_outlined, size: 18),
+                label: const Text('Take Down Product'),
+              ),
+              OutlinedButton.icon(
+                onPressed: () => _dismissReport(reportId),
+                icon: const Icon(Icons.check_circle_outline_rounded, size: 18),
+                label: const Text('Dismiss / Resolve'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildReportMetaRow(String label, String value) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 4),
+      padding: const EdgeInsets.only(bottom: 6),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -2134,7 +2164,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
             child: Text(label, style: TextStyle(fontSize: 12, color: Colors.grey.shade600, fontWeight: FontWeight.w600)),
           ),
           Expanded(
-            child: Text(
+            child: SelectableText(
               value.isNotEmpty ? value : '—',
               style: const TextStyle(fontSize: 12, color: kCardText),
             ),
