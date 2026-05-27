@@ -1,16 +1,89 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../../utils/product_status.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/services.dart';
+import '../../utils/product_status.dart';
+import '../../utils/store_status.dart';
 import 'chat_page.dart';
-import 'product_detail_page.dart'; // Make sure this matches your file name
+import 'product_detail_page.dart';
 
-// --- Color Constants ---
-const kPrimary = Color(0xFF4C6B3F); 
-const kAccent  = Color(0xFFF27B35); 
-const kBg      = Color(0xFFF5F7F2); 
-const kWhite   = Colors.white;
+const kPrimary = Color(0xFF4C6B3F);
+const kAccent = Color(0xFFF27B35);
+const kBg = Color(0xFFF5F7F2);
+const kWhite = Colors.white;
+const kTextDark = Color(0xFF1A1A2E);
+
+class _StoreProfile {
+  final String storeName;
+  final String location;
+  final String description;
+  final String photoUrl;
+  final String category;
+  final Map<String, dynamic> raw;
+
+  const _StoreProfile({
+    required this.storeName,
+    required this.location,
+    required this.description,
+    required this.photoUrl,
+    required this.category,
+    required this.raw,
+  });
+
+  bool get isVerified => storeIsApproved(raw);
+  bool get isPending => storeIsPending(raw);
+
+  factory _StoreProfile.fromMap(Map<String, dynamic> data) {
+    final storeName = (data['storeName'] ??
+            data['shopName'] ??
+            data['sellerName'] ??
+            data['name'] ??
+            'Store')
+        .toString()
+        .trim();
+    final location = (data['storeLocation'] ??
+            data['kolej'] ??
+            data['college'] ??
+            data['location'] ??
+            data['address'] ??
+            'Location not set')
+        .toString()
+        .trim();
+    final description = (data['description'] ??
+            data['storeDescription'] ??
+            data['bio'] ??
+            'No description yet.')
+        .toString()
+        .trim();
+    final photoUrl = (data['storePhotoUrl'] ??
+            data['bannerUrl'] ??
+            data['coverImageUrl'] ??
+            data['logoUrl'] ??
+            data['imageUrl'] ??
+            '')
+        .toString()
+        .trim();
+    final category = (data['category'] ?? 'General').toString().trim();
+
+    return _StoreProfile(
+      storeName: storeName.isEmpty ? 'Store' : storeName,
+      location: location.isEmpty ? 'Location not set' : location,
+      description: description.isEmpty ? 'No description yet.' : description,
+      photoUrl: photoUrl,
+      category: category.isEmpty ? 'General' : category,
+      raw: data,
+    );
+  }
+
+  static const unknown = _StoreProfile(
+    storeName: 'Store',
+    location: 'Location not available',
+    description: 'This seller has not set up a store profile yet.',
+    photoUrl: '',
+    category: 'General',
+    raw: {},
+  );
+}
 
 class StoreProfilePage extends StatelessWidget {
   final String sellerId;
@@ -20,45 +93,33 @@ class StoreProfilePage extends StatelessWidget {
     required this.sellerId,
   });
 
-  Future<Map<String, String>> _fetchSellerDetails() async {
-    Future<Map<String, String>?> tryCollection(String collectionName) async {
-      final doc = await FirebaseFirestore.instance
-          .collection(collectionName)
-          .doc(sellerId)
+  Future<_StoreProfile> _fetchFallbackProfile() async {
+    try {
+      final byOwner = await FirebaseFirestore.instance
+          .collection('stores')
+          .where('ownerId', isEqualTo: sellerId)
+          .limit(1)
           .get();
-      if (!doc.exists) return null;
-      final data = doc.data() ?? <String, dynamic>{};
-      final storeName =
-          (data['storeName'] ?? data['shopName'] ?? data['sellerName'] ?? data['name'] ?? 'Unknown Store')
-              .toString();
-      final location =
-          (data['kolej'] ?? data['college'] ?? data['location'] ?? data['address'] ?? 'Location not available')
-              .toString();
-      final description = (data['description'] ?? data['storeDescription'] ?? data['bio'] ?? 'No description available.')
-          .toString();
-      return {
-        'storeName': storeName,
-        'location': location,
-        'description': description,
-        'bannerUrl': (data['bannerUrl'] ?? data['coverImageUrl'] ?? data['imageUrl'] ?? '').toString(),
-      };
-    }
+      if (byOwner.docs.isNotEmpty) {
+        return _StoreProfile.fromMap(byOwner.docs.first.data());
+      }
 
-    final fromStores = await tryCollection('stores');
-    if (fromStores != null) return fromStores;
+      final userDoc =
+          await FirebaseFirestore.instance.collection('users').doc(sellerId).get();
+      if (userDoc.exists) {
+        final data = userDoc.data() ?? <String, dynamic>{};
+        return _StoreProfile.fromMap({
+          'storeName': data['fullName'] ?? data['name'],
+          'storeLocation': data['college'] ?? data['kolej'],
+          'description': data['bio'] ?? data['description'],
+          'storePhotoUrl': data['profileImage'] ?? data['photoUrl'],
+          'category': 'General',
+          'status': 'Approved',
+        });
+      }
+    } catch (_) {}
 
-    final fromUsers = await tryCollection('users');
-    if (fromUsers != null) return fromUsers;
-
-    final fromSellers = await tryCollection('sellers');
-    if (fromSellers != null) return fromSellers;
-
-    return {
-      'storeName': 'Unknown Store',
-      'location': 'Location not available',
-      'description': 'No description available.',
-      'bannerUrl': '',
-    };
+    return _StoreProfile.unknown;
   }
 
   Future<void> _openChatSeller(BuildContext context, String sellerName) async {
@@ -85,7 +146,8 @@ class StoreProfilePage extends StatelessWidget {
     }
 
     final chatsRef = FirebaseFirestore.instance.collection('chats');
-    final existing = await chatsRef.where('participants', arrayContains: currentUser.uid).get();
+    final existing =
+        await chatsRef.where('participants', arrayContains: currentUser.uid).get();
 
     String? chatId;
     for (final doc in existing.docs) {
@@ -209,7 +271,11 @@ class StoreProfilePage extends StatelessWidget {
                 ListTile(
                   leading: const Icon(Icons.share_rounded, color: kPrimary),
                   title: const Text('Copy Store Link'),
-                  subtitle: Text(storeName, maxLines: 1, overflow: TextOverflow.ellipsis),
+                  subtitle: Text(
+                    storeName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                   onTap: () async {
                     Navigator.pop(sheetContext);
                     await _copyStoreLink(context, storeName);
@@ -223,7 +289,9 @@ class StoreProfilePage extends StatelessWidget {
                     Navigator.pop(sheetContext);
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
-                        content: Text('Thanks. Reporting tools will be available soon.'),
+                        content: Text(
+                          'Thanks. Reporting tools will be available soon.',
+                        ),
                       ),
                     );
                   },
@@ -240,360 +308,794 @@ class StoreProfilePage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: kBg,
-      body: CustomScrollView(
-        slivers: [
-          // --- COLLAPSING BANNER (SliverAppBar) ---
-          SliverAppBar(
-            expandedHeight: 220.0,
-            pinned: true,
-            backgroundColor: kPrimary,
-            elevation: 0,
-            leading: IconButton(
+      body: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+        stream: FirebaseFirestore.instance
+            .collection('stores')
+            .doc(sellerId)
+            .snapshots(),
+        builder: (context, storeSnap) {
+          if (storeSnap.connectionState == ConnectionState.waiting) {
+            return const Center(
+              child: CircularProgressIndicator(color: kPrimary),
+            );
+          }
+
+          final storeData = storeSnap.data?.data();
+          if (storeData != null) {
+            return _buildBody(
+              context,
+              profile: _StoreProfile.fromMap(storeData),
+            );
+          }
+
+          return FutureBuilder<_StoreProfile>(
+            future: _fetchFallbackProfile(),
+            builder: (context, fallbackSnap) {
+              final profile = fallbackSnap.data ?? _StoreProfile.unknown;
+              if (fallbackSnap.connectionState == ConnectionState.waiting) {
+                return const Center(
+                  child: CircularProgressIndicator(color: kPrimary),
+                );
+              }
+              return _buildBody(context, profile: profile);
+            },
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildBody(BuildContext context, {required _StoreProfile profile}) {
+    return CustomScrollView(
+      slivers: [
+        SliverAppBar(
+          expandedHeight: 168,
+          pinned: true,
+          backgroundColor: kPrimary,
+          surfaceTintColor: Colors.transparent,
+          elevation: 0,
+          leading: IconButton(
+            icon: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.35),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.arrow_back_ios_new_rounded,
+                color: kWhite,
+                size: 18,
+              ),
+            ),
+            onPressed: () => Navigator.pop(context),
+          ),
+          actions: [
+            IconButton(
               icon: Container(
                 padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(color: Colors.black.withOpacity(0.3), shape: BoxShape.circle),
-                child: const Icon(Icons.arrow_back_ios_new_rounded, color: kWhite, size: 18),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.35),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.more_horiz_rounded, color: kWhite, size: 20),
               ),
-              onPressed: () => Navigator.pop(context),
+              onPressed: () => _showStoreActionsSheet(context, profile.storeName),
             ),
-            actions: const [SizedBox(width: 8)],
-            flexibleSpace: FlexibleSpaceBar(
-              background: Stack(
-                fit: StackFit.expand,
-                children: [
-                  // Store Banner Image
-                  Image.network(
-                    'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=800', 
-                    fit: BoxFit.cover,
+            const SizedBox(width: 8),
+          ],
+          flexibleSpace: FlexibleSpaceBar(
+            background: _StoreBanner(imageUrl: profile.photoUrl),
+          ),
+        ),
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _StoreHeaderCard(
+                  profile: profile,
+                  sellerId: sellerId,
+                  onChat: () => _openChatSeller(context, profile.storeName),
+                  onFollow: () => _toggleFollowStore(context),
+                  followStream: _isFollowingStoreStream(),
+                ),
+                const SizedBox(height: 28),
+                StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                    stream: FirebaseFirestore.instance
+                        .collection('products')
+                        .where('sellerId', isEqualTo: sellerId)
+                        .snapshots(),
+                    builder: (context, productSnap) {
+                      final approvedCount = (productSnap.data?.docs ?? [])
+                          .where((d) => productIsApproved(d.data()))
+                          .length;
+
+                      return Row(
+                        children: [
+                          Text(
+                            'Products',
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w800,
+                              color: kTextDark,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: kPrimary.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Text(
+                              '$approvedCount',
+                              style: const TextStyle(
+                                color: kPrimary,
+                                fontWeight: FontWeight.w800,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ),
+                        ],
+                      );
+                    },
                   ),
-                  // Dark gradient overlay for text readability
-                  Container(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [Colors.transparent, Colors.black.withOpacity(0.7)],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+                const SizedBox(height: 20),
+              ],
             ),
           ),
-
-          // --- STORE INFO SECTION ---
-          SliverToBoxAdapter(
-            child: FutureBuilder<Map<String, String>>(
-              future: _fetchSellerDetails(),
-              builder: (context, snapshot) {
-                final seller = snapshot.data ??
-                    {
-                      'storeName': 'Loading...',
-                      'location': 'Loading location...',
-                      'description': 'Loading description...',
-                      'bannerUrl': '',
-                    };
-                final storeName = seller['storeName'] ?? 'Store';
-                return Container(
-                  transform: Matrix4.translationValues(0.0, -20.0, 0.0), // Pull it up over the banner
-                  decoration: const BoxDecoration(
-                    color: kBg,
-                    borderRadius: BorderRadius.only(topLeft: Radius.circular(30), topRight: Radius.circular(30)),
+        ),
+        StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+          stream: FirebaseFirestore.instance
+              .collection('products')
+              .where('sellerId', isEqualTo: sellerId)
+              .snapshots(),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const SliverToBoxAdapter(
+                child: Padding(
+                  padding: EdgeInsets.all(32),
+                  child: Center(
+                    child: CircularProgressIndicator(color: kPrimary),
                   ),
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
-                    child: Column(
+                ),
+              );
+            }
+
+            if (snapshot.hasError) {
+              return SliverToBoxAdapter(
+                child: _EmptyState(
+                  icon: Icons.error_outline_rounded,
+                  title: 'Could not load products',
+                  subtitle: 'Pull down to refresh or try again later.',
+                ),
+              );
+            }
+
+            final docs = (snapshot.data?.docs ?? [])
+                .where((d) => productIsApproved(d.data()))
+                .toList()
+              ..sort((a, b) {
+                final nameA = (a.data()['name'] ?? '').toString().toLowerCase();
+                final nameB = (b.data()['name'] ?? '').toString().toLowerCase();
+                return nameA.compareTo(nameB);
+              });
+
+            if (docs.isEmpty) {
+              return SliverToBoxAdapter(
+                child: _EmptyState(
+                  icon: Icons.inventory_2_outlined,
+                  title: 'No products yet',
+                  subtitle:
+                      'This store has not listed any approved items. Check back soon.',
+                ),
+              );
+            }
+
+            return SliverPadding(
+              padding: const EdgeInsets.fromLTRB(20, 4, 20, 40),
+              sliver: SliverGrid(
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  mainAxisSpacing: 14,
+                  crossAxisSpacing: 14,
+                  childAspectRatio: 0.7,
+                ),
+                delegate: SliverChildBuilderDelegate(
+                  (context, index) {
+                    final doc = docs[index];
+                    return _ProductCard(
+                      productId: doc.id,
+                      product: doc.data(),
+                      sellerId: sellerId,
+                    );
+                  },
+                  childCount: docs.length,
+                ),
+              ),
+            );
+          },
+        ),
+      ],
+    );
+  }
+}
+
+class _StoreBanner extends StatelessWidget {
+  final String imageUrl;
+
+  const _StoreBanner({required this.imageUrl});
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        if (imageUrl.isNotEmpty)
+          Image.network(
+            imageUrl,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => const _BannerPlaceholder(),
+          )
+        else
+          const _BannerPlaceholder(),
+        Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                Colors.black.withValues(alpha: 0.1),
+                Colors.black.withValues(alpha: 0.55),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _BannerPlaceholder extends StatelessWidget {
+  const _BannerPlaceholder();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF5A7D4C), kPrimary],
+        ),
+      ),
+      child: Center(
+        child: Icon(
+          Icons.storefront_rounded,
+          size: 72,
+          color: kWhite.withValues(alpha: 0.35),
+        ),
+      ),
+    );
+  }
+}
+
+class _StoreHeaderCard extends StatelessWidget {
+  final _StoreProfile profile;
+  final String sellerId;
+  final VoidCallback onChat;
+  final VoidCallback onFollow;
+  final Stream<bool> followStream;
+
+  const _StoreHeaderCard({
+    required this.profile,
+    required this.sellerId,
+    required this.onChat,
+    required this.onFollow,
+    required this.followStream,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(20, 22, 20, 22),
+      decoration: BoxDecoration(
+        color: kWhite,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.grey.shade200),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 16,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              _StoreAvatar(imageUrl: profile.photoUrl),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      profile.storeName,
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w900,
+                        color: kTextDark,
+                        height: 1.25,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    storeName,
-                                    style: const TextStyle(
-                                      fontSize: 24,
-                                      fontWeight: FontWeight.w900,
-                                      color: Color(0xFF1A1A2E),
-                                      height: 1.2,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 6),
-                                  Row(
-                                    children: [
-                                      const Icon(Icons.location_on_rounded, color: kAccent, size: 16),
-                                      const SizedBox(width: 4),
-                                      Expanded(
-                                        child: Text(
-                                          seller['location'] ?? 'Location not available',
-                                          style: const TextStyle(
-                                            color: Colors.black54,
-                                            fontSize: 13,
-                                            fontWeight: FontWeight.w500,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 12),
-                                  Wrap(
-                                    spacing: 8,
-                                    runSpacing: 8,
-                                    children: [
-                                      _buildInfoChip(Icons.storefront_rounded, 'Campus Seller'),
-                                      _buildInfoChip(Icons.verified_rounded, 'Verified'),
-                                    ],
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
+                        const Padding(
+                          padding: EdgeInsets.only(top: 1),
+                          child: Icon(
+                            Icons.location_on_rounded,
+                            color: kAccent,
+                            size: 16,
+                          ),
                         ),
-                        const SizedBox(height: 20),
-                        Text(
-                          seller['description'] ?? 'No description available.',
-                          style: const TextStyle(color: Colors.black87, fontSize: 14, height: 1.5),
-                        ),
-                        const SizedBox(height: 16),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: ElevatedButton.icon(
-                                onPressed: () => _openChatSeller(
-                                  context,
-                                  storeName,
-                                ),
-                                icon: const Icon(Icons.chat_bubble_rounded, size: 18),
-                                label: const Text(
-                                  'Chat Seller',
-                                  style: TextStyle(fontWeight: FontWeight.w700),
-                                ),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: kPrimary,
-                                  foregroundColor: kWhite,
-                                  elevation: 0,
-                                  padding: const EdgeInsets.symmetric(vertical: 13),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(14),
-                                  ),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            StreamBuilder<bool>(
-                              stream: _isFollowingStoreStream(),
-                              builder: (context, followSnapshot) {
-                                final isFollowing = followSnapshot.data ?? false;
-                                return OutlinedButton(
-                                  onPressed: () => _toggleFollowStore(context),
-                                  style: OutlinedButton.styleFrom(
-                                    foregroundColor: isFollowing ? kAccent : kPrimary,
-                                    side: BorderSide(
-                                      color: (isFollowing ? kAccent : kPrimary).withOpacity(0.4),
-                                    ),
-                                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(14),
-                                    ),
-                                  ),
-                                  child: Icon(
-                                    isFollowing ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-                                  ),
-                                );
-                              },
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 10),
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: TextButton.icon(
-                            onPressed: () => _showStoreActionsSheet(context, storeName),
-                            icon: const Icon(Icons.more_horiz_rounded, size: 18),
-                            label: const Text('More Actions'),
-                            style: TextButton.styleFrom(
-                              foregroundColor: Colors.black54,
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            profile.location,
+                            style: TextStyle(
+                              color: Colors.grey.shade700,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                              height: 1.35,
                             ),
                           ),
                         ),
-                        const SizedBox(height: 24),
-                        const Divider(color: Colors.black12, height: 1),
-                        const SizedBox(height: 20),
-                        const Text(
-                          'All Items',
-                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1A1A2E)),
-                        ),
-                        const SizedBox(height: 16),
                       ],
                     ),
-                  ),
-                );
-              },
-            ),
+                  ],
+                ),
+              ),
+            ],
           ),
-
-          // --- PRODUCT GRID ---
+          const SizedBox(height: 18),
+          const Divider(height: 1, color: Color(0xFFEEEEEE)),
+          const SizedBox(height: 18),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _InfoChip(
+                icon: Icons.category_rounded,
+                label: profile.category,
+                color: kPrimary,
+              ),
+              if (profile.isVerified)
+                const _InfoChip(
+                  icon: Icons.verified_rounded,
+                  label: 'Verified',
+                  color: Color(0xFF2E7D32),
+                )
+              else if (profile.isPending)
+                const _InfoChip(
+                  icon: Icons.hourglass_top_rounded,
+                  label: 'Pending approval',
+                  color: Color(0xFFE65100),
+                ),
+            ],
+          ),
+          const SizedBox(height: 18),
           StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
             stream: FirebaseFirestore.instance
-                .collection('products')
-                .where('sellerId', isEqualTo: sellerId)
+                .collection('stores')
+                .doc(sellerId)
+                .collection('followers')
                 .snapshots(),
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const SliverToBoxAdapter(
-                  child: Padding(
-                    padding: EdgeInsets.all(24),
-                    child: Center(child: CircularProgressIndicator(color: kPrimary)),
-                  ),
-                );
-              }
-
-              if (snapshot.hasError) {
-                return const SliverToBoxAdapter(
-                  child: Padding(
-                    padding: EdgeInsets.all(24),
-                    child: Center(child: Text('Failed to load store items.')),
-                  ),
-                );
-              }
-
-              final docs = (snapshot.data?.docs ?? [])
-                  .where((d) => productIsApproved(d.data()))
-                  .toList();
-
-              if (docs.isEmpty) {
-                return const SliverToBoxAdapter(
-                  child: Padding(
-                    padding: EdgeInsets.fromLTRB(24, 8, 24, 40),
-                    child: Center(
-                      child: Text(
-                        'No products available yet.',
-                        style: TextStyle(color: Colors.black54),
+            builder: (context, followersSnap) {
+              final followerCount = followersSnap.data?.docs.length ?? 0;
+              return Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                decoration: BoxDecoration(
+                  color: kBg,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: _StatTile(
+                        label: 'Followers',
+                        value: '$followerCount',
                       ),
                     ),
-                  ),
-                );
-              }
-
-              return SliverPadding(
-                padding: const EdgeInsets.fromLTRB(20, 0, 20, 40),
-                sliver: SliverGrid(
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 2,
-                    mainAxisSpacing: 16,
-                    crossAxisSpacing: 16,
-                    childAspectRatio: 0.72,
-                  ),
-                  delegate: SliverChildBuilderDelegate(
-                    (context, index) {
-                      final doc = docs[index];
-                      return _buildProductCard(context, doc.data(), productId: doc.id);
-                    },
-                    childCount: docs.length,
-                  ),
+                    Container(
+                      width: 1,
+                      height: 32,
+                      color: Colors.grey.shade300,
+                    ),
+                    const Expanded(
+                      child: _StatTile(
+                        label: 'Campus',
+                        value: 'UiTM',
+                      ),
+                    ),
+                  ],
                 ),
               );
             },
           ),
+          const SizedBox(height: 18),
+          Text(
+            'About',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: Colors.grey.shade600,
+              letterSpacing: 0.3,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            profile.description,
+            style: TextStyle(
+              color: Colors.grey.shade800,
+              fontSize: 14,
+              height: 1.55,
+            ),
+          ),
+          const SizedBox(height: 22),
+          Row(
+            children: [
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: onChat,
+                  icon: const Icon(Icons.chat_bubble_rounded, size: 18),
+                  label: const Text(
+                    'Chat Seller',
+                    style: TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: kPrimary,
+                    foregroundColor: kWhite,
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              StreamBuilder<bool>(
+                stream: followStream,
+                builder: (context, followSnapshot) {
+                  final isFollowing = followSnapshot.data ?? false;
+                  return OutlinedButton(
+                    onPressed: onFollow,
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: isFollowing ? kAccent : kPrimary,
+                      side: BorderSide(
+                        color: (isFollowing ? kAccent : kPrimary)
+                            .withValues(alpha: 0.45),
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 14,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                    child: Icon(
+                      isFollowing
+                          ? Icons.favorite_rounded
+                          : Icons.favorite_border_rounded,
+                    ),
+                  );
+                },
+              ),
+            ],
+          ),
         ],
       ),
     );
   }
+}
 
-  // HELPER WIDGET: Product Card
-  Widget _buildInfoChip(IconData icon, String label) {
+class _StoreAvatar extends StatelessWidget {
+  final String imageUrl;
+
+  const _StoreAvatar({required this.imageUrl});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 72,
+      height: 72,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.grey.shade200, width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: imageUrl.isNotEmpty
+          ? Image.network(
+              imageUrl,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => const _AvatarFallback(),
+            )
+          : const _AvatarFallback(),
+    );
+  }
+}
+
+class _AvatarFallback extends StatelessWidget {
+  const _AvatarFallback();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: kPrimary.withValues(alpha: 0.12),
+      child: const Icon(Icons.storefront_rounded, color: kPrimary, size: 30),
+    );
+  }
+}
+
+class _StatTile extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _StatTile({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Text(
+          value,
+          style: const TextStyle(
+            fontSize: 17,
+            fontWeight: FontWeight.w800,
+            color: kTextDark,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            color: Colors.grey.shade600,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _InfoChip extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+
+  const _InfoChip({
+    required this.icon,
+    required this.label,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: kWhite,
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: kPrimary.withOpacity(0.15)),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 14, color: kPrimary),
+          Icon(icon, size: 14, color: color),
           const SizedBox(width: 5),
           Text(
             label,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: Color(0xFF1A1A2E),
+              fontWeight: FontWeight.w700,
+              color: color.withValues(alpha: 0.95),
             ),
           ),
         ],
       ),
     );
   }
+}
 
-  Widget _buildProductCard(BuildContext context, Map<String, dynamic> product, {required String productId}) {
+class _EmptyState extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+
+  const _EmptyState({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 8, 24, 48),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+        decoration: BoxDecoration(
+          color: kWhite,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: Colors.grey.shade200),
+        ),
+        child: Column(
+          children: [
+            Icon(icon, size: 48, color: kPrimary.withValues(alpha: 0.45)),
+            const SizedBox(height: 12),
+            Text(
+              title,
+              style: const TextStyle(
+                fontWeight: FontWeight.w800,
+                fontSize: 16,
+                color: kTextDark,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              subtitle,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Colors.grey.shade600,
+                fontSize: 13,
+                height: 1.4,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ProductCard extends StatelessWidget {
+  final String productId;
+  final Map<String, dynamic> product;
+  final String sellerId;
+
+  const _ProductCard({
+    required this.productId,
+    required this.product,
+    required this.sellerId,
+  });
+
+  @override
+  Widget build(BuildContext context) {
     final productName = (product['name'] ?? 'Unnamed Product').toString();
     final productPrice = product['price'] is num
         ? (product['price'] as num).toDouble()
         : double.tryParse((product['price'] ?? '').toString()) ?? 0.0;
-    final productImage = (product['imageUrl'] ?? product['image'] ?? '').toString();
-    final productDescription = (product['description'] ?? 'No description available.').toString();
-    final productSellerName = (product['sellerName'] ?? 'Unknown Seller').toString();
+    final productImage =
+        (product['imageUrl'] ?? product['image'] ?? '').toString();
+    final productDescription =
+        (product['description'] ?? 'No description available.').toString();
+    final productSellerName =
+        (product['sellerName'] ?? 'Unknown Seller').toString();
     final productVariations = (product['variations'] is List)
         ? (product['variations'] as List).whereType<String>().toList()
         : <String>[];
 
     return GestureDetector(
       onTap: () {
-        // --- BAWA DATA BARANG MASUK KE BILIK DETAIL ---
-        Navigator.push(context, MaterialPageRoute(builder: (_) => ProductDetailPage(
-          productId: productId,
-          name: productName,
-          price: productPrice,
-          imageUrl: productImage,
-          sellerId: sellerId,
-          sellerName: productSellerName,
-          description: productDescription,
-          variations: productVariations,
-        )));
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => ProductDetailPage(
+              productId: productId,
+              name: productName,
+              price: productPrice,
+              imageUrl: productImage,
+              sellerId: sellerId,
+              sellerName: productSellerName,
+              description: productDescription,
+              variations: productVariations,
+            ),
+          ),
+        );
       },
       child: Container(
         decoration: BoxDecoration(
           color: kWhite,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 12, offset: const Offset(0, 5))],
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.05),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
         ),
         clipBehavior: Clip.hardEdge,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Product Image
             Expanded(
               child: SizedBox(
                 width: double.infinity,
-                child: Image.network(
-                  productImage,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => Container(
-                    color: kPrimary.withOpacity(0.08),
-                    child: const Icon(Icons.image_not_supported_outlined, color: kPrimary, size: 34),
-                  ),
-                ),
+                child: productImage.isNotEmpty
+                    ? Image.network(
+                        productImage,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => _productImageFallback(),
+                      )
+                    : _productImageFallback(),
               ),
             ),
-            // Product Info
             Padding(
               padding: const EdgeInsets.all(12),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(productName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF1A1A2E)), maxLines: 2, overflow: TextOverflow.ellipsis),
+                  Text(
+                    productName,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13,
+                      color: kTextDark,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                   const SizedBox(height: 6),
-                  Text('RM ${productPrice.toStringAsFixed(2)}', style: const TextStyle(color: kAccent, fontWeight: FontWeight.w900, fontSize: 14)),
+                  Text(
+                    'RM ${productPrice.toStringAsFixed(2)}',
+                    style: const TextStyle(
+                      color: kAccent,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 14,
+                    ),
+                  ),
                 ],
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _productImageFallback() {
+    return Container(
+      color: kPrimary.withValues(alpha: 0.08),
+      child: const Center(
+        child: Icon(
+          Icons.image_not_supported_outlined,
+          color: kPrimary,
+          size: 32,
         ),
       ),
     );

@@ -51,6 +51,8 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
   double _productDeliveryFee = 0.0;
   bool _firebaseMetaApplied = false;
   bool _buyersCanPurchaseThisListing = true;
+  String _storePhotoUrl = '';
+  String _displayStoreName = '';
 
   bool get _isOwnStoreProduct {
     final currentUserId = FirebaseAuth.instance.currentUser?.uid ?? '';
@@ -65,7 +67,57 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     if (displayVariations.isNotEmpty) {
       selectedVariation = displayVariations.first;
     }
+    _displayStoreName = widget.sellerName;
     _loadProductMeta();
+    _loadStoreMeta();
+  }
+
+  Future<void> _loadStoreMeta() async {
+    final sellerId = widget.sellerId.trim();
+    if (sellerId.isEmpty) return;
+
+    try {
+      Map<String, dynamic>? data;
+
+      final storeDoc =
+          await FirebaseFirestore.instance.collection('stores').doc(sellerId).get();
+      if (storeDoc.exists) {
+        data = storeDoc.data();
+      } else {
+        final byOwner = await FirebaseFirestore.instance
+            .collection('stores')
+            .where('ownerId', isEqualTo: sellerId)
+            .limit(1)
+            .get();
+        if (byOwner.docs.isNotEmpty) {
+          data = byOwner.docs.first.data();
+        }
+      }
+
+      if (data == null || !mounted) return;
+
+      final photoUrl = (data['storePhotoUrl'] ??
+              data['bannerUrl'] ??
+              data['coverImageUrl'] ??
+              data['logoUrl'] ??
+              data['imageUrl'] ??
+              '')
+          .toString()
+          .trim();
+      final storeName = (data['storeName'] ??
+              data['shopName'] ??
+              data['sellerName'] ??
+              widget.sellerName)
+          .toString()
+          .trim();
+
+      setState(() {
+        _storePhotoUrl = photoUrl;
+        if (storeName.isNotEmpty) {
+          _displayStoreName = storeName;
+        }
+      });
+    } catch (_) {}
   }
 
   double get _selectedUnitPrice {
@@ -523,23 +575,16 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                         ),
                         child: Row(
                           children: [
-                            CircleAvatar(
-                              radius: 20,
-                              backgroundColor: kPrimary.withOpacity(0.12),
-                              child: Text(
-                                widget.sellerName.isNotEmpty
-                                    ? widget.sellerName[0].toUpperCase()
-                                    : 'S',
-                                style: const TextStyle(
-                                  color: kPrimary,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
+                            _StoreAvatarChip(
+                              imageUrl: _storePhotoUrl,
+                              storeName: _displayStoreName,
                             ),
                             const SizedBox(width: 12),
                             Expanded(
                               child: Text(
-                                widget.sellerName,
+                                _displayStoreName.isNotEmpty
+                                    ? _displayStoreName
+                                    : widget.sellerName,
                                 style: const TextStyle(
                                   fontSize: 15,
                                   fontWeight: FontWeight.w700,
@@ -882,5 +927,53 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
   void dispose() {
     _imagePageController.dispose();
     super.dispose();
+  }
+}
+
+class _StoreAvatarChip extends StatelessWidget {
+  final String imageUrl;
+  final String storeName;
+
+  const _StoreAvatarChip({
+    required this.imageUrl,
+    required this.storeName,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final initial = storeName.isNotEmpty
+        ? storeName[0].toUpperCase()
+        : 'S';
+
+    return Container(
+      width: 40,
+      height: 40,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: kPrimary.withValues(alpha: 0.12),
+        border: Border.all(color: Colors.grey.shade300),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: imageUrl.isNotEmpty
+          ? Image.network(
+              imageUrl,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => _initialFallback(initial),
+            )
+          : _initialFallback(initial),
+    );
+  }
+
+  Widget _initialFallback(String initial) {
+    return Center(
+      child: Text(
+        initial,
+        style: const TextStyle(
+          color: kPrimary,
+          fontWeight: FontWeight.bold,
+          fontSize: 16,
+        ),
+      ),
+    );
   }
 }

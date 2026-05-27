@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart'; // Wajib import untuk Login
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../main.dart'; // Make sure this path to HomeScreen is correct
 import 'register_page.dart';
 import '../admin_web/admin_dashboard_page.dart';
@@ -10,6 +11,10 @@ const kPrimaryLight = Color(0xFF799B61);
 const kAccent       = Color(0xFFF27B35); 
 const kBg           = Color(0xFFF5F7F2); 
 const kWhite        = Colors.white;
+
+const _kRememberMeKey = 'login_remember_me';
+const _kSavedLoginKey = 'login_saved_identifier';
+final _uitmEmailRegex = RegExp(r'^[a-z0-9._%+-]+@student\.uitm\.edu\.my$');
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -29,6 +34,120 @@ class _LoginPageState extends State<LoginPage> {
   /// Shown after user tries to log in but email is not verified yet.
   bool _showResendVerification = false;
 
+  @override
+  void initState() {
+    super.initState();
+    _loadRememberedCredentials();
+  }
+
+  /// Matric-only input is expanded to the UiTM student email used at registration.
+  String _resolveLoginEmail(String input) {
+    final trimmed = input.trim().toLowerCase();
+    if (trimmed.contains('@')) return trimmed;
+    return '$trimmed@student.uitm.edu.my';
+  }
+
+  Future<void> _loadRememberedCredentials() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final remember = prefs.getBool(_kRememberMeKey) ?? false;
+      final saved = prefs.getString(_kSavedLoginKey);
+      if (!mounted) return;
+      setState(() {
+        _rememberMe = remember;
+        if (remember && saved != null && saved.isNotEmpty) {
+          _emailController.text = saved;
+        }
+      });
+    } catch (_) {}
+  }
+
+  Future<void> _saveRememberedCredentials() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (_rememberMe) {
+        await prefs.setBool(_kRememberMeKey, true);
+        await prefs.setString(
+          _kSavedLoginKey,
+          _emailController.text.trim().toLowerCase(),
+        );
+      } else {
+        await prefs.setBool(_kRememberMeKey, false);
+        await prefs.remove(_kSavedLoginKey);
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _onRememberMeChanged(bool? value) async {
+    final checked = value ?? false;
+    setState(() => _rememberMe = checked);
+    if (!checked) {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setBool(_kRememberMeKey, false);
+        await prefs.remove(_kSavedLoginKey);
+      } catch (_) {}
+    }
+  }
+
+  Future<void> _forgotPassword() async {
+    final rawInput = _emailController.text.trim();
+    if (rawInput.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Enter your student ID or email first.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    final email = _resolveLoginEmail(rawInput);
+    final isAdmin = email == 'admin@umart.com';
+    if (!isAdmin && !_uitmEmailRegex.hasMatch(email)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Use your UiTM student email (matricno@student.uitm.edu.my).'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Password reset email sent. Check your Inbox or Spam/Junk folder.',
+            ),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } on FirebaseAuthException catch (e) {
+      String errorMsg = 'Unable to send password reset email.';
+      if (e.code == 'invalid-email') {
+        errorMsg = 'Please enter a valid email format.';
+      } else if (e.code == 'user-not-found') {
+        errorMsg = 'No account found for this email.';
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(errorMsg), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
   Future<void> _syncFirestoreEmailVerified(User user) async {
     try {
       await FirebaseFirestore.instance.collection('users').doc(user.uid).set(
@@ -41,7 +160,7 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   Future<void> _resendVerificationEmail() async {
-    final email = _emailController.text.trim().toLowerCase();
+    final email = _resolveLoginEmail(_emailController.text);
     final password = _passwordController.text.trim();
 
     if (email.isEmpty || password.isEmpty) {
@@ -110,7 +229,7 @@ class _LoginPageState extends State<LoginPage> {
 
   // --- Firebase Login Logic ---
   Future<void> _loginUser() async {
-    final email = _emailController.text.trim().toLowerCase();
+    final email = _resolveLoginEmail(_emailController.text);
     final password = _passwordController.text.trim();
 
     // 1. Check if fields are empty
@@ -174,6 +293,8 @@ class _LoginPageState extends State<LoginPage> {
           return;
         }
       }
+
+      await _saveRememberedCredentials();
 
       // Stop loading
       if (mounted) {
@@ -303,7 +424,7 @@ class _LoginPageState extends State<LoginPage> {
                             height: 24,
                             child: Checkbox(
                               value: _rememberMe,
-                              onChanged: (value) => setState(() => _rememberMe = value!),
+                              onChanged: _isLoading ? null : _onRememberMeChanged,
                               activeColor: kPrimary,
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
                               side: BorderSide(color: Colors.grey.shade400, width: 1.5),
@@ -315,7 +436,7 @@ class _LoginPageState extends State<LoginPage> {
                       ),
                       // Forgot Password Link
                       TextButton(
-                        onPressed: () {},
+                        onPressed: _isLoading ? null : _forgotPassword,
                         style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(50, 30)),
                         child: const Text('Forgot Password ?', style: TextStyle(color: kAccent, fontWeight: FontWeight.bold, fontSize: 13)),
                       ),
