@@ -21,6 +21,7 @@ bool get _supportsFirebasePush =>
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  // Do not show UI here; server should not target logged-out tokens after unregister.
 }
 
 class PushMessaging {
@@ -30,15 +31,24 @@ class PushMessaging {
   final FlutterLocalNotificationsPlugin _local = FlutterLocalNotificationsPlugin();
   bool _initialized = false;
 
+  /// Last account that registered this device's FCM token (used on logout).
+  String? _registeredUid;
+  String? _registeredToken;
+
   Future<void> ensureInitialized() async {
     if (!_supportsFirebasePush || _initialized) return;
     _initialized = true;
 
     await _setupLocalNotifications();
     await _requestPermissions();
-    await _persistCurrentToken();
+
+    // Only attach token if someone is already signed in (e.g. restored session).
+    if (FirebaseAuth.instance.currentUser != null) {
+      await _persistCurrentToken();
+    }
 
     FirebaseMessaging.instance.onTokenRefresh.listen((token) async {
+      if (FirebaseAuth.instance.currentUser == null) return;
       await _saveTokenToFirestore(token);
     });
 
@@ -49,7 +59,41 @@ class PushMessaging {
     if (!_supportsFirebasePush) return;
     if (user != null) {
       await _persistCurrentToken();
+    } else {
+      await unregisterCurrentDevice();
     }
+  }
+
+  /// Call before [FirebaseAuth.signOut] if you sign out outside [authStateChanges].
+  Future<void> unregisterCurrentDevice() async {
+    if (!_supportsFirebasePush) return;
+
+    final uid = _registeredUid ?? FirebaseAuth.instance.currentUser?.uid;
+    final token = _registeredToken ?? await FirebaseMessaging.instance.getToken();
+
+    if (uid != null && token != null && token.isNotEmpty) {
+      try {
+        await FirebaseFirestore.instance.collection('users').doc(uid).set(
+          {'fcmTokens': FieldValue.arrayRemove([token])},
+          SetOptions(merge: true),
+        );
+      } catch (e, st) {
+        debugPrint('PushMessaging: failed to remove FCM token: $e\n$st');
+      }
+    }
+
+    try {
+      await FirebaseMessaging.instance.deleteToken();
+    } catch (e, st) {
+      debugPrint('PushMessaging: deleteToken failed: $e\n$st');
+    }
+
+    try {
+      await _local.cancelAll();
+    } catch (_) {}
+
+    _registeredUid = null;
+    _registeredToken = null;
   }
 
   Future<void> _setupLocalNotifications() async {
@@ -101,12 +145,16 @@ class PushMessaging {
         {'fcmTokens': FieldValue.arrayUnion([token])},
         SetOptions(merge: true),
       );
+      _registeredUid = user.uid;
+      _registeredToken = token;
     } catch (e, st) {
       debugPrint('PushMessaging: failed to save FCM token: $e\n$st');
     }
   }
 
   Future<void> _onForegroundMessage(RemoteMessage message) async {
+    if (FirebaseAuth.instance.currentUser == null) return;
+
     final notification = message.notification;
     final title = notification?.title ?? message.data['title'] ?? 'UMart';
     final body = notification?.body ?? message.data['body'] ?? '';
