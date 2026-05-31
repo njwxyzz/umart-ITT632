@@ -6,7 +6,11 @@ class MapMarkerSmoother {
   MapMarkerSmoother(this.tickerProvider);
 
   final TickerProvider tickerProvider;
-  static const Duration _duration = Duration(milliseconds: 420);
+
+  /// Visual travel speed between GPS / Firestore updates (~36 km/h cap).
+  static const double _metresPerSecond = 10;
+  static const Duration _minDuration = Duration(milliseconds: 380);
+  static const Duration _maxDuration = Duration(milliseconds: 3200);
 
   AnimationController? _anim;
   LatLng? _start;
@@ -58,9 +62,17 @@ class MapMarkerSmoother {
     _stopAnim();
     _start = _current!;
     _end = target;
-    _anim = AnimationController(vsync: tickerProvider, duration: _duration)
+    final durationMs = (jumpM / _metresPerSecond * 1000).round();
+    final duration = Duration(
+      milliseconds: durationMs.clamp(
+        _minDuration.inMilliseconds,
+        _maxDuration.inMilliseconds,
+      ),
+    );
+    _anim = AnimationController(vsync: tickerProvider, duration: duration)
       ..addListener(() {
-        final t = Curves.easeOutCubic.transform(_anim!.value);
+        // Linear easing keeps motion continuous when updates arrive in a chain.
+        final t = Curves.linear.transform(_anim!.value);
         _current = LatLng(
           _start!.latitude + (_end!.latitude - _start!.latitude) * t,
           _start!.longitude + (_end!.longitude - _start!.longitude) * t,

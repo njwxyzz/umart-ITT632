@@ -131,7 +131,10 @@ class _SellerEditShopPageState extends State<SellerEditShopPage> {
 
       if (_newImageBytes != null) {
         final ref = FirebaseStorage.instance.ref().child('store_images/$uid.jpg');
-        final snap = await ref.putData(_newImageBytes!);
+        final snap = await ref.putData(
+          _newImageBytes!,
+          SettableMetadata(contentType: 'image/jpeg'),
+        );
         photoUrl = await snap.ref.getDownloadURL();
       }
 

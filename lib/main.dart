@@ -151,6 +151,8 @@ class _HomeScreenState extends State<HomeScreen> {
   List<_FoodItem> _foodItems = []; 
   List<_FoodItem> _prelovedItems = []; 
   List<_FoodItem> _printingItems = []; 
+  List<_FoodItem> _gadgetItems = [];
+  List<_FoodItem> _booksItems = [];
   List<_FoodItem> _otherItems = []; 
 
   bool _isLoadingProducts = true;
@@ -222,6 +224,8 @@ class _HomeScreenState extends State<HomeScreen> {
       List<_FoodItem> tempFood = [];
       List<_FoodItem> tempPreloved = [];
       List<_FoodItem> tempPrinting = [];
+      List<_FoodItem> tempGadget = [];
+      List<_FoodItem> tempBooks = [];
       List<_FoodItem> tempOther = [];
       final missingLocationSellerIds = <String>{};
 
@@ -287,8 +291,12 @@ class _HomeScreenState extends State<HomeScreen> {
           tempPreloved.add(item);
         } else if (productCategory == 'Printing Services') {
           tempPrinting.add(item);
+        } else if (productCategory == 'Gadgets & Accessories') {
+          tempGadget.add(item);
+        } else if (productCategory == 'Books & Notes') {
+          tempBooks.add(item);
         } else {
-          tempOther.add(item); 
+          tempOther.add(item);
         }
       }
 
@@ -298,6 +306,8 @@ class _HomeScreenState extends State<HomeScreen> {
           _foodItems = tempFood;
           _prelovedItems = tempPreloved;
           _printingItems = tempPrinting;
+          _gadgetItems = tempGadget;
+          _booksItems = tempBooks;
           _otherItems = tempOther;
           _isLoadingProducts = false;
           _productsLoadFailed = false;
@@ -477,6 +487,8 @@ class _HomeScreenState extends State<HomeScreen> {
                     foodItems: _foodItems,
                     prelovedItems: _prelovedItems,
                     printingItems: _printingItems,
+                    gadgetItems: _gadgetItems,
+                    booksItems: _booksItems,
                     otherItems: _otherItems,
                   )
                 ),
@@ -856,14 +868,20 @@ class _BentoGrid extends StatelessWidget {
   final List<_FoodItem> foodItems; 
   final List<_FoodItem> prelovedItems; 
   final List<_FoodItem> printingItems; 
+  final List<_FoodItem> gadgetItems;
+  final List<_FoodItem> booksItems;
   final List<_FoodItem> otherItems; 
 
   const _BentoGrid({
     required this.foodItems,
     required this.prelovedItems,
     required this.printingItems,
+    required this.gadgetItems,
+    required this.booksItems,
     required this.otherItems,
   });
+
+  List<_FoodItem> get _parcelItems => [...booksItems, ...otherItems];
 
   void _showMoreCategories(BuildContext context) {
     showModalBottomSheet(
@@ -890,7 +908,7 @@ class _BentoGrid extends StatelessWidget {
                 trailing: const Icon(Icons.chevron_right_rounded),
                 onTap: () {
                    Navigator.pop(context);
-                   Navigator.push(context, MaterialPageRoute(builder: (context) => const AllProductPage(title: 'Electronics', items: [])));
+                   Navigator.push(context, MaterialPageRoute(builder: (context) => AllProductPage(title: 'Electronics & Gadgets', items: gadgetItems)));
                 },
               ),
               ListTile(
@@ -899,7 +917,7 @@ class _BentoGrid extends StatelessWidget {
                 trailing: const Icon(Icons.chevron_right_rounded),
                 onTap: () {
                    Navigator.pop(context);
-                   Navigator.push(context, MaterialPageRoute(builder: (context) => const AllProductPage(title: 'Services', items: [])));
+                   Navigator.push(context, MaterialPageRoute(builder: (context) => AllProductPage(title: 'Design Services', items: printingItems)));
                 },
               ),
               ListTile(
@@ -908,7 +926,7 @@ class _BentoGrid extends StatelessWidget {
                 trailing: const Icon(Icons.chevron_right_rounded),
                 onTap: () {
                    Navigator.pop(context);
-                   Navigator.push(context, MaterialPageRoute(builder: (context) => AllProductPage(title: 'Others', items: otherItems))); 
+                   Navigator.push(context, MaterialPageRoute(builder: (context) => AllProductPage(title: 'Others / Miscellaneous', items: otherItems))); 
                 },
               ),
               const SizedBox(height: 20),
@@ -950,12 +968,12 @@ class _BentoGrid extends StatelessWidget {
                   children: [
                     _BentoCard(
                       bgColor: Colors.orange.shade50,
-                      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => AllProductPage(title: 'Parcel & more', items: otherItems))),
+                      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => AllProductPage(title: 'Parcel & more', items: _parcelItems))),
                       child: Row(
                         children: [
                           Container(width: 48, height: 48, decoration: BoxDecoration(color: kWhite, borderRadius: BorderRadius.circular(12)), child: _iconAsset('assets/icons/parcel_icons.png', radius: 12)),
                           const SizedBox(width: 10),
-                          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const Text('Parcel & more', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)), Text('Books, gadgets & more', style: TextStyle(color: Colors.grey[600], fontSize: 11))])),
+                          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const Text('Parcel & more', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)), Text('Books & more', style: TextStyle(color: Colors.grey[600], fontSize: 11))])),
                         ],
                       ),
                     ),
@@ -1227,6 +1245,8 @@ class _FoodCarousel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (items.isEmpty) return const SizedBox.shrink();
+
     return Column(
       children: [
         Padding(
@@ -1239,13 +1259,20 @@ class _FoodCarousel extends StatelessWidget {
             ],
           ),
         ),
-        SizedBox(
-          height: 235,
-          child: ListView.builder(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 12),
+        const SizedBox(height: 4),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
             itemCount: items.length,
-            itemBuilder: (context, index) => Padding(padding: const EdgeInsets.symmetric(horizontal: 4), child: _FoodCard(item: items[index])),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 3,
+              crossAxisSpacing: 8,
+              mainAxisSpacing: 8,
+              childAspectRatio: 0.58,
+            ),
+            itemBuilder: (context, index) => _FoodCard(item: items[index]),
           ),
         ),
       ],
@@ -1463,8 +1490,7 @@ class _FoodCard extends StatelessWidget {
           },
         );
       },
-      child: Container( 
-        width: 170,
+      child: Container(
         decoration: BoxDecoration(color: kWhite, borderRadius: BorderRadius.circular(16), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 10, offset: const Offset(0, 3))]),
         clipBehavior: Clip.hardEdge,
         child: Stack(
@@ -1474,72 +1500,70 @@ class _FoodCard extends StatelessWidget {
               children: [
                 Stack(
                   children: [
-                    SizedBox(height: 120, width: double.infinity, child: Image.network(item.imageUrl, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Container(color: Colors.grey[200], child: const Icon(Icons.shopping_bag_outlined, color: Colors.grey)))),
-                    if (item.badge != null) Positioned(top: 8, left: 8, child: Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: item.badgeColor, borderRadius: BorderRadius.circular(8)), child: Text(item.badge!, style: const TextStyle(color: kWhite, fontSize: 10, fontWeight: FontWeight.w700)))),
+                    AspectRatio(
+                      aspectRatio: 1,
+                      child: Image.network(
+                        item.imageUrl,
+                        fit: BoxFit.cover,
+                        width: double.infinity,
+                        errorBuilder: (_, __, ___) => Container(
+                          color: Colors.grey[200],
+                          child: const Icon(Icons.shopping_bag_outlined, color: Colors.grey),
+                        ),
+                      ),
+                    ),
+                    if (item.badge != null)
+                      Positioned(
+                        top: 6,
+                        left: 6,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                          decoration: BoxDecoration(color: item.badgeColor, borderRadius: BorderRadius.circular(8)),
+                          child: Text(item.badge!, style: const TextStyle(color: kWhite, fontSize: 9, fontWeight: FontWeight.w700)),
+                        ),
+                      ),
                   ],
                 ),
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+                  padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(item.label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12), maxLines: 2, overflow: TextOverflow.ellipsis),
-                      const SizedBox(height: 4),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            'RM${item.price.toStringAsFixed(2)}',
-                            style: const TextStyle(
-                              color: kAccent,
-                              fontWeight: FontWeight.w700,
-                              fontSize: 12,
-                            ),
-                          ),
-                          Text(
-                            '${item.soldCount} sold',
-                            style: TextStyle(
-                              color: Colors.grey[700],
-                              fontSize: 10,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
+                      Text(item.label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11), maxLines: 2, overflow: TextOverflow.ellipsis),
+                      const SizedBox(height: 3),
+                      Text(
+                        'RM${item.price.toStringAsFixed(2)}',
+                        style: const TextStyle(
+                          color: kAccent,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 11,
+                        ),
                       ),
-                      const SizedBox(height: 4),
-                      
+                      const SizedBox(height: 2),
+                      Text(
+                        '${item.soldCount} sold',
+                        style: TextStyle(
+                          color: Colors.grey[700],
+                          fontSize: 9,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                       GestureDetector(
                         onTap: () {
                           Navigator.push(context, MaterialPageRoute(builder: (_) => StoreProfilePage(sellerId: item.sellerId)));
                         },
-                        behavior: HitTestBehavior.opaque, 
+                        behavior: HitTestBehavior.opaque,
                         child: Padding(
-                          padding: const EdgeInsets.fromLTRB(0, 4, 38, 4), 
+                          padding: const EdgeInsets.only(top: 4, right: 28),
                           child: Row(
                             children: [
-                              Icon(Icons.storefront_rounded, size: 12, color: Colors.grey[500]), 
-                              const SizedBox(width: 4), 
-                              Expanded(child: Text(item.sellerName, style: TextStyle(color: Colors.grey[500], fontSize: 10, fontWeight: FontWeight.w500), maxLines: 1, overflow: TextOverflow.ellipsis))
-                            ]
-                          ),
-                        ),
-                      ),
-                      if (item.storeLocation.isNotEmpty)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 2, right: 38),
-                          child: Row(
-                            children: [
-                              Icon(Icons.location_on_rounded, size: 12, color: Colors.grey[500]),
-                              const SizedBox(width: 4),
+                              Icon(Icons.storefront_rounded, size: 10, color: Colors.grey[500]),
+                              const SizedBox(width: 3),
                               Expanded(
                                 child: Text(
-                                  item.storeLocation,
-                                  style: TextStyle(
-                                    color: Colors.grey[500],
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w500,
-                                  ),
+                                  item.sellerName,
+                                  style: TextStyle(color: Colors.grey[500], fontSize: 9, fontWeight: FontWeight.w500),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                 ),
@@ -1547,13 +1571,22 @@ class _FoodCard extends StatelessWidget {
                             ],
                           ),
                         ),
-                      
+                      ),
                     ],
                   ),
                 ),
               ],
             ),
-            Positioned(bottom: 10, right: 10, child: Container(width: 30, height: 30, decoration: const BoxDecoration(color: kPrimary, shape: BoxShape.circle), child: const Icon(Icons.add, color: kWhite, size: 18))),
+            Positioned(
+              bottom: 8,
+              right: 8,
+              child: Container(
+                width: 26,
+                height: 26,
+                decoration: const BoxDecoration(color: kPrimary, shape: BoxShape.circle),
+                child: const Icon(Icons.add, color: kWhite, size: 16),
+              ),
+            ),
           ],
         ),
       ),

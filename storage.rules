@@ -1,0 +1,80 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isSeller() {
+      return isSignedIn() &&
+        firestore.exists(/databases/(default)/documents/stores/$(request.auth.uid));
+    }
+
+    function isChatParticipant(chatId) {
+      return isSignedIn() &&
+        request.auth.uid in firestore.get(/databases/(default)/documents/chats/$(chatId)).data.participants;
+    }
+
+    function isValidImage() {
+      return request.resource.size < 5 * 1024 * 1024 &&
+        (
+          request.resource.contentType == null ||
+          request.resource.contentType.matches('image/.*') ||
+          request.resource.contentType == 'application/octet-stream'
+        );
+    }
+
+    // Product images — sellers upload, everyone can view
+    match /products/{fileName} {
+      allow read: if true;
+      allow create, update: if isSeller() && isValidImage();
+      allow delete: if isSeller();
+    }
+
+    // Seller shop logo — path: store_images/{uid}.jpg
+    match /store_images/{fileName} {
+      allow read: if true;
+      allow create, update: if isSignedIn() &&
+        fileName == request.auth.uid + '.jpg' &&
+        isValidImage();
+      allow delete: if isSignedIn() && fileName == request.auth.uid + '.jpg';
+    }
+
+    // Seller payment QR — path: store_payment_qr/{uid}.jpg
+    match /store_payment_qr/{fileName} {
+      allow read: if true;
+      allow create, update: if isSignedIn() &&
+        fileName == request.auth.uid + '.jpg' &&
+        isValidImage();
+      allow delete: if isSignedIn() && fileName == request.auth.uid + '.jpg';
+    }
+
+    // User profile photo — path: profile_images/{uid}.jpg
+    match /profile_images/{fileName} {
+      allow read: if true;
+      allow create, update: if isSignedIn() &&
+        fileName == request.auth.uid + '.jpg' &&
+        isValidImage();
+      allow delete: if isSignedIn() && fileName == request.auth.uid + '.jpg';
+    }
+
+    // Buyer payment receipt — path: payment_receipts/{uid}/{file}.jpg
+    match /payment_receipts/{userId}/{fileName} {
+      allow read: if isSignedIn();
+      allow create, update: if isSignedIn() &&
+        userId == request.auth.uid &&
+        isValidImage();
+      allow delete: if isSignedIn() && userId == request.auth.uid;
+    }
+
+    // Chat attachments — path: chat_attachments/{chatId}/{file}
+    match /chat_attachments/{chatId}/{fileName} {
+      allow read: if isChatParticipant(chatId);
+      allow create, update: if isChatParticipant(chatId) &&
+        request.resource.size < 10 * 1024 * 1024;
+      allow delete: if isChatParticipant(chatId);
+    }
+  }
+}

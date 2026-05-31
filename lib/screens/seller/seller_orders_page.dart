@@ -134,6 +134,35 @@ class _SellerOrdersPageState extends State<SellerOrdersPage> {
     }
   }
 
+  bool _isActiveOrderStatus(String status) => status == 'Processing';
+
+  Timestamp? _orderCreatedAt(Map<String, dynamic> data) {
+    final raw = data['createdAt'];
+    return raw is Timestamp ? raw : null;
+  }
+
+  int _compareOrdersByRecency(QueryDocumentSnapshot a, QueryDocumentSnapshot b) {
+    final timeA = _orderCreatedAt(a.data() as Map<String, dynamic>);
+    final timeB = _orderCreatedAt(b.data() as Map<String, dynamic>);
+    if (timeA != null && timeB != null) return timeB.compareTo(timeA);
+    if (timeA != null) return -1;
+    if (timeB != null) return 1;
+    return 0;
+  }
+
+  void _sortOrders(List<QueryDocumentSnapshot> orders, {bool activeFirst = false}) {
+    orders.sort((a, b) {
+      if (activeFirst) {
+        final statusA = ((a.data() as Map<String, dynamic>)['status'] ?? '').toString();
+        final statusB = ((b.data() as Map<String, dynamic>)['status'] ?? '').toString();
+        final rankA = _isActiveOrderStatus(statusA) ? 0 : 1;
+        final rankB = _isActiveOrderStatus(statusB) ? 0 : 1;
+        if (rankA != rankB) return rankA.compareTo(rankB);
+      }
+      return _compareOrdersByRecency(a, b);
+    });
+  }
+
   List<MapEntry<String, int>> _parseOrderItems(String rawItems) {
     final parsed = <MapEntry<String, int>>[];
     final parts = rawItems
@@ -352,6 +381,9 @@ class _SellerOrdersPageState extends State<SellerOrdersPage> {
                 return data['status'] != 'Pending';
               }).toList();
 
+              _sortOrders(pendingOrders);
+              _sortOrders(activeAndPastOrders, activeFirst: true);
+
               return TabBarView(
                 children: [
                   // --- TAB 1: PENDING ORDERS ---
@@ -403,7 +435,6 @@ class _SellerOrdersPageState extends State<SellerOrdersPage> {
               orderId: orderId,
               buyerName: order['buyerName'] ?? 'Student',
               address: order['buyerLocation'] ?? 'UiTM Campus',
-              phone: order['buyerPhone'] ?? '',
               buyerLat: (order['buyerLat'] as num?)?.toDouble() ?? 6.4497,
               buyerLng: (order['buyerLng'] as num?)?.toDouble() ?? 100.2704,
             ),
@@ -425,7 +456,29 @@ class _SellerOrdersPageState extends State<SellerOrdersPage> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(displayId, style: const TextStyle(fontWeight: FontWeight.w800, color: AppColors.primary, fontSize: 14)),
+              Row(
+                children: [
+                  Text(displayId, style: const TextStyle(fontWeight: FontWeight.w800, color: AppColors.primary, fontSize: 14)),
+                  if (status == 'Processing') ...[
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: AppColors.accent.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Text(
+                        'Active',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.accent,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
               Text(
                 _formatOrderCreatedAt(order['createdAt'], context),
                 style: TextStyle(color: Colors.grey.shade500, fontSize: 11, fontWeight: FontWeight.w500),

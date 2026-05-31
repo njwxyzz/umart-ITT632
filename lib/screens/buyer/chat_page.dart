@@ -619,12 +619,6 @@ class _ChatPageState extends State<ChatPage> {
             fontSize: 18,
           ),
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.more_vert_rounded, color: Color(0xFF1A1A2E), size: 22),
-            onPressed: () {},
-          ),
-        ],
       ),
       body: Container(
         decoration: const BoxDecoration(
@@ -718,16 +712,6 @@ class _ChatPageState extends State<ChatPage> {
                               ],
                             ),
                           ],
-                        ),
-                      ),
-                      Container(
-                        decoration: BoxDecoration(
-                          color: kPrimary.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: IconButton(
-                          icon: const Icon(Icons.call_rounded, color: kPrimary, size: 19),
-                          onPressed: () {},
                         ),
                       ),
                     ],

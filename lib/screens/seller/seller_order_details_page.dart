@@ -6,6 +6,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'package:umart_app/utils/map_marker_smoother.dart';
+import 'package:umart_app/utils/mock_location_stream.dart';
 // ─── Colors ───────────────────────────────────────────────────────────────────
 const kPrimary = Color(0xFF4C6B3F);
 const kAccent  = Color(0xFFF27B35);
@@ -17,7 +18,6 @@ class SellerOrderDetailsPage extends StatefulWidget {
   final String orderId;
   final String buyerName;
   final String address;
-  final String phone;
   final double buyerLat;   // pass buyer's real lat from order doc
   final double buyerLng;   // pass buyer's real lng from order doc
 
@@ -26,7 +26,6 @@ class SellerOrderDetailsPage extends StatefulWidget {
     required this.orderId,
     required this.buyerName,
     required this.address,
-    required this.phone,
     required this.buyerLat,
     required this.buyerLng,
   });
@@ -331,17 +330,17 @@ class _SellerOrderDetailsPageState extends State<SellerOrderDetailsPage>
       _isDemoMoving = true;
     });
 
-    // Small loop around buyer location for testing live movement.
-    final path = <LatLng>[
+    final waypoints = <LatLng>[
       LatLng(_buyerRawLatLng.latitude + 0.0009, _buyerRawLatLng.longitude - 0.0007),
       LatLng(_buyerRawLatLng.latitude + 0.0005, _buyerRawLatLng.longitude - 0.0002),
       LatLng(_buyerRawLatLng.latitude + 0.0002, _buyerRawLatLng.longitude + 0.0002),
       LatLng(_buyerRawLatLng.latitude - 0.0001, _buyerRawLatLng.longitude + 0.0004),
       LatLng(_buyerRawLatLng.latitude + 0.0003, _buyerRawLatLng.longitude + 0.0001),
       LatLng(_buyerRawLatLng.latitude + 0.0007, _buyerRawLatLng.longitude - 0.0004),
-      LatLng(_buyerRawLatLng.latitude, _buyerRawLatLng.longitude), // simulate arrival
+      LatLng(_buyerRawLatLng.latitude, _buyerRawLatLng.longitude),
     ];
-    int i = 0;
+    final path = MockLocationStream.densifyPath(waypoints);
+    var idx = 0;
 
     Future<void> pushPoint(LatLng p) async {
       final metresToBuyer = Geolocator.distanceBetween(
@@ -369,13 +368,18 @@ class _SellerOrderDetailsPageState extends State<SellerOrderDetailsPage>
     }
 
     await pushPoint(path.first);
-    _demoMoveTimer = Timer.periodic(const Duration(seconds: 3), (timer) async {
+    _demoMoveTimer = Timer.periodic(MockLocationStream.stepInterval, (timer) async {
       if (!_isDemoMoving) {
         timer.cancel();
         return;
       }
-      i = (i + 1) % path.length;
-      await pushPoint(path[i]);
+      if (idx >= path.length - 1) {
+        await pushPoint(path.last);
+        timer.cancel();
+        return;
+      }
+      idx++;
+      await pushPoint(path[idx]);
     });
   }
 
@@ -608,7 +612,7 @@ class _SellerOrderDetailsPageState extends State<SellerOrderDetailsPage>
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Order ${widget.orderId}',
+                    '#UM-${widget.orderId.substring(0, widget.orderId.length < 5 ? widget.orderId.length : 5).toUpperCase()}',
                     style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: Color(0xFF1A1A2E)),
                   ),
                   const SizedBox(height: 16),
@@ -642,10 +646,6 @@ class _SellerOrderDetailsPageState extends State<SellerOrderDetailsPage>
                               ),
                             ],
                           ),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.call, color: kGreen),
-                          onPressed: () {},
                         ),
                       ],
                     ),
