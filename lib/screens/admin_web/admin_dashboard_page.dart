@@ -6,6 +6,7 @@ import 'dart:math';
 
 import '../auth/login_page.dart';
 import '../../utils/product_status.dart';
+import '../../utils/store_status.dart';
 // --- Color Constants ---
 const kPrimary = Color(0xFF4C6B3F); 
 const kBg = Color(0xFFF5F7F2); 
@@ -1693,6 +1694,13 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
       }
       await storeRef.update(update);
 
+      if (newStatus == 'Approved') {
+        await FirebaseFirestore.instance.collection('users').doc(ownerId).set(
+          {'role': 'seller'},
+          SetOptions(merge: true),
+        );
+      }
+
       final notif = FirebaseFirestore.instance.collection('users').doc(ownerId).collection('notifications');
       if (newStatus == 'Approved') {
         await notif.add({
@@ -2269,6 +2277,20 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator(color: kPrimary));
         }
+
+        if (snapshot.hasError) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Text(
+                'Could not load stores: ${snapshot.error}\n\n'
+                'If this is a permission error, allow admin@umart.com to read/update the stores collection in Firestore rules.',
+                style: const TextStyle(color: Colors.red),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          );
+        }
         
         if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
           return const Center(child: Text('No store applications yet.', style: TextStyle(color: Colors.grey)));
@@ -2281,12 +2303,12 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
             storeData['storeName'],
             storeData['ownerName'],
             storeData['sellerName'],
-            storeData['status'],
+            storeStatusLabel(storeData),
           ].join(' ').toLowerCase();
           return content.contains(_searchQuery);
         }).where((doc) {
           final data = doc.data() as Map<String, dynamic>;
-          final status = (data['status'] ?? 'Pending').toString();
+          final status = storeStatusLabel(data);
           if (_statusFilter != 'All' && status != _statusFilter) return false;
           return _matchesDateFilter(data);
         }).toList();
@@ -2298,8 +2320,8 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
           String right;
           switch (_storeSortBy) {
             case 'status':
-              left = (dataA['status'] ?? '').toString().toLowerCase();
-              right = (dataB['status'] ?? '').toString().toLowerCase();
+              left = storeStatusLabel(dataA).toLowerCase();
+              right = storeStatusLabel(dataB).toLowerCase();
               break;
             default:
               left = (dataA['storeName'] ?? '').toString().toLowerCase();
@@ -2314,6 +2336,8 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
           );
         }
 
+        final pendingCount = stores.where((d) => storeIsPending(d.data() as Map<String, dynamic>?)).length;
+
         final maxPage = ((stores.length - 1) / _pageSize).floor();
         if (_storePage > maxPage) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -2324,6 +2348,35 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
 
         return Column(
           children: [
+            if (pendingCount > 0)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.shade50,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.orange.shade200),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.storefront_rounded, color: Colors.orange.shade800, size: 20),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          '$pendingCount seller application${pendingCount == 1 ? '' : 's'} waiting for approval',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: Colors.orange.shade900,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             Expanded(
               child: SingleChildScrollView(
                 child: SizedBox(
@@ -2362,7 +2415,9 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                       final displayIndex = (_storePage * _pageSize) + index + 1;
                 
                       String storeName = storeData['storeName'] ?? 'Unnamed Store';
-                      String status = storeData['status'] ?? 'Pending'; 
+                      final status = storeStatusLabel(storeData);
+                      final ownerId = storeData['ownerId']?.toString();
+                      final ownerFromStore = (storeData['ownerName'] ?? storeData['sellerName'] ?? '').toString().trim();
 
                       return DataRow(
                         cells: [
@@ -2370,42 +2425,54 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                           DataCell(Text(storeName, style: const TextStyle(fontWeight: FontWeight.w600))),
                     
                           DataCell(
-                            storeData['ownerId'] != null 
-                              ? FutureBuilder<DocumentSnapshot>(
-                                  future: FirebaseFirestore.instance.collection('users').doc(storeData['ownerId']).get(),
-                                  builder: (context, userSnapshot) {
-                                    if (userSnapshot.connectionState == ConnectionState.waiting) {
-                                      return const Text('Loading...', style: TextStyle(color: Colors.grey, fontSize: 12, fontStyle: FontStyle.italic));
-                                    }
-                                    if (userSnapshot.hasData && userSnapshot.data!.exists) {
-                                      var userData = userSnapshot.data!.data() as Map<String, dynamic>;
-                                      String realName = userData['name'] ?? userData['username'] ?? userData['fullName'] ?? 'No Name';
-                                      return Text(realName);
-                                    }
-                                    return const Text('User Deleted', style: TextStyle(color: Colors.red, fontSize: 12));
-                                  },
-                                )
-                              : const Text('No ID', style: TextStyle(color: Colors.grey)),
+                            ownerFromStore.isNotEmpty
+                                ? Text(ownerFromStore)
+                                : ownerId != null && ownerId.isNotEmpty
+                                    ? FutureBuilder<DocumentSnapshot>(
+                                        future: FirebaseFirestore.instance.collection('users').doc(ownerId).get(),
+                                        builder: (context, userSnapshot) {
+                                          if (userSnapshot.connectionState == ConnectionState.waiting) {
+                                            return const Text(
+                                              'Loading...',
+                                              style: TextStyle(color: Colors.grey, fontSize: 12, fontStyle: FontStyle.italic),
+                                            );
+                                          }
+                                          if (userSnapshot.hasData && userSnapshot.data!.exists) {
+                                            final userData = userSnapshot.data!.data() as Map<String, dynamic>;
+                                            final realName = userData['fullName'] ??
+                                                userData['name'] ??
+                                                userData['username'] ??
+                                                'No Name';
+                                            return Text(realName.toString());
+                                          }
+                                          return const Text('User Deleted', style: TextStyle(color: Colors.red, fontSize: 12));
+                                        },
+                                      )
+                                    : const Text('No ID', style: TextStyle(color: Colors.grey)),
                           ),
 
                           DataCell(
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                               decoration: BoxDecoration(
-                                color: status == 'Approved' ? Colors.green.shade50 
-                                     : status == 'Rejected' ? Colors.red.shade50 
-                                     : Colors.orange.shade50,
+                                color: storeIsApproved(storeData)
+                                    ? Colors.green.shade50
+                                    : storeIsRejected(storeData)
+                                        ? Colors.red.shade50
+                                        : Colors.orange.shade50,
                                 borderRadius: BorderRadius.circular(20),
                               ),
                               child: Text(
-                                status.toUpperCase(), 
+                                status.toUpperCase(),
                                 style: TextStyle(
-                                  fontSize: 12, 
+                                  fontSize: 12,
                                   fontWeight: FontWeight.bold,
-                                  color: status == 'Approved' ? Colors.green.shade700 
-                                       : status == 'Rejected' ? Colors.red.shade700 
-                                       : Colors.orange.shade700
-                                )
+                                  color: storeIsApproved(storeData)
+                                      ? Colors.green.shade700
+                                      : storeIsRejected(storeData)
+                                          ? Colors.red.shade700
+                                          : Colors.orange.shade700,
+                                ),
                               ),
                             )
                           ),
@@ -2413,7 +2480,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                             Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                if (status == 'Pending') ...[
+                                if (storeIsPending(storeData)) ...[
                                   IconButton(
                                     icon: const Icon(Icons.check_circle_outline_rounded, color: Colors.green),
                                     tooltip: 'Approve Store',
@@ -2428,7 +2495,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                                   Padding(
                                     padding: const EdgeInsets.only(right: 4),
                                     child: Text(
-                                      status == 'Approved' ? 'Done' : 'Closed',
+                                      storeIsApproved(storeData) ? 'Done' : 'Closed',
                                       style: TextStyle(color: Colors.grey.shade400, fontStyle: FontStyle.italic),
                                     ),
                                   ),
@@ -2438,7 +2505,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                                   onPressed: () => _deleteStore(
                                     docId,
                                     storeName,
-                                    storeData['ownerId']?.toString(),
+                                    ownerId,
                                   ),
                                 ),
                               ],
@@ -2730,109 +2797,126 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
         return Column(
           children: [
             Expanded(
-              child: SingleChildScrollView(
-                child: SizedBox(
-                  width: double.infinity,
-                  child: DataTable(
-                    headingRowColor: WidgetStateProperty.all(kBg),
-                    headingRowHeight: 60,
-                    dataRowMinHeight: 52,
-                    dataRowMaxHeight: 58,
-                    columnSpacing: 32,
-                    horizontalMargin: 22,
-                    sortColumnIndex: _orderSortBy == 'id'
-                        ? 1
-                        : _orderSortBy == 'buyer'
-                            ? 2
-                            : _orderSortBy == 'total'
-                                ? 4
-                                : 5,
-                    sortAscending: _orderSortAsc,
-                    columns: [
-                      const DataColumn(label: Text('No.', style: TextStyle(fontWeight: FontWeight.bold))),
-                      DataColumn(
-                        label: const Text('Order ID', style: TextStyle(fontWeight: FontWeight.bold)),
-                        onSort: (_, __) => setState(() {
-                          if (_orderSortBy == 'id') _orderSortAsc = !_orderSortAsc;
-                          _orderSortBy = 'id';
-                        }),
-                      ),
-                      DataColumn(
-                        label: const Text('Buyer', style: TextStyle(fontWeight: FontWeight.bold)),
-                        onSort: (_, __) => setState(() {
-                          if (_orderSortBy == 'buyer') _orderSortAsc = !_orderSortAsc;
-                          _orderSortBy = 'buyer';
-                        }),
-                      ),
-                      const DataColumn(label: Text('Item', style: TextStyle(fontWeight: FontWeight.bold))),
-                      DataColumn(
-                        numeric: true,
-                        label: const Text('Total (RM)', style: TextStyle(fontWeight: FontWeight.bold)),
-                        onSort: (_, __) => setState(() {
-                          if (_orderSortBy == 'total') _orderSortAsc = !_orderSortAsc;
-                          _orderSortBy = 'total';
-                        }),
-                      ),
-                      DataColumn(
-                        label: const Text('Status', style: TextStyle(fontWeight: FontWeight.bold)),
-                        onSort: (_, __) => setState(() {
-                          if (_orderSortBy == 'status') _orderSortAsc = !_orderSortAsc;
-                          _orderSortBy = 'status';
-                        }),
-                      ),
-                    ],
-                    rows: List.generate(pagedOrders.length, (index) {
-                      var orderData = pagedOrders[index].data() as Map<String, dynamic>;
-                      String docId = pagedOrders[index].id;
-                      final displayIndex = (_orderPage * _pageSize) + index + 1;
-                
-                      String shortId = docId.length >= 5 ? docId.substring(0, 5) : docId;
-                      String displayId = '#UM-${shortId.toUpperCase()}';
-                
-                      String buyerName = orderData['buyerName'] ?? 'Unknown Buyer';
-                      String itemName = orderData['productName'] ?? 'Item';
-                      String status = orderData['status'] ?? 'Pending';
-                
-                      double total = 0.0;
-                      if (orderData['totalPrice'] != null) {
-                        total = (orderData['totalPrice'] as num).toDouble();
-                      }
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  const tableMinWidth = 880.0;
+                  final minWidth = constraints.maxWidth < tableMinWidth ? tableMinWidth : constraints.maxWidth;
 
-                      return DataRow(
-                        cells: [
-                          DataCell(Text('$displayIndex')),
-                          DataCell(Text(displayId, style: const TextStyle(fontWeight: FontWeight.w900, color: kPrimary))),
-                          DataCell(Text(buyerName)),
-                          DataCell(Text('1x $itemName', style: const TextStyle(fontWeight: FontWeight.w500))),
-                          DataCell(Text(total.toStringAsFixed(2), style: const TextStyle(fontWeight: FontWeight.bold))),
-                          DataCell(
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                              decoration: BoxDecoration(
-                                color: status == 'Delivered' ? Colors.green.shade50 
-                                     : status == 'Rejected' ? Colors.red.shade50 
-                                     : status == 'Processing' ? Colors.blue.shade50
-                                     : Colors.orange.shade50,
-                                borderRadius: BorderRadius.circular(20),
-                              ),
-                              child: Text(
-                                status.toUpperCase(), 
-                                style: TextStyle(
-                                  fontSize: 12, 
-                                  fontWeight: FontWeight.bold,
-                                  color: status == 'Delivered' ? Colors.green.shade700 
-                                       : status == 'Rejected' ? Colors.red.shade700 
-                                       : status == 'Processing' ? Colors.blue.shade700
-                                       : Colors.orange.shade700
-                                )
-                              ),
-                            )
-                          ),
-                        ]
-                      );
-                    }),
-                  ),
-                ),
+                  return SingleChildScrollView(
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(minWidth: minWidth),
+                        child: DataTable(
+                          headingRowColor: WidgetStateProperty.all(kBg),
+                          headingRowHeight: 56,
+                          dataRowMinHeight: 52,
+                          dataRowMaxHeight: 64,
+                          columnSpacing: 20,
+                          horizontalMargin: 16,
+                          sortColumnIndex: _orderSortBy == 'id'
+                              ? 1
+                              : _orderSortBy == 'buyer'
+                                  ? 2
+                                  : _orderSortBy == 'total'
+                                      ? 4
+                                      : 5,
+                          sortAscending: _orderSortAsc,
+                          columns: [
+                            const DataColumn(label: Text('No.', style: TextStyle(fontWeight: FontWeight.bold))),
+                            DataColumn(
+                              label: const Text('Order ID', style: TextStyle(fontWeight: FontWeight.bold)),
+                              onSort: (_, __) => setState(() {
+                                if (_orderSortBy == 'id') _orderSortAsc = !_orderSortAsc;
+                                _orderSortBy = 'id';
+                              }),
+                            ),
+                            DataColumn(
+                              label: const Text('Buyer', style: TextStyle(fontWeight: FontWeight.bold)),
+                              onSort: (_, __) => setState(() {
+                                if (_orderSortBy == 'buyer') _orderSortAsc = !_orderSortAsc;
+                                _orderSortBy = 'buyer';
+                              }),
+                            ),
+                            const DataColumn(label: Text('Item', style: TextStyle(fontWeight: FontWeight.bold))),
+                            DataColumn(
+                              numeric: true,
+                              label: const Text('Total', style: TextStyle(fontWeight: FontWeight.bold)),
+                              onSort: (_, __) => setState(() {
+                                if (_orderSortBy == 'total') _orderSortAsc = !_orderSortAsc;
+                                _orderSortBy = 'total';
+                              }),
+                            ),
+                            DataColumn(
+                              label: const Text('Status', style: TextStyle(fontWeight: FontWeight.bold)),
+                              onSort: (_, __) => setState(() {
+                                if (_orderSortBy == 'status') _orderSortAsc = !_orderSortAsc;
+                                _orderSortBy = 'status';
+                              }),
+                            ),
+                          ],
+                          rows: List.generate(pagedOrders.length, (index) {
+                            final orderData = pagedOrders[index].data() as Map<String, dynamic>;
+                            final docId = pagedOrders[index].id;
+                            final displayIndex = (_orderPage * _pageSize) + index + 1;
+
+                            final shortId = docId.length >= 5 ? docId.substring(0, 5) : docId;
+                            final displayId = '#UM-${shortId.toUpperCase()}';
+
+                            final buyerName = (orderData['buyerName'] ?? 'Unknown Buyer').toString();
+                            final itemName = (orderData['productName'] ?? 'Item').toString();
+                            final status = (orderData['status'] ?? 'Pending').toString();
+
+                            double total = 0.0;
+                            if (orderData['totalPrice'] != null) {
+                              total = (orderData['totalPrice'] as num).toDouble();
+                            }
+
+                            return DataRow(
+                              cells: [
+                                DataCell(Text('$displayIndex')),
+                                DataCell(
+                                  SizedBox(
+                                    width: 88,
+                                    child: Text(
+                                      displayId,
+                                      style: const TextStyle(fontWeight: FontWeight.w900, color: kPrimary, fontSize: 13),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ),
+                                DataCell(
+                                  SizedBox(
+                                    width: 120,
+                                    child: Text(buyerName, overflow: TextOverflow.ellipsis, maxLines: 1),
+                                  ),
+                                ),
+                                DataCell(
+                                  SizedBox(
+                                    width: 160,
+                                    child: Text(
+                                      '1x $itemName',
+                                      style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13),
+                                      overflow: TextOverflow.ellipsis,
+                                      maxLines: 1,
+                                    ),
+                                  ),
+                                ),
+                                DataCell(
+                                  Text(
+                                    'RM ${total.toStringAsFixed(2)}',
+                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                                  ),
+                                ),
+                                DataCell(_buildOrderStatusChip(status)),
+                              ],
+                            );
+                          }),
+                        ),
+                      ),
+                    ),
+                  );
+                },
               ),
             ),
             _buildPaginationControls(
@@ -2843,6 +2927,43 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
           ],
         );
       },
+    );
+  }
+
+  Widget _buildOrderStatusChip(String status) {
+    Color bg;
+    Color fg;
+    switch (status) {
+      case 'Delivered':
+        bg = Colors.green.shade50;
+        fg = Colors.green.shade700;
+        break;
+      case 'Rejected':
+        bg = Colors.red.shade50;
+        fg = Colors.red.shade700;
+        break;
+      case 'Processing':
+        bg = Colors.blue.shade50;
+        fg = Colors.blue.shade700;
+        break;
+      default:
+        bg = Colors.orange.shade50;
+        fg = Colors.orange.shade800;
+    }
+
+    return Container(
+      constraints: const BoxConstraints(maxWidth: 110),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(
+        status.toUpperCase(),
+        style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: fg),
+        overflow: TextOverflow.ellipsis,
+        maxLines: 1,
+      ),
     );
   }
 }
