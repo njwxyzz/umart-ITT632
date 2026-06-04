@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../main.dart'; // Make sure this path to HomeScreen is correct
 import 'register_page.dart';
 import '../admin_web/admin_dashboard_page.dart';
+import '../../utils/campus_scope.dart';
 
 const kPrimary      = Color(0xFF4C6B3F); 
 const kPrimaryLight = Color(0xFF799B61); 
@@ -103,7 +104,7 @@ class _LoginPageState extends State<LoginPage> {
     }
 
     final email = _resolveLoginEmail(rawInput);
-    final isAdmin = email == 'admin@umart.com';
+    final isAdmin = isUmartAdminEmail(email);
     if (!isAdmin && !_uitmEmailRegex.hasMatch(email)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -183,7 +184,7 @@ class _LoginPageState extends State<LoginPage> {
 
       await userCredential.user?.reload();
       final user = FirebaseAuth.instance.currentUser;
-      final isAdmin = email == 'admin@umart.com';
+      final isAdmin = isUmartAdminEmail(email);
 
       if (!isAdmin && user != null && !user.emailVerified) {
         await user.sendEmailVerification();
@@ -252,7 +253,7 @@ class _LoginPageState extends State<LoginPage> {
 
       await userCredential.user?.reload();
       final user = FirebaseAuth.instance.currentUser;
-      final isAdmin = email == 'admin@umart.com';
+      final isAdmin = isUmartAdminEmail(email);
 
       if (!isAdmin && user != null && !user.emailVerified) {
         await user.sendEmailVerification();

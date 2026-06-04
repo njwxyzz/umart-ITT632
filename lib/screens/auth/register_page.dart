@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart'; // add this for Firebase Auth
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../utils/campus_scope.dart';
 
 // --- Color Constants ---
 const kPrimary      = Color(0xFF4C6B3F); 
@@ -22,6 +23,8 @@ class _RegisterPageState extends State<RegisterPage> {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _phoneController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
+  final TextEditingController _campusController =
+      TextEditingController(text: kCampusDisplayName);
 
   bool _obscurePassword = true;  // to toggle password visibility
   bool _isLoading = false; // to show loading spinner when processing registration
@@ -109,8 +112,7 @@ class _RegisterPageState extends State<RegisterPage> {
         'phone': phone,
         'role': 'student', // you can set default role as 'student' or whatever you want
         'emailVerified': false,
-        'campus': 'perlis',
-        'campusName': 'UiTM Perlis',
+        ...perlisCampusFirestoreFields(),
         'createdAt': FieldValue.serverTimestamp(),
       });
 
@@ -157,6 +159,7 @@ class _RegisterPageState extends State<RegisterPage> {
     _emailController.dispose();
     _phoneController.dispose();
     _passwordController.dispose();
+    _campusController.dispose();
     super.dispose();
   }
 
@@ -217,36 +220,33 @@ class _RegisterPageState extends State<RegisterPage> {
                     'Create an account to continue!',
                     style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
                   ),
-                  const SizedBox(height: 16),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                    decoration: BoxDecoration(
-                      color: kAccent.withOpacity(0.12),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: kAccent.withOpacity(0.45), width: 1.5),
+                  const SizedBox(height: 24),
+
+                  Text(
+                    'Campus',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.grey.shade700,
+                      letterSpacing: 0.3,
                     ),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Icon(Icons.location_on_rounded, color: kAccent, size: 22),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            'Strictly for UiTM Perlis (Arau) students only.',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w700,
-                              color: kAccent.withOpacity(0.95),
-                              height: 1.35,
-                            ),
-                          ),
-                        ),
-                      ],
+                  ),
+                  const SizedBox(height: 8),
+                  _buildCampusField(),
+                  const SizedBox(height: 6),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: Text(
+                      'UMart is restricted to UiTM Perlis (Arau) branch students only. Campus cannot be changed.',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey.shade600,
+                        height: 1.4,
+                      ),
                     ),
                   ),
 
-                  const SizedBox(height: 32),
+                  const SizedBox(height: 24),
 
                   // Input 1: Full Name
                   _buildCleanTextField(hint: 'Full Name', controller: _nameController),
@@ -387,6 +387,32 @@ class _RegisterPageState extends State<RegisterPage> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildCampusField() {
+    return Container(
+      decoration: BoxDecoration(
+        color: kWhite,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: kPrimary.withOpacity(0.25)),
+      ),
+      child: TextField(
+        controller: _campusController,
+        readOnly: true,
+        style: const TextStyle(
+          fontSize: 15,
+          color: Color(0xFF1A1A2E),
+          fontWeight: FontWeight.w600,
+        ),
+        decoration: InputDecoration(
+          hintText: kCampusDisplayName,
+          prefixIcon: Icon(Icons.school_rounded, color: kPrimary.withOpacity(0.85), size: 22),
+          suffixIcon: Icon(Icons.lock_outline_rounded, color: Colors.grey.shade400, size: 18),
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+        ),
       ),
     );
   }

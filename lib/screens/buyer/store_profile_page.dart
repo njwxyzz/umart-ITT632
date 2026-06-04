@@ -6,6 +6,7 @@ import '../../utils/product_status.dart';
 import '../../utils/store_status.dart';
 import '../../widgets/report_store_sheet.dart';
 import '../../utils/store_deep_link.dart';
+import '../../utils/campus_scope.dart';
 import 'chat_page.dart';
 import 'product_detail_page.dart';
 
@@ -34,6 +35,7 @@ class _StoreProfile {
 
   bool get isVerified => storeIsApproved(raw);
   bool get isPending => storeIsPending(raw);
+  String get campusLabel => campusLabelFromData(raw);
 
   factory _StoreProfile.fromMap(Map<String, dynamic> data) {
     final storeName = (data['storeName'] ??
@@ -729,10 +731,10 @@ class _StoreHeaderCard extends StatelessWidget {
                       height: 32,
                       color: Colors.grey.shade300,
                     ),
-                    const Expanded(
+                    Expanded(
                       child: _StatTile(
                         label: 'Campus',
-                        value: 'UiTM',
+                        value: profile.campusLabel,
                       ),
                     ),
                   ],

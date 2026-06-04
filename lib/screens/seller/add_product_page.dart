@@ -4,6 +4,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:cloud_firestore/cloud_firestore.dart'; 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart'; // WAJIB untuk Firebase Storage
+import '../../utils/campus_scope.dart';
 
 // --- Color Constants ---
 const kPrimary = Color(0xFF4C6B3F); 
@@ -144,6 +145,7 @@ class _AddProductPageState extends State<AddProductPage> {
         'imageUrl': imageUrls.first, // Backward compatibility
         'imageUrls': imageUrls,
         'status': 'Pending',
+        ...perlisCampusFirestoreFields(),
         'createdAt': FieldValue.serverTimestamp(),
       });
 

@@ -37,6 +37,7 @@ import 'utils/store_status.dart';
 import 'utils/product_status.dart';
 import 'push_messaging.dart';
 import 'utils/store_deep_link.dart';
+import 'utils/campus_scope.dart';
 
 
 
@@ -88,7 +89,7 @@ class _AuthGate extends StatelessWidget {
 
         if (snapshot.hasData) {
           final user = snapshot.data!;
-          if (user.email?.trim().toLowerCase() == 'admin@umart.com') {
+          if (isUmartAdminEmail(user.email)) {
             return const AdminDashboardPage();
           }
           return const HomeScreen();
@@ -164,8 +165,10 @@ class _HomeScreenState extends State<HomeScreen> {
     _fetchProductsData(); 
   }
 
-  Future<Map<String, String>> _loadStoreLocationsBySellerIds(Set<String> sellerIds) async {
-    final result = <String, String>{};
+  Future<Map<String, Map<String, dynamic>>> _loadStoresBySellerIds(
+    Set<String> sellerIds,
+  ) async {
+    final result = <String, Map<String, dynamic>>{};
     if (sellerIds.isEmpty) return result;
 
     final ids = sellerIds.where((id) => id.trim().isNotEmpty).toList();
@@ -177,11 +180,7 @@ class _HomeScreenState extends State<HomeScreen> {
           .get();
 
       for (final doc in storesSnap.docs) {
-        final data = doc.data();
-        final loc = (data['storeLocation'] ?? data['location'] ?? data['address'] ?? '').toString().trim();
-        if (loc.isNotEmpty) {
-          result[doc.id] = loc;
-        }
+        result[doc.id] = doc.data();
       }
     }
 
@@ -227,25 +226,23 @@ class _HomeScreenState extends State<HomeScreen> {
       List<_FoodItem> tempGadget = [];
       List<_FoodItem> tempBooks = [];
       List<_FoodItem> tempOther = [];
-      final missingLocationSellerIds = <String>{};
+      final sellerIds = <String>{};
 
       for (final doc in snapshot.docs) {
         final data = doc.data();
         if (!productIsApproved(data)) continue;
-        final productLocation =
-            (data['storeLocation'] ?? data['sellerLocation'] ?? data['location'] ?? '').toString().trim();
         final sellerId = (data['sellerId'] ?? data['ownerId'] ?? '').toString().trim();
-        if (productLocation.isEmpty && sellerId.isNotEmpty) {
-          missingLocationSellerIds.add(sellerId);
-        }
+        if (sellerId.isNotEmpty) sellerIds.add(sellerId);
       }
 
-      final storeLocationsBySeller = await _loadStoreLocationsBySellerIds(missingLocationSellerIds);
+      final storesBySeller = await _loadStoresBySellerIds(sellerIds);
       final backfillUpdates = <MapEntry<DocumentReference<Map<String, dynamic>>, String>>[];
       
       for (final doc in snapshot.docs) {
         final data = doc.data();
         if (!productIsApproved(data)) continue;
+
+        final sellerId = (data['sellerId'] ?? data['ownerId'] ?? '').toString().trim();
 
         double harga = data['price'] is num ? (data['price'] as num).toDouble() : double.tryParse(data['price'].toString()) ?? 0.0;
         int soldCount = 0;
@@ -258,11 +255,16 @@ class _HomeScreenState extends State<HomeScreen> {
 
         String productCategory = data['category'] ?? 'Others';
 
-        final sellerId = (data['sellerId'] ?? data['ownerId'] ?? '').toString().trim();
         String storeLocation =
             (data['storeLocation'] ?? data['sellerLocation'] ?? data['location'] ?? '').toString().trim();
         if (storeLocation.isEmpty && sellerId.isNotEmpty) {
-          storeLocation = (storeLocationsBySeller[sellerId] ?? '').trim();
+          final store = storesBySeller[sellerId];
+          storeLocation = (store?['storeLocation'] ??
+                  store?['location'] ??
+                  store?['address'] ??
+                  '')
+              .toString()
+              .trim();
           if (storeLocation.isNotEmpty) {
             backfillUpdates.add(MapEntry(doc.reference, storeLocation));
           }

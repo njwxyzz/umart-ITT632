@@ -5,6 +5,7 @@ import 'edit_profile_page.dart';
 import 'settings_page.dart';
 import '../auth/login_page.dart';
 import '../../utils/store_status.dart';
+import '../../utils/campus_scope.dart';
 
 // ─── Color Constants (TEMA HIJAU BARU) ───────────────────────────────────────
 const kPrimary      = Color(0xFF4C6B3F); 
@@ -29,7 +30,8 @@ class _ProfilePageState extends State<ProfilePage> {
   String _fullName = "Student";
   String _matricNo = "No Matric ID";
   String _initial = "S";
-  String _college = "UiTM Campus"; // TAMBAH VARIABLE KOLEJ SINI
+  String _college = "UiTM Campus";
+  String _campusName = kCampusDisplayName;
   String? _profileImageUrl;
   _SellerBadgeKind _sellerBadge = _SellerBadgeKind.buyer;
   
@@ -62,7 +64,8 @@ class _ProfilePageState extends State<ProfilePage> {
         var data = userDoc.data()!;
         _fullName = data['fullName'] ?? currentUser.email?.split('@')[0] ?? 'Student';
         _matricNo = data['studentId'] ?? 'Unknown Matric';
-        _college = data['college'] ?? 'UiTM Campus'; // TARIK DATA KOLEJ DARI FIREBASE
+        _college = data['college'] ?? 'UiTM Campus';
+        _campusName = campusLabelFromData(data);
         final rawImage = (data['profileImage'] ?? data['photoUrl'] ?? data['imageUrl'] ?? '')
             .toString()
             .trim();
@@ -326,7 +329,8 @@ class _ProfilePageState extends State<ProfilePage> {
                   matricNo: _matricNo, 
                   initial: _initial,
                   profileImageUrl: _profileImageUrl,
-                  college: _college, // PASS DATA KOLEJ
+                  college: _college,
+                  campusName: _campusName,
                   sellerBadge: _sellerBadge,
                   onEditTap: () async {
                     await Navigator.push(context, MaterialPageRoute(builder: (_) => const EditProfilePage()));
@@ -441,6 +445,7 @@ class _ProfileCard extends StatelessWidget {
   final String initial;
   final String? profileImageUrl;
   final String college;
+  final String campusName;
   final _SellerBadgeKind sellerBadge;
   final VoidCallback onEditTap;
 
@@ -450,6 +455,7 @@ class _ProfileCard extends StatelessWidget {
     required this.initial,
     this.profileImageUrl,
     required this.college,
+    required this.campusName,
     required this.sellerBadge,
     required this.onEditTap,
   });
@@ -528,7 +534,21 @@ class _ProfileCard extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 6),
-                    // 🚨 MAGIK LOKASI KOLEJ DI SINI 🚨
+                    Row(
+                      children: [
+                        const Icon(Icons.school_rounded, color: Colors.white70, size: 14),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            campusName,
+                            style: const TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w600),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
                     Row(
                       children: [
                         const Icon(Icons.location_on_rounded, color: Colors.white70, size: 14),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../../utils/campus_scope.dart';
 
 // --- Color Constants ---
 const kPrimary = Color(0xFF4C6B3F); 
@@ -155,9 +156,9 @@ class _SellerRegistrationPageState extends State<SellerRegistrationPage> {
 
                         String ownerName = currentUser.email?.split('@')[0] ?? 'Student';
                         final userDoc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+                        final userData = userDoc.data();
                         if (userDoc.exists) {
-                          final u = userDoc.data();
-                          final fn = u?['fullName']?.toString().trim();
+                          final fn = userData?['fullName']?.toString().trim();
                           if (fn != null && fn.isNotEmpty) ownerName = fn;
                         }
 
@@ -170,6 +171,7 @@ class _SellerRegistrationPageState extends State<SellerRegistrationPage> {
                           'ownerId': uid,
                           'ownerName': ownerName,
                           'status': 'Pending',
+                          ...perlisCampusFirestoreFields(),
                           'createdAt': FieldValue.serverTimestamp(),
                         });
 

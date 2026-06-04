@@ -46,3 +46,7 @@ app.*.map.json
 
 # Firebase Cloud Functions
 functions/node_modules/
+
+# Firebase Admin service account (never commit)
+serviceAccountKey.json
+*serviceAccount*.json
